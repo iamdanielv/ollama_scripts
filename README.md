@@ -1,14 +1,40 @@
 # Ollama & OpenWebUI Setup
 
-This repository provides utilities to setup Ollama and OpenWebUI.
+This repository provides simple shell scripts to install, manage, and run Ollama and OpenWebUI.
 
-## Prerequisites 🛠️
+## Quick Start 🚀
 
-* **Docker:** [https://docs.docker.com/get-docker/](https://docs.docker.com/get-docker/) for OpenWebUI
+To get up and running quickly:
 
-## Ollama Installation 📦
+1. **Install/Update Ollama:**
 
-Run the Ollama Installation Script:
+    ```bash
+    ./installollama.sh
+    ```
+
+2. **Start OpenWebUI:**
+
+    ```bash
+    ./openwebui/startopenwebui.sh
+    ```
+
+    After it starts, open the link provided and follow the on-screen instructions to create an account.
+
+---
+
+## Prerequisites
+
+* **curl:** Required by the Ollama installer.
+* **Docker:** Required for running OpenWebUI. See [Docker installation docs](https://docs.docker.com/get-docker/).
+* **systemd:** The management scripts (`stop`, `restart`) are designed for Linux systems using `systemd`.
+
+---
+
+## Ollama Management
+
+## Install or Update Ollama 📦
+
+The `installollama.sh` script handles both initial installation and updates.
 
 ```bash
 ./installollama.sh
@@ -18,35 +44,33 @@ The script will:
 
 * Check pre-req's
 * Install Ollama (if not already installed)
-* Check the version of Ollama, and update if newer version is available
-* Verify the service is running
+* Check the current version and update if a newer one is available.
+* Verify the `ollama` service is running.
 
 ## Restarting Ollama 🔄
 
-If Ollama goes into a weird state, you can restart it with:
+If Ollama becomes unresponsive or encounters issues, you can use the restart script.
 
 ```bash
 ./restartollama.sh
 ```
 
-This script will:
-
-* Stop the ollama service
-* Reset NVIDIA UVM (if NVIDIA GPU is detected).
-* Start the ollama service
-* Verify the service is running
+This script will stop the service, reset NVIDIA UVM (if a GPU is detected) to clear potential hardware state issues, and restart the service.
 
 ## Stopping Ollama 🛑
 
-If you need to stop the Ollama service:
+To stop the Ollama service:
 
 ```bash
 ./stopollama.sh
 ```
 
-## Ollama Update 🚀
+> [!NOTE]
+> The `restartollama.sh` and `stopollama.sh` scripts require `sudo` to manage the systemd service. They will automatically attempt to re-run themselves with `sudo` if needed.
 
-Run the `./installollama.sh` script to update ollama. It will automatically check for the latest version and download it if needed.
+---
+
+## OpenWebUI Management
 
 ## Starting OpenWebUI 🌐
 
@@ -54,12 +78,13 @@ Run the `./installollama.sh` script to update ollama. It will automatically chec
 ./openwebui/startopenwebui.sh
 ```
 
-This script will:
+This script uses `docker-compose` to run the OpenWebUI container in detached mode and prints a link to the UI once it's ready.
 
-* Use docker compose to run the OpenWebUI containers in detached mode
-* Wait for the service to start and print out a link to the UI
+## First-Time Setup ⚙️
 
-### Stopping OpenWebUI 🛑
+On your first visit, OpenWebUI will prompt you to create an administrator account. The connection to your local Ollama instance is configured automatically.
+
+## Stopping OpenWebUI 🛑
 
 To stop the OpenWebUI containers:
 
@@ -67,47 +92,45 @@ To stop the OpenWebUI containers:
 ./openwebui/stopopenwebui.sh
 ```
 
-### OpenWebUI Environment Configuration (`.env`)
+## Configuration 🛠️
 
-You can create a `.env` file inside the `openwebui/` directory to configure ports. The start script will automatically load it.
+To customize the ports, create a `.env` file in the `openwebui/` directory. The start script will automatically load it.
 
-Example `.env` file:
+**Example `openwebui/.env` file:**
 
-``` shell
+```env
+# Sets the host port for the OpenWebUI interface.
+# The default is 3000.
 OPEN_WEBUI_PORT=8080
-OLLAMA_PORT=11435
+
+# Sets the port your Ollama instance is running on.
+# This is used to connect OpenWebUI to Ollama.
+# The default is 11434.
+OLLAMA_PORT=11434
 ```
 
-## OpenWebUI Configuration ⚙️
+The Docker Compose file (`docker-compose.yaml`) is pre-configured to use these environment variables.
 
-The Docker Compose file (`docker-compose.yaml`) defines the services:
-
-* `open-webui`:  Runs the OpenWebUI application using a Docker image.
-* `host.docker.internal:host-gateway`:  Allows OpenWebUI to access network resources from within the Docker container.
-
-> [!TIP]
-> On first run you have to create an account.
-> You may have to configure the `Settings` -> `Connections`.
->
-> Use `http://localhost:11434/v1` for the Ollama Server URL. If you have configured a custom `OLLAMA_PORT`, use that port instead.
+---
 
 ## Troubleshooting
 
 * **Container Not Starting:**
-  * Check your Docker logs: `docker logs <container_id>`
-  * Ensure you have sufficient resources (CPU, memory) available.
-  * Verify the Docker Compose configuration file (`docker-compose.yaml`) is correct.
-* **OpenWebUI can't access the Ollama Models:**
-  * Make sure the firewall isn't blocking the port (3000).
-  * Try `host.docker.internal` instead of `localhost` in the connection config.
+  * Check Docker logs for errors: `docker logs open-webui` (or the specific container ID).
+  * Ensure Docker has sufficient resources (CPU, memory).
+* **OpenWebUI Can't Access Ollama Models:**
+  * Verify the Ollama URL in OpenWebUI settings is correct. Inside the Docker container, `localhost` may not work. Try using `http://host.docker.internal:11434` instead.
+  * Ensure your firewall is not blocking the port used by Ollama (default `11434`).
+
+---
 
 ## For Contributors 🤝
 
-* I'm open and encourage contributions of bug fixes, improvements, and documentation!
+I'm open to and encourage contributions of bug fixes, improvements, and documentation!
 
 ## License 📜
 
-This project is licensed under the MIT License.  See the `LICENSE` file for details.
+This project is licensed under the MIT License. See the `LICENSE` file for details.
 
 ## Contact 📧
 
