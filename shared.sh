@@ -78,6 +78,29 @@ show_logs_and_exit() {
     exit 1
 }
 
+# Polls a given URL until it gets a successful HTTP response or times out.
+# Usage: poll_service <url> <service_name> [timeout_seconds]
+poll_service() {
+    local url="$1"
+    local service_name="$2"
+    local timeout=${3:-15} # Default timeout 15 seconds
+
+    printMsgNoNewline "    ${C_BLUE}Waiting for ${service_name} to respond at ${url}... ${T_RESET}"
+    for ((i=0; i<timeout; i++)); do
+        if curl --silent --fail --head "$url" &>/dev/null; then
+            echo # Newline for the dots
+            printMsg "    ${T_OK_ICON} ${service_name} is responsive."
+            return 0
+        fi
+        sleep 1
+        printMsgNoNewline "${C_L_BLUE}.${T_RESET}"
+    done
+
+    echo # Newline after the dots
+    # The calling script should handle the failure message
+    return 1
+}
+
 # Verifies that the Ollama service is running and responsive.
 verify_ollama_service() {
     printMsg "${T_INFO_ICON} Verifying Ollama service status..."
@@ -92,18 +115,10 @@ verify_ollama_service() {
     fi
     printMsg "    ${T_OK_ICON} Systemd reports service is active."
 
-    # 2. Poll the API endpoint to ensure it's responsive
-    printMsgNoNewline "    ${C_BLUE}Waiting for API to respond ${T_RESET}"
-    for i in {1..15}; do
-        if curl --silent --fail --head http://localhost:11434 &>/dev/null; then
-            echo # Newline for the dots
-            printMsg "    ${T_OK_ICON} API is responsive."
-            return 0
-        fi
-        sleep 1
-        printMsgNoNewline "${C_L_BLUE}.${T_RESET}"
-    done
+    local ollama_port=${OLLAMA_PORT:-11434}
+    local ollama_url="http://localhost:${ollama_port}"
 
-    echo # Newline after the dots
-    show_logs_and_exit "Ollama service is active, but the API is not responding at http://localhost:11434."
+    if ! poll_service "$ollama_url" "Ollama API"; then
+        show_logs_and_exit "Ollama service is active, but the API is not responding at ${ollama_url}."
+    fi
 }

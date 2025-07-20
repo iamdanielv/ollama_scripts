@@ -19,54 +19,81 @@ show_docker_logs_and_exit() {
     local message="$1"
     printErrMsg "$message"
     printMsg "    ${T_INFO_ICON} Showing last 20 lines of container logs:"
-    # Use tail to limit output and sed to indent
+    # Use tail to limit output and sed to indent. The command is determined dynamically.
     docker compose logs --tail=20 | sed 's/^/    /'
     exit 1
 }
 
-printBanner "OpenWebUI Starter"
+main() {
+    printBanner "OpenWebUI Starter"
 
-printMsg "${T_INFO_ICON} Checking prerequisites..."
+    printMsg "${T_INFO_ICON} Checking prerequisites..."
 
-# Check if Docker and Docker Compose are installed
-if ! command -v docker &>/dev/null; then
-    printErrMsg "Docker is not installed. Please install Docker to continue."
-    exit 1
-fi
-printOkMsg "Docker is installed."
+    # Check for Docker
+    if ! command -v docker &>/dev/null; then
+        printErrMsg "Docker is not installed. Please install Docker to continue."
+        exit 1
+    fi
+    printOkMsg "Docker is installed."
 
-if ! docker compose version &>/dev/null; then
-    printErrMsg "Docker Compose is not installed or not available in the PATH."
-    exit 1
-fi
-printOkMsg "Docker Compose is available."
-
-# Ensure we are running in the script's directory so docker-compose.yml is found
-SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
-if [[ "$PWD" != "$SCRIPT_DIR" ]]; then
-    printMsg "${T_INFO_ICON} Changing to script directory: ${C_L_BLUE}${SCRIPT_DIR}${T_RESET}"
-    cd "$SCRIPT_DIR"
-fi
-
-printMsg "${T_INFO_ICON} Starting OpenWebUI containers in detached mode..."
-if ! docker compose up -d; then
-    show_docker_logs_and_exit "Failed to start OpenWebUI containers."
-fi
-
-printMsg "${T_INFO_ICON} Verifying OpenWebUI service status..."
-printMsgNoNewline "    ${C_BLUE}Waiting for Web UI to respond ${T_RESET}"
-for i in {1..30}; do
-    sleep 1
-    if curl --silent --fail --head http://localhost:3000 &>/dev/null; then
-        echo # Newline for the dots
-        printMsg "    ${T_OK_ICON} Web UI is responsive."
-        printOkMsg "OpenWebUI started successfully!"
-        printMsg "    🌐 Access it at: ${C_L_BLUE}http://localhost:3000${T_RESET}"
-        exit 0
+    # Check for Docker Compose (v2 plugin or v1 standalone)
+    local docker_compose_cmd
+    if command -v docker &>/dev/null && docker compose version &>/dev/null; then
+        printOkMsg "Docker Compose v2 (plugin) is available."
+        docker_compose_cmd="docker compose"
+    elif command -v docker-compose &>/dev/null; then
+        printOkMsg "Docker Compose v1 (standalone) is available."
+        docker_compose_cmd="docker-compose"
+    else
+        printErrMsg "Docker Compose is not installed."
+        exit 1
     fi
 
-    printMsgNoNewline "${C_L_BLUE}.${T_RESET}"
-done
+    # Ensure we are running in the script's directory so docker-compose.yml is found
+    local SCRIPT_DIR
+    SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+    if [[ "$PWD" != "$SCRIPT_DIR" ]]; then
+        printMsg "${T_INFO_ICON} Changing to script directory: ${C_L_BLUE}${SCRIPT_DIR}${T_RESET}"
+        cd "$SCRIPT_DIR"
+    fi
 
-echo # Newline after the dots
-show_docker_logs_and_exit "OpenWebUI containers are running, but the UI is not responding."
+    # Source .env file for configuration if it exists
+    if [[ -f ".env" ]]; then
+        printMsg "${T_INFO_ICON} Sourcing configuration from .env file."
+        set -a
+        source .env
+        set +a
+    fi
+
+    local ollama_port=${OLLAMA_PORT:-11434}
+    local ollama_url="http://localhost:${ollama_port}"
+
+    # Check if Ollama is running, as it's a dependency for OpenWebUI
+    printMsg "${T_INFO_ICON} Checking if Ollama service is running..."
+    # Give Ollama a moment to respond if it was just started.
+    if ! poll_service "$ollama_url" "Ollama" 10; then
+        printErrMsg "Ollama service is not responding at ${ollama_url}."
+        printMsg "    ${T_INFO_ICON} Please ensure Ollama is running before starting OpenWebUI."
+        printMsg "    ${T_INFO_ICON} You can try running: ${C_L_BLUE}../restartollama.sh${T_RESET}"
+        exit 1
+    fi
+    # The success message is already printed by poll_service_responsive.
+
+    printMsg "${T_INFO_ICON} Starting OpenWebUI containers in detached mode..."
+    if ! $docker_compose_cmd up -d; then
+        show_docker_logs_and_exit "Failed to start OpenWebUI containers."
+    fi
+
+    local webui_port=${OPEN_WEBUI_PORT:-3000}
+    local webui_url="http://localhost:${webui_port}"
+
+    if ! poll_service "$webui_url" "OpenWebUI" 30; then
+        show_docker_logs_and_exit "OpenWebUI containers are running, but the UI is not responding at ${webui_url}."
+    fi
+
+    printOkMsg "OpenWebUI started successfully!"
+    printMsg "    🌐 Access it at: ${C_L_BLUE}${webui_url}${T_RESET}"
+}
+
+# Run the main script logic
+main "$@"
