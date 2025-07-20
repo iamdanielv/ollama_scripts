@@ -12,6 +12,9 @@ To get up and running quickly:
     ./installollama.sh
     ```
 
+    > [!IMPORTANT]
+    > During installation, the script will ask to configure Ollama for network access. This is **required** for OpenWebUI to connect to it.
+
 2. **Start OpenWebUI:**
 
     ```bash
@@ -46,6 +49,12 @@ The script will:
 * Install Ollama (if not already installed)
 * Check the current version and update if a newer one is available.
 * Verify the `ollama` service is running.
+
+### Network Access for Docker
+
+By default, Ollama only listens for requests from the local machine (`localhost`). For OpenWebUI (running in a Docker container) to connect to Ollama, the Ollama service must be configured to listen on all network interfaces (`0.0.0.0`).
+
+The `installollama.sh` script will detect if this is needed and prompt you to apply this configuration automatically. This is the recommended way to set it up.
 
 ## Restarting Ollama 🔄
 
@@ -83,6 +92,7 @@ This script uses `docker-compose` to run the OpenWebUI container in detached mod
 ## First-Time Setup ⚙️
 
 On your first visit, OpenWebUI will prompt you to create an administrator account. The connection to your local Ollama instance is configured automatically.
+This works because the included Docker Compose file tells OpenWebUI to connect to `http://host.docker.internal:11434`, and the `installollama.sh` script helps configure the host's Ollama service to accept these connections.
 
 ## Stopping OpenWebUI 🛑
 
@@ -119,8 +129,9 @@ The Docker Compose file (`docker-compose.yaml`) is pre-configured to use these e
   * Check Docker logs for errors: `docker logs open-webui` (or the specific container ID).
   * Ensure Docker has sufficient resources (CPU, memory).
 * **OpenWebUI Can't Access Ollama Models:**
-  * Verify the Ollama URL in OpenWebUI settings is correct. Inside the Docker container, `localhost` may not work. Try using `http://host.docker.internal:11434` instead.
-  * Ensure your firewall is not blocking the port used by Ollama (default `11434`).
+  * This usually means the Ollama service on your host machine is not accessible from inside the Docker container.
+  * **Solution:** Run the `./installollama.sh` script. It will prompt you to configure Ollama to listen on all network interfaces, which resolves this issue.
+  * **Verification:** The `docker-compose.yaml` is pre-configured to connect to Ollama at `http://host.docker.internal:11434`. Ensure your firewall is not blocking traffic on port `11434` (or your custom `OLLAMA_PORT`).
 
 ---
 
