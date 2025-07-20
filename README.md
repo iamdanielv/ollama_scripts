@@ -1,6 +1,6 @@
-# Ollama & OpenWebUI Setup
+# Ollama & OpenWebUI Management Scripts
 
-This repository provides simple shell scripts to install, manage, and run Ollama and OpenWebUI.
+This repository provides a set of simple shell scripts to install, manage, and run Ollama and OpenWebUI on a Linux system with `systemd`.
 
 ## Quick Start 🚀
 
@@ -21,16 +21,35 @@ To get up and running quickly:
     ./openwebui/startopenwebui.sh
     ```
 
-    After it starts, open the link provided and follow the on-screen instructions to create an account.
+    After it starts, open the link provided (usually `http://localhost:3000`) and follow the on-screen instructions to create an account.
 
+---
+---
+
+## Scripts Overview
+
+| Script | Description |
+|---|---|
+| `./installollama.sh` | Installs or updates Ollama and configures it for network access. |
+| `./restartollama.sh` | Stops, resets GPU state (if applicable), and restarts the Ollama service. |
+| `./stopollama.sh` | Stops the Ollama service. |
+| `./openwebui/startopenwebui.sh` | Starts the OpenWebUI Docker containers. |
+| `./openwebui/stopopenwebui.sh` | Stops the OpenWebUI Docker containers. |
+| `./openwebui/updateopenwebui.sh` | Pulls the latest Docker images for OpenWebUI. |
+
+---
 ---
 
 ## Prerequisites
 
-* **curl:** Required by the Ollama installer.
-* **Docker:** Required for running OpenWebUI. See [Docker installation docs](https://docs.docker.com/get-docker/).
-* **systemd:** The management scripts (`stop`, `restart`) are designed for Linux systems using `systemd`.
+- **curl:** Required by the Ollama installer.
+- **Docker:** Required for running OpenWebUI. See [Docker installation docs](https://docs.docker.com/get-docker/).
+- **systemd:** The Ollama management scripts (`stopollama.sh`, `restartollama.sh`) are designed for Linux systems using `systemd`. They will not work on systems without it (e.g., macOS or WSL without systemd enabled).
 
+> [!WARNING]
+> The Ollama management scripts will not work on systems without `systemd` (e.g., standard macOS or WSL distributions).
+
+---
 ---
 
 ## Ollama Management
@@ -45,10 +64,11 @@ The `installollama.sh` script handles both initial installation and updates.
 
 The script will:
 
-* Check pre-req's
-* Install Ollama (if not already installed)
-* Check the current version and update if a newer one is available.
-* Verify the `ollama` service is running.
+- Check pre-req's
+- Install Ollama (if not already installed)
+- Check the current version and update if a newer one is available.
+- Verify the `ollama` service is running.
+- **Prompt you to configure Ollama for network access.** This is required for OpenWebUI (in Docker) to connect to it. Please say **Yes (y)** when asked.
 
 ### Network Access for Docker
 
@@ -78,6 +98,7 @@ To stop the Ollama service:
 > The `restartollama.sh` and `stopollama.sh` scripts require `sudo` to manage the systemd service. They will automatically attempt to re-run themselves with `sudo` if needed.
 
 ---
+---
 
 ## OpenWebUI Management
 
@@ -87,9 +108,9 @@ To stop the Ollama service:
 ./openwebui/startopenwebui.sh
 ```
 
-This script uses `docker-compose` to run the OpenWebUI container in detached mode and prints a link to the UI once it's ready.
+This script uses `docker-compose` to run the OpenWebUI container in detached mode and prints a link (usually `http://localhost:3000`) to the UI once it's ready.
 
-## First-Time Setup ⚙️
+## OpenWebUI First-Time Setup ⚙️
 
 On your first visit, OpenWebUI will prompt you to create an administrator account. The connection to your local Ollama instance is configured automatically.
 This works because the included Docker Compose file tells OpenWebUI to connect to `http://host.docker.internal:11434`, and the `installollama.sh` script helps configure the host's Ollama service to accept these connections.
@@ -122,17 +143,19 @@ OLLAMA_PORT=11434
 The Docker Compose file (`docker-compose.yaml`) is pre-configured to use these environment variables.
 
 ---
+---
 
 ## Troubleshooting
 
-* **Container Not Starting:**
-  * Check Docker logs for errors: `docker logs open-webui` (or the specific container ID).
-  * Ensure Docker has sufficient resources (CPU, memory).
-* **OpenWebUI Can't Access Ollama Models:**
-  * This usually means the Ollama service on your host machine is not accessible from inside the Docker container.
-  * **Solution:** Run the `./installollama.sh` script. It will prompt you to configure Ollama to listen on all network interfaces, which resolves this issue.
-  * **Verification:** The `docker-compose.yaml` is pre-configured to connect to Ollama at `http://host.docker.internal:11434`. Ensure your firewall is not blocking traffic on port `11434` (or your custom `OLLAMA_PORT`).
+- **Container Not Starting:**
+  - Check Docker logs for errors. In the `openwebui/` directory, run: `docker compose logs --tail 50`
+  - Ensure Docker has sufficient resources (CPU, memory).
+- **OpenWebUI Can't Access Ollama Models:**
+  - This usually means the Ollama service on your host machine is not accessible from inside the Docker container.
+  - **Solution:** Run the `./installollama.sh` script. It will prompt you to configure Ollama to listen on all network interfaces, which resolves this issue.
+  - **Verification:** The `docker-compose.yaml` is pre-configured to connect to Ollama at `http://host.docker.internal:11434`. Ensure your firewall is not blocking traffic on port `11434` (or your custom `OLLAMA_PORT`).
 
+---
 ---
 
 ## For Contributors 🤝
