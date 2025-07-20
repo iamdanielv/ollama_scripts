@@ -19,25 +19,9 @@ main() {
 
     printMsg "${T_INFO_ICON} Checking prerequisites..."
 
-    # Check for Docker
-    if ! command -v docker &>/dev/null; then
-        printErrMsg "Docker is not installed. Cannot stop containers if Docker isn't installed."
-        exit 1
-    fi
-    printOkMsg "Docker is installed."
-
-    # Check for Docker Compose (v2 plugin or v1 standalone)
+    check_docker_prerequisites
     local docker_compose_cmd
-    if command -v docker &>/dev/null && docker compose version &>/dev/null; then
-        printOkMsg "Docker Compose v2 (plugin) is available."
-        docker_compose_cmd="docker compose"
-    elif command -v docker-compose &>/dev/null; then
-        printOkMsg "Docker Compose v1 (standalone) is available."
-        docker_compose_cmd="docker-compose"
-    else
-        printErrMsg "Docker Compose is not installed. Cannot stop containers."
-        exit 1
-    fi
+    docker_compose_cmd=$(get_docker_compose_cmd)
 
     # Ensure we are running in the script's directory so docker-compose.yml is found
     local SCRIPT_DIR

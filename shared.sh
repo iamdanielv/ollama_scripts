@@ -74,6 +74,42 @@ check_ollama_installed() {
     printOkMsg "Ollama is installed."
 }
 
+# Checks for Docker and Docker Compose. Exits if not found.
+check_docker_prerequisites() {
+    printMsg "${T_INFO_ICON} Checking for Docker..." >&2
+    if ! command -v docker &>/dev/null; then
+        printErrMsg "Docker is not installed. Please install Docker to continue." >&2
+        exit 1
+    fi
+    printOkMsg "Docker is installed." >&2
+
+    printMsg "${T_INFO_ICON} Checking for Docker Compose..." >&2
+    # Check for either v2 (plugin) or v1 (standalone)
+    if ! (command -v docker &>/dev/null && docker compose version &>/dev/null) && ! command -v docker-compose &>/dev/null; then
+        printErrMsg "Docker Compose is not installed." >&2
+        exit 1
+    fi
+    printOkMsg "Docker Compose is available." >&2
+}
+
+# Gets the correct Docker Compose command ('docker compose' or 'docker-compose').
+# Assumes prerequisites have been checked by check_docker_prerequisites.
+# Usage:
+#   local compose_cmd
+#   compose_cmd=$(get_docker_compose_cmd)
+#   $compose_cmd up -d
+get_docker_compose_cmd() {
+    if command -v docker &>/dev/null && docker compose version &>/dev/null; then
+        echo "docker compose"
+    elif command -v docker-compose &>/dev/null; then
+        echo "docker-compose"
+    else
+        # This case should not be reached if check_docker_prerequisites was called.
+        printErrMsg "Could not determine Docker Compose command." >&2
+        exit 1
+    fi
+}
+
 # Helper to show systemd logs and exit on failure.
 show_logs_and_exit() {
     local message="$1"
