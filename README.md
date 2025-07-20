@@ -1,27 +1,27 @@
 # Ollama & OpenWebUI Management Scripts
 
-This repository provides a set of simple shell scripts to install, manage, and run Ollama and OpenWebUI on a Linux system with `systemd`.  These scripts aim to simplify the setup process and ensure a consistent environment.
+This repository provides a set of simple shell scripts to install, manage, and run Ollama and OpenWebUI on a Linux system with `systemd`. These scripts aim to simplify the setup process and ensure a consistent environment.
 
 ## Quick Start 🚀
 
 To get up and running quickly:
 
+> [!IMPORTANT]
+> During installation, the script will prompt you to configure Ollama for network access. This is **required** for OpenWebUI (in Docker) to connect to it.
+
 1. **Install/Update Ollama:**
 
-    ```bash
-    ./installollama.sh
-    ```
-
-    > [!IMPORTANT]
-    > During installation, the script will prompt you to configure Ollama for network access. This is **required** for OpenWebUI (in Docker) to connect to it.
+   ```bash
+   ./installollama.sh
+   ```
 
 2. **Start OpenWebUI:**
 
-    ```bash
-    ./openwebui/startopenwebui.sh
-    ```
+   ```bash
+   ./openwebui/startopenwebui.sh
+   ```
 
-    After it starts, open the link provided (usually `http://localhost:3000`) and follow the on-screen instructions to create an account.
+   After it starts, open the link provided (usually `http://localhost:3000`) and follow the on-screen instructions to create an account.
 
 ---
 ---
@@ -44,7 +44,7 @@ To get up and running quickly:
 
 - **curl:** Required by the Ollama installer.
 - **Docker:** Required for running OpenWebUI. See [Docker installation docs](https://docs.docker.com/get-docker/) for instructions.
-- **Docker Compose:**  Required for running OpenWebUI containers.
+- **Docker Compose:** Required for running OpenWebUI containers.
 - **systemd:** The Ollama management scripts (`stopollama.sh`, `restartollama.sh`) are designed for Linux systems using `systemd`. They will not work on systems without it (e.g., macOS or WSL without systemd enabled).
 
 > [!WARNING]
