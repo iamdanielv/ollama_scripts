@@ -71,7 +71,7 @@ main() {
     local webui_port=${OPEN_WEBUI_PORT:-3000}
     local webui_url="http://localhost:${webui_port}"
 
-    if ! poll_service "$webui_url" "OpenWebUI" 30; then
+    if ! poll_service "$webui_url" "OpenWebUI" 60; then
         show_docker_logs_and_exit "OpenWebUI containers are running, but the UI is not responding at ${webui_url}."
     fi
 
