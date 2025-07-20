@@ -123,6 +123,20 @@ To stop the OpenWebUI containers:
 ./openwebui/stopopenwebui.sh
 ```
 
+## Updating OpenWebUI ⬆️
+
+To update OpenWebUI to the latest version, you can pull the newest container images.
+
+```bash
+./openwebui/updateopenwebui.sh
+```
+
+This script runs `docker compose pull` to download the latest images. After the pull is complete, simply restart OpenWebUI by running the start script again. It will automatically use the new images.
+
+```bash
+./openwebui/startopenwebui.sh
+```
+
 ## Configuration 🛠️
 
 To customize the ports, create a `.env` file in the `openwebui/` directory. The start script will automatically load it.
