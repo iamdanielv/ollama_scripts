@@ -63,6 +63,17 @@ function printBanner() {
   printMsg "${DIV}${T_RESET}"
 }
 
+# Checks if the Ollama CLI is installed and exits if it's not.
+check_ollama_installed() {
+    printMsg "${T_INFO_ICON} Checking for Ollama installation..."
+    if ! command -v ollama &> /dev/null; then
+        printErrMsg "Ollama is not installed."
+        printMsg "    ${T_INFO_ICON} Please run ${C_L_BLUE}./installollama.sh${T_RESET} to install it."
+        exit 1
+    fi
+    printOkMsg "Ollama is installed."
+}
+
 # Helper to show systemd logs and exit on failure.
 show_logs_and_exit() {
     local message="$1"

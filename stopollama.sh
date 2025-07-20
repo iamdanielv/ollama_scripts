@@ -32,12 +32,7 @@ main() {
 
     printMsg "${T_INFO_ICON} Checking prerequisites..."
 
-    # Check if Ollama is installed
-    if ! command -v ollama &> /dev/null; then
-        printErrMsg "Ollama is not installed. Cannot stop a service that isn't installed."
-        exit 1
-    fi
-    printOkMsg "Ollama is installed."
+    check_ollama_installed
 
     # --- Stop Ollama Service ---
     printMsg "${T_INFO_ICON} Attempting to stop Ollama service..."

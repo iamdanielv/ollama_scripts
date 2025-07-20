@@ -30,12 +30,7 @@ main() {
 
     printMsg "${T_INFO_ICON} Checking prerequisites..."
 
-    # Check if Ollama is installed
-    if ! command -v ollama &> /dev/null; then
-        printErrMsg "Ollama is not installed. Please run the installer first."
-        exit 1
-    fi
-    printOkMsg "Ollama is installed."
+    check_ollama_installed
 
     # --- GPU Detection ---
     local IS_NVIDIA=false
