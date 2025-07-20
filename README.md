@@ -44,7 +44,7 @@ If you need to stop the Ollama service:
 ./stopollama.sh
 ```
 
-## Ollama Update
+## Ollama Update 🚀
 
 Run the `./installollama.sh` script to update ollama. It will automatically check for the latest version and download it if needed.
 
@@ -59,7 +59,15 @@ This script will:
 * Use docker compose to run the OpenWebUI containers in detached mode
 * Wait for the service to start and print out a link to the UI
 
-### Environment Configuration (`.env`)
+### Stopping OpenWebUI 🛑
+
+To stop the OpenWebUI containers:
+
+```bash
+./openwebui/stopopenwebui.sh
+```
+
+### OpenWebUI Environment Configuration (`.env`)
 
 You can create a `.env` file inside the `openwebui/` directory to configure ports. The start script will automatically load it.
 
