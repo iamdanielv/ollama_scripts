@@ -36,6 +36,14 @@ This script will:
 * Start the ollama service
 * Verify the service is running
 
+## Stopping Ollama 🛑
+
+If you need to stop the Ollama service:
+
+```bash
+./stopollama.sh
+```
+
 ## Ollama Update
 
 Run the `./installollama.sh` script to update ollama. It will automatically check for the latest version and download it if needed.

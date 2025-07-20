@@ -47,24 +47,9 @@ else
 fi
 
 # --- Stop Ollama Service ---
-printMsg "${T_INFO_ICON} Attempting to stop Ollama service..."
-if systemctl is-active --quiet ollama.service; then
-    printMsgNoNewline "    ${C_BLUE}Executing 'systemctl stop'...${T_RESET}\t"
-    if systemctl stop ollama.service; then
-        printMsg "${T_OK_ICON} Stopped via systemctl."
-    else
-        printMsg "    ${T_WARN_ICON} 'systemctl stop' failed. Attempting fallback with 'pkill'..."
-        if pkill -f ollama; then
-            sleep 2 # Give the process a moment to terminate
-            printMsg "    ${T_OK_ICON} Stopped via pkill."
-        else
-            printErrMsg "Failed to stop Ollama service."
-            exit 1
-        fi
-    fi
-else
-    printMsg "    ${T_INFO_ICON} Ollama service is not running."
-fi
+printMsg "${T_INFO_ICON} Stopping Ollama service..."
+# We can just call the stop script directly
+"$(dirname "$0")/stopollama.sh"
 
 # --- Reset NVIDIA UVM (if applicable) ---
 if [ "$IS_NVIDIA" = true ]; then
