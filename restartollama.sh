@@ -17,65 +17,69 @@ fi
 
 # --- Main Execution ---
 
-# Check if the script is run as root, and re-run with sudo if not.
-if [[ $EUID -ne 0 ]]; then
-    printMsg "${T_INFO_ICON} This script requires root privileges for systemd and kernel modules."
-    printMsg "    ${C_L_BLUE}Attempting to re-run with sudo...${T_RESET}"
-    # Re-execute the script with sudo, passing all original arguments
-    exec sudo bash "$0" "$@"
-fi
+main() {
+    # Check if the script is run as root, and re-run with sudo if not.
+    if [[ $EUID -ne 0 ]]; then
+        printMsg "${T_INFO_ICON} This script requires root privileges for systemd and kernel modules."
+        printMsg "    ${C_L_BLUE}Attempting to re-run with sudo...${T_RESET}"
+        # Re-execute the script with sudo, passing all original arguments
+        exec sudo bash "$0" "$@"
+    fi
 
-printBanner "Ollama Service Restarter"
+    printBanner "Ollama Service Restarter"
 
-printMsg "${T_INFO_ICON} Checking prerequisites..."
+    printMsg "${T_INFO_ICON} Checking prerequisites..."
 
-# Check if Ollama is installed
-if ! command -v ollama &> /dev/null; then
-    printErrMsg "Ollama is not installed. Please run the installer first."
-    exit 1
-fi
-printOkMsg "Ollama is installed."
-
-# --- GPU Detection ---
-IS_NVIDIA=false
-printMsg "${T_INFO_ICON} Checking for NVIDIA GPU..."
-if nvidia-smi &> /dev/null; then
-    IS_NVIDIA=true
-    printMsg "    ${T_OK_ICON} NVIDIA GPU detected."
-else
-    printMsg "    ${T_INFO_ICON} No NVIDIA GPU found. Assuming CPU-only operation."
-fi
-
-# --- Stop Ollama Service ---
-printMsg "${T_INFO_ICON} Stopping Ollama service..."
-# We can just call the stop script directly
-"$(dirname "$0")/stopollama.sh"
-
-# --- Reset NVIDIA UVM (if applicable) ---
-if [ "$IS_NVIDIA" = true ]; then
-    printMsg "${T_INFO_ICON} Resetting NVIDIA UVM kernel module..."
-    printMsgNoNewline "    ${C_BLUE}Reloading 'nvidia_uvm' module...${T_RESET}\t"
-    # Unload the module. Ignore error if not loaded.
-    rmmod nvidia_uvm &>/dev/null || true
-    # Reload the module.
-    if modprobe nvidia_uvm; then
-        printMsg "${T_OK_ICON} Module reloaded."
-    else
-        printErrMsg "Failed to reset NVIDIA UVM."
-        printMsg "    ${T_INFO_ICON} Check your NVIDIA driver installation."
+    # Check if Ollama is installed
+    if ! command -v ollama &> /dev/null; then
+        printErrMsg "Ollama is not installed. Please run the installer first."
         exit 1
     fi
-fi
+    printOkMsg "Ollama is installed."
 
-# --- Start Ollama Service ---
-printMsg "${T_INFO_ICON} Starting Ollama service..."
-printMsgNoNewline "    ${C_BLUE}Executing 'systemctl start'...${T_RESET}\t"
-if ! systemctl start ollama.service; then
-    show_logs_and_exit "Failed to start Ollama via systemctl."
-else
-    printMsg "${T_OK_ICON} Service started."
-fi
+    # --- GPU Detection ---
+    local IS_NVIDIA=false
+    printMsg "${T_INFO_ICON} Checking for NVIDIA GPU..."
+    if nvidia-smi &> /dev/null; then
+        IS_NVIDIA=true
+        printMsg "    ${T_OK_ICON} NVIDIA GPU detected."
+    else
+        printMsg "    ${T_INFO_ICON} No NVIDIA GPU found. Assuming CPU-only operation."
+    fi
 
-# --- Final Verification ---
-verify_ollama_service
-printOkMsg "Ollama has been successfully restarted!"
+    # --- Stop Ollama Service ---
+    printMsg "${T_INFO_ICON} Stopping Ollama service..."
+    # We can just call the stop script directly
+    "$(dirname "$0")/stopollama.sh"
+
+    # --- Reset NVIDIA UVM (if applicable) ---
+    if [ "$IS_NVIDIA" = true ]; then
+        printMsg "${T_INFO_ICON} Resetting NVIDIA UVM kernel module..."
+        printMsgNoNewline "    ${C_BLUE}Reloading 'nvidia_uvm' module...${T_RESET}\t"
+        # Unload the module. Ignore error if not loaded.
+        rmmod nvidia_uvm &>/dev/null || true
+        # Reload the module.
+        if modprobe nvidia_uvm; then
+            printMsg "${T_OK_ICON} Module reloaded."
+        else
+            printErrMsg "Failed to reset NVIDIA UVM."
+            printMsg "    ${T_INFO_ICON} Check your NVIDIA driver installation."
+            exit 1
+        fi
+    fi
+
+    # --- Start Ollama Service ---
+    printMsg "${T_INFO_ICON} Starting Ollama service..."
+    printMsgNoNewline "    ${C_BLUE}Executing 'systemctl start'...${T_RESET}\t"
+    if ! systemctl start ollama.service; then
+        show_logs_and_exit "Failed to start Ollama via systemctl."
+    else
+        printMsg "${T_OK_ICON} Service started."
+    fi
+
+    # --- Final Verification ---
+    verify_ollama_service
+    printOkMsg "Ollama has been successfully restarted!"
+}
+
+main "$@"
