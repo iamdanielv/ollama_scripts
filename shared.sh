@@ -24,6 +24,7 @@ export T_ERR_ICON="[${T_BOLD}${C_RED}✗${T_RESET}]"
 
 export T_OK_ICON="[${T_BOLD}${C_GREEN}✓${T_RESET}]"
 export T_INFO_ICON="[${T_BOLD}${C_YELLOW}i${T_RESET}]"
+export T_WARN_ICON="[${T_BOLD}${C_YELLOW}!${T_RESET}]"
 export T_QST_ICON="${T_BOLD}[?]${T_RESET}"
 
 export DIV="-------------------------------------------------------------------------------"
@@ -60,4 +61,49 @@ function printBanner() {
   printMsg "${C_BLUE}${DIV}"
   printMsg " ${1}"
   printMsg "${DIV}${T_RESET}"
+}
+
+# Helper to show systemd logs and exit on failure.
+show_logs_and_exit() {
+    local message="$1"
+    printErrMsg "$message"
+    # Check if journalctl is available before trying to use it
+    if command -v journalctl &> /dev/null; then
+        printMsg "    ${T_INFO_ICON} Preview of system log:"
+        # Indent the journalctl output for readability
+        journalctl -u ollama.service -n 10 --no-pager | sed 's/^/    /'
+    else
+        printMsg "    ${T_WARN_ICON} 'journalctl' not found. Cannot display logs."
+    fi
+    exit 1
+}
+
+# Verifies that the Ollama service is running and responsive.
+verify_ollama_service() {
+    printMsg "${T_INFO_ICON} Verifying Ollama service status..."
+    if ! command -v systemctl &>/dev/null || ! systemctl list-units --type=service | grep -q 'ollama.service'; then
+        printMsg "    ${T_INFO_ICON} Not a systemd system or Ollama service not managed by systemd. Skipping service check."
+        return 0
+    fi
+
+    # 1. Check if the service is active with systemd
+    if ! systemctl is-active --quiet ollama.service; then
+        show_logs_and_exit "Ollama service failed to activate according to systemd."
+    fi
+    printMsg "    ${T_OK_ICON} Systemd reports service is active."
+
+    # 2. Poll the API endpoint to ensure it's responsive
+    printMsgNoNewline "    ${C_BLUE}Waiting for API to respond ${T_RESET}"
+    for i in {1..15}; do
+        if curl --silent --fail --head http://localhost:11434 &>/dev/null; then
+            echo # Newline for the dots
+            printMsg "    ${T_OK_ICON} API is responsive."
+            return 0
+        fi
+        sleep 1
+        printMsgNoNewline "${C_L_BLUE}.${T_RESET}"
+    done
+
+    echo # Newline after the dots
+    show_logs_and_exit "Ollama service is active, but the API is not responding at http://localhost:11434."
 }

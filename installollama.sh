@@ -54,37 +54,6 @@ compare_versions() {
     fi
 }
 
-# Helper to show systemd logs and exit on failure.
-show_logs_and_exit() {
-    local message="$1"
-    printErrMsg "$message"
-    # Check if journalctl is available before trying to use it
-    if command -v journalctl &> /dev/null; then
-        printMsg "    ${T_INFO_ICON} Preview of system log:"
-        # Indent the journalctl output for readability
-        journalctl -u ollama.service -n 10 --no-pager | sed 's/^/    /'
-    else
-        printMsg "    ${T_WARN_ICON} 'journalctl' not found. Cannot display logs."
-    fi
-    exit 1
-}
-
-# Verifies that the Ollama service is running and responsive.
-verify_service_status() {
-    printMsg "${T_INFO_ICON} Verifying Ollama service status..."
-    if ! command -v systemctl &>/dev/null || ! systemctl list-units --type=service | grep -q 'ollama.service'; then
-        printMsg "    ${T_INFO_ICON} Not a systemd system or Ollama service not managed by systemd. Skipping service check."
-        return 0
-    fi
-
-    if ! systemctl is-active --quiet ollama.service; then
-        show_logs_and_exit "Ollama service failed to activate according to systemd."
-    fi
-    printMsg "    ${T_OK_ICON} Systemd reports service is active."
-
-    # The rest of the verification (API check) can be added here if desired.
-}
-
 # --- Main Execution ---
 
 main() {
@@ -107,7 +76,7 @@ main() {
         latest_version=$(get_latest_ollama_version)
 
         if [[ -z "$latest_version" ]]; then
-            printMsg "${T_WARN}Could not fetch latest version. Will verify current installation.${T_RESET}"
+            printMsg "${T_WARN_ICON} Could not fetch latest version. Will verify current installation."
         else
             printMsg "${C_L_BLUE}${latest_version}${T_RESET}"
             compare_versions "$installed_version" "$latest_version"
@@ -115,12 +84,12 @@ main() {
 
             if [[ $comparison_result -eq 0 ]]; then
                 printMsg "${T_OK_ICON} You are on the latest version."
-                verify_service_status
+                verify_ollama_service
                 printOkMsg "Ollama is up-to-date and running correctly."
                 exit 0
             elif [[ $comparison_result -eq 1 ]]; then
                 printMsg "${T_INFO_ICON} Your installed version (${installed_version}) is newer than the latest release (${latest_version})."
-                verify_service_status
+                verify_ollama_service
                 printOkMsg "Ollama is running correctly."
                 exit 0
             else
@@ -168,6 +137,9 @@ main() {
         printOkMsg "Ollama installed successfully."
         printMsg "    Version: $post_install_version"
     fi
+
+    # Final verification that the service is up and running
+    verify_ollama_service
 }
 
 # Run the main script logic

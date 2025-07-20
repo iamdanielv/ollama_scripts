@@ -15,15 +15,15 @@ if ! source "$(dirname "$0")/shared.sh"; then
     exit 1
 fi
 
-# --- Helper Functions ---
-show_logs_and_exit() {
-    local message="$1"
-    printErrMsg "$message"
-    printMsg "    ${T_INFO_ICON} Preview of system log:"
-    # Indent the journalctl output for readability
-    journalctl -u ollama.service -n 10 --no-pager | sed 's/^/    /'
-    exit 1
-}
+# --- Main Execution ---
+
+# Check if the script is run as root, and re-run with sudo if not.
+if [[ $EUID -ne 0 ]]; then
+    printMsg "${T_INFO_ICON} This script requires root privileges for systemd and kernel modules."
+    printMsg "    ${C_L_BLUE}Attempting to re-run with sudo...${T_RESET}"
+    # Re-execute the script with sudo, passing all original arguments
+    exec sudo bash "$0" "$@"
+fi
 
 printBanner "Ollama Service Restarter"
 
@@ -36,31 +36,24 @@ if ! command -v ollama &> /dev/null; then
 fi
 printOkMsg "Ollama is installed."
 
-# Check if the script is run as root
-if [[ $EUID -ne 0 ]]; then
-    printErrMsg "This script must be run as root to manage systemd services."
-    exit 1
-fi
-printOkMsg "Running with root privileges."
-
 # --- GPU Detection ---
 IS_NVIDIA=false
-printMsgNoNewline "${C_BLUE}Checking for NVIDIA GPU...${T_RESET}\t"
+printMsg "${T_INFO_ICON} Checking for NVIDIA GPU..."
 if nvidia-smi &> /dev/null; then
     IS_NVIDIA=true
-    printMsg "${T_OK_ICON} NVIDIA GPU detected."
+    printMsg "    ${T_OK_ICON} NVIDIA GPU detected."
 else
-    printMsg "${T_INFO_ICON} No NVIDIA GPU found. Running on CPU only."
+    printMsg "    ${T_INFO_ICON} No NVIDIA GPU found. Assuming CPU-only operation."
 fi
 
 # --- Stop Ollama Service ---
 printMsg "${T_INFO_ICON} Attempting to stop Ollama service..."
 if systemctl is-active --quiet ollama.service; then
-    printMsgNoNewline "    ${C_BLUE}Stopping Ollama service...${T_RESET}\t"
+    printMsgNoNewline "    ${C_BLUE}Executing 'systemctl stop'...${T_RESET}\t"
     if systemctl stop ollama.service; then
         printMsg "${T_OK_ICON} Stopped via systemctl."
     else
-        printMsg "${T_WARN_ICON} systemctl stop failed. Trying pkill..."
+        printMsg "    ${T_WARN_ICON} 'systemctl stop' failed. Attempting fallback with 'pkill'..."
         if pkill -f ollama; then
             sleep 2 # Give the process a moment to terminate
             printMsg "    ${T_OK_ICON} Stopped via pkill."
@@ -75,12 +68,13 @@ fi
 
 # --- Reset NVIDIA UVM (if applicable) ---
 if [ "$IS_NVIDIA" = true ]; then
-    printMsgNoNewline "${C_BLUE}Resetting NVIDIA UVM...${T_RESET}\t\t"
+    printMsg "${T_INFO_ICON} Resetting NVIDIA UVM kernel module..."
+    printMsgNoNewline "    ${C_BLUE}Reloading 'nvidia_uvm' module...${T_RESET}\t"
     # Unload the module. Ignore error if not loaded.
     rmmod nvidia_uvm &>/dev/null || true
     # Reload the module.
     if modprobe nvidia_uvm; then
-        printMsg "${T_OK_ICON} OK"
+        printMsg "${T_OK_ICON} Module reloaded."
     else
         printErrMsg "Failed to reset NVIDIA UVM."
         printMsg "    ${T_INFO_ICON} Check your NVIDIA driver installation."
@@ -89,35 +83,14 @@ if [ "$IS_NVIDIA" = true ]; then
 fi
 
 # --- Start Ollama Service ---
-printMsgNoNewline "${C_BLUE}Starting Ollama service...${T_RESET}\t"
+printMsg "${T_INFO_ICON} Starting Ollama service..."
+printMsgNoNewline "    ${C_BLUE}Executing 'systemctl start'...${T_RESET}\t"
 if ! systemctl start ollama.service; then
     show_logs_and_exit "Failed to start Ollama via systemctl."
 else
-    printMsg "${T_OK_ICON} OK"
+    printMsg "${T_OK_ICON} Service started."
 fi
 
-# --- Verify Service and API Status ---
-printMsg "${T_INFO_ICON} Verifying Ollama service status..."
-
-# 1. Check if the service is active with systemd
-if ! systemctl is-active --quiet ollama.service; then
-    show_logs_and_exit "Ollama service failed to activate according to systemd."
-fi
-printMsg "    ${T_OK_ICON} Systemd reports service is active."
-
-# 2. Poll the API endpoint to ensure it's responsive
-printMsgNoNewline "    ${C_BLUE}Waiting for API to respond ${T_RESET}"
-for i in {1..15}; do
-    if curl --silent --fail --head http://localhost:11434 &>/dev/null; then
-        echo # Newline for the dots
-        printMsg "    ${T_OK_ICON} API is responsive."
-        printOkMsg "Ollama has been successfully restarted!"
-        exit 0
-    fi
-    sleep 1
-    printMsgNoNewline "${C_L_BLUE}.${T_RESET}"
-done
-
-echo # Newline after the dots
-printMsg "    ${T_INFO_ICON} The service might still be starting up, or there could be an issue."
-show_logs_and_exit "Ollama service is active, but the API is not responding at http://localhost:11434."
+# --- Final Verification ---
+verify_ollama_service
+printOkMsg "Ollama has been successfully restarted!"
