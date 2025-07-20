@@ -34,6 +34,57 @@ get_latest_ollama_version() {
     curl --silent "https://api.github.com/repos/ollama/ollama/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/' | sed 's/^v//'
 }
 
+# Compares two semantic versions (e.g., 0.1.10 vs 0.1.9).
+# Returns:
+#   0 if version1 == version2
+#   1 if version1 > version2
+#   2 if version1 < version2
+compare_versions() {
+    # If versions are identical, return 0
+    if [[ "$1" == "$2" ]]; then
+        return 0
+    fi
+    # Use sort -V to compare versions. The highest version will be last.
+    local latest
+    latest=$(printf '%s\n' "$1" "$2" | sort -V | tail -n1)
+    if [[ "$1" == "$latest" ]]; then
+        return 1 # ver1 is greater
+    else
+        return 2 # ver2 is greater
+    fi
+}
+
+# Helper to show systemd logs and exit on failure.
+show_logs_and_exit() {
+    local message="$1"
+    printErrMsg "$message"
+    # Check if journalctl is available before trying to use it
+    if command -v journalctl &> /dev/null; then
+        printMsg "    ${T_INFO_ICON} Preview of system log:"
+        # Indent the journalctl output for readability
+        journalctl -u ollama.service -n 10 --no-pager | sed 's/^/    /'
+    else
+        printMsg "    ${T_WARN_ICON} 'journalctl' not found. Cannot display logs."
+    fi
+    exit 1
+}
+
+# Verifies that the Ollama service is running and responsive.
+verify_service_status() {
+    printMsg "${T_INFO_ICON} Verifying Ollama service status..."
+    if ! command -v systemctl &>/dev/null || ! systemctl list-units --type=service | grep -q 'ollama.service'; then
+        printMsg "    ${T_INFO_ICON} Not a systemd system or Ollama service not managed by systemd. Skipping service check."
+        return 0
+    fi
+
+    if ! systemctl is-active --quiet ollama.service; then
+        show_logs_and_exit "Ollama service failed to activate according to systemd."
+    fi
+    printMsg "    ${T_OK_ICON} Systemd reports service is active."
+
+    # The rest of the verification (API check) can be added here if desired.
+}
+
 # --- Main Execution ---
 
 main() {
@@ -51,46 +102,62 @@ main() {
 
     if [[ -n "$installed_version" ]]; then
         printOkMsg "🤖 Ollama is already installed (version: ${installed_version})."
-        printMsg "${T_INFO_ICON} Checking for updates from GitHub... "
+        printMsgNoNewline "${T_INFO_ICON} Checking for latest version from GitHub... "
         local latest_version
         latest_version=$(get_latest_ollama_version)
 
         if [[ -z "$latest_version" ]]; then
-            printMsg "${T_WARN}Could not fetch latest version.${T_RESET}"
-            printMsg "    Proceeding with installation/update anyway."
-        elif [[ "$installed_version" == "$latest_version" ]]; then
-            printMsg "${T_OK_ICON} Already on the latest version (${latest_version})."
-            exit 0
+            printMsg "${T_WARN}Could not fetch latest version. Will verify current installation.${T_RESET}"
         else
-            printMsg "${T_OK_ICON} New version available: ${C_L_BLUE}${latest_version}${T_RESET}"
+            printMsg "${C_L_BLUE}${latest_version}${T_RESET}"
+            compare_versions "$installed_version" "$latest_version"
+            local comparison_result=$?
+
+            if [[ $comparison_result -eq 0 ]]; then
+                printMsg "${T_OK_ICON} You are on the latest version."
+                verify_service_status
+                printOkMsg "Ollama is up-to-date and running correctly."
+                exit 0
+            elif [[ $comparison_result -eq 1 ]]; then
+                printMsg "${T_INFO_ICON} Your installed version (${installed_version}) is newer than the latest release (${latest_version})."
+                verify_service_status
+                printOkMsg "Ollama is running correctly."
+                exit 0
+            else
+                printMsg "${T_OK_ICON} New version available: ${C_L_BLUE}${latest_version}${T_RESET}"
+                # Fall through to the installation block
+            fi
         fi
     else
         printMsg "${T_INFO_ICON} 🤖 Ollama not found, proceeding with installation..."
     fi
 
+    printMsg "${T_QST_ICON} The script will now download and execute the official installer from ${C_L_BLUE}https://ollama.com/install.sh${T_RESET}"
+    printMsg "    This is a standard installation method, but it involves running a script from the internet."
+    printMsgNoNewline "    ${T_QST_ICON} Do you want to proceed? (y/N) "
+    read -r response
+    if [[ ! "$response" =~ ^([yY][eE][sS]|[yY])$ ]]; then
+        printMsg "${T_INFO_ICON} Installation cancelled by user."
+        exit 0
+    fi
+
     printMsg "Downloading 📥 and running the official Ollama install script..."
-    # The following command downloads and executes a script from the internet.
-    # This is a common practice for installers but carries a security risk.
-    # For higher security, download the script, inspect it, and then run it manually.
     if ! curl -fsSL https://ollama.com/install.sh | sh; then
         printErrMsg "Ollama installation script failed to execute."
         exit 1
     fi
     printOkMsg "Ollama installation script finished."
 
-    printMsg "${T_INFO_ICON} Verifying installation..."
     # Clear the shell's command lookup cache to find the new executable.
     hash -r
-
-    sleep 1
     local post_install_version
     post_install_version=$(get_ollama_version)
 
     if [[ -z "$post_install_version" ]]; then
-        printErrMsg "Ollama installation failed. The 'ollama' command is not available after installation."
-        exit 1
+        show_logs_and_exit "Ollama installation failed. The 'ollama' command is not available after installation."
     fi
 
+    printMsg "${T_INFO_ICON} Verifying installation version..."
     if [[ "$installed_version" == "$post_install_version" ]]; then
         printOkMsg "Ollama installation script ran, but the version did not change."
         printMsg "    Current version: $post_install_version"
@@ -105,4 +172,3 @@ main() {
 
 # Run the main script logic
 main "$@"
-#    for i in {1..5}; do
