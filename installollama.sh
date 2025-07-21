@@ -54,41 +54,23 @@ compare_versions() {
     fi
 }
 
-# Exposes Ollama to the network by creating a systemd override file.
-expose_ollama_to_network() {
-    printMsg "${T_INFO_ICON} Checking network exposure for Ollama..."
+# Checks if Ollama is configured to be exposed to the network.
+# Returns 0 if exposed, 1 if not.
+check_network_exposure() {
+    local current_host_config
+    current_host_config=$(systemctl show --no-pager --property=Environment ollama 2>/dev/null || echo "")
+    if echo "$current_host_config" | grep -q "OLLAMA_HOST=0.0.0.0"; then
+        return 0 # Is exposed
+    else
+        return 1 # Is not exposed
+    fi
+}
+
+# Applies the systemd override to expose Ollama to the network.
+# This function requires sudo to run its commands.
+expose_to_network() {
     local override_dir="/etc/systemd/system/ollama.service.d"
     local override_file="${override_dir}/10-expose-network.conf"
-    local service_file="/etc/systemd/system/ollama.service"
-
-    if [[ ! -f "$service_file" ]]; then
-        # This can happen if Ollama is not installed via systemd.
-        printWarnMsg "Ollama service file not found at $service_file. Skipping network exposure."
-        printMsg "    This script only supports systemd-based installations of Ollama."
-        return
-    fi
-
-    # Check if OLLAMA_HOST is already configured to be exposed.
-    # We check the output of systemd which shows the final calculated environment.
-    local current_host_config
-    current_host_config=$(sudo systemctl show --no-pager --property=Environment ollama 2>/dev/null || echo "")
-    if echo "$current_host_config" | grep -q "OLLAMA_HOST=0.0.0.0"; then
-        if systemctl is-active --quiet ollama; then
-            printOkMsg "Ollama is already exposed to the network and running."
-            return
-        fi
-    fi
-
-    printMsg "${T_QST_ICON} To allow network access to Ollama (from Docker), the script can configure it to listen on all interfaces (0.0.0.0)."
-    printMsg "    This will create a systemd override file at: ${C_L_BLUE}${override_file}${T_RESET}"
-    printMsg "    This requires sudo privileges."
-    printMsgNoNewline "    ${T_QST_ICON} Do you want to continue? (y/N) "
-    local response
-    read -r response
-    if [[ ! "$response" =~ ^([yY][eE][sS]|[yY])$ ]]; then
-        printMsg "${T_INFO_ICON} Ollama service change cancelled by user."
-        return
-    fi
 
     printMsg "${T_INFO_ICON} Creating systemd override to expose Ollama to network..."
 
@@ -97,7 +79,6 @@ expose_ollama_to_network() {
         return 1
     fi
 
-    # Using a specific file for our setting is safer than overwriting a generic override.conf
     local override_content="[Service]\nEnvironment=\"OLLAMA_HOST=0.0.0.0\""
     if ! echo -e "$override_content" | sudo tee "$override_file" >/dev/null; then
         printErrMsg "Failed to write override file: $override_file"
@@ -115,6 +96,38 @@ expose_ollama_to_network() {
     fi
 
     printOkMsg "Ollama has been configured to be exposed to the network and was restarted."
+    return 0
+}
+
+# Manages the network exposure configuration for Ollama.
+# It checks if the configuration is needed and prompts the user before applying it.
+manage_network_exposure() {
+    printMsg "${T_INFO_ICON} Checking network exposure for Ollama..."
+
+    # Check if systemd is running and if the ollama service is installed.
+    if ! command -v systemctl &>/dev/null || ! systemctl list-unit-files --type=service | grep -q '^ollama\.service'; then
+        printMsg "    ${T_INFO_ICON} Not a systemd system or Ollama service not found. Skipping network exposure check."
+        return
+    fi
+
+    if check_network_exposure; then
+        printOkMsg "Ollama is already exposed to the network."
+        return
+    fi
+
+    local override_file="/etc/systemd/system/ollama.service.d/10-expose-network.conf"
+    printMsg "${T_QST_ICON} To allow network access to Ollama (from Docker), \n    the script can configure it to listen on all interfaces (0.0.0.0)."
+    printMsg "    This will create a systemd override file at:\n    \t${C_L_BLUE}${override_file}${T_RESET}"
+    printMsg "    This requires sudo privileges."
+    printMsgNoNewline "    ${T_QST_ICON} Do you want to continue? (y/N) "
+    local response
+    read -r response
+    if [[ ! "$response" =~ ^([yY][eE][sS]|[yY])$ ]]; then
+        printMsg "${T_INFO_ICON} Ollama service change cancelled by user."
+        return
+    fi
+
+    expose_to_network
 }
 
 # --- Main Execution ---
@@ -145,21 +158,26 @@ main() {
             compare_versions "$installed_version" "$latest_version"
             local comparison_result=$?
 
-            if [[ $comparison_result -eq 0 ]]; then
-                printMsg "${T_OK_ICON} You are on the latest version."
-                verify_ollama_service
-                expose_ollama_to_network # Check network exposure
-                printOkMsg "Ollama is up-to-date and running correctly."
-                exit 0
-            elif [[ $comparison_result -eq 1 ]]; then
-                printMsg "${T_INFO_ICON} Your installed version (${installed_version}) is newer than the latest release (${latest_version})."
-                verify_ollama_service
-                expose_ollama_to_network # Check network exposure
-                printOkMsg "Ollama is running correctly."
-                exit 0
-            else
+            if [[ $comparison_result -eq 2 ]]; then
                 printMsg "${T_OK_ICON} New version available: ${C_L_BLUE}${latest_version}${T_RESET}"
                 # Fall through to the installation block
+            else
+                # This block handles when the installed version is the same or newer.
+                if [[ $comparison_result -eq 0 ]]; then
+                    printMsg "${T_OK_ICON} You are on the latest version."
+                else # $comparison_result -eq 1
+                    printMsg "${T_INFO_ICON} Your installed version (${installed_version}) is newer than the latest release (${latest_version})."
+                fi
+
+                verify_ollama_service
+                manage_network_exposure # Check and optionally configure network exposure
+
+                if [[ $comparison_result -eq 0 ]]; then
+                    printOkMsg "Ollama is up-to-date and running correctly."
+                else
+                    printOkMsg "Ollama is running correctly."
+                fi
+                exit 0
             fi
         fi
     else
@@ -210,7 +228,7 @@ main() {
     verify_ollama_service
 
     # Check and configure network exposure
-    expose_ollama_to_network
+    manage_network_exposure
 }
 
 # Run the main script logic
