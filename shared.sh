@@ -124,6 +124,19 @@ ensure_script_dir() {
     fi
 }
 
+# Checks if the script is run as root. If not, it prints a message
+# and re-executes the script with sudo.
+# Usage: ensure_root "Reason why root is needed." "$@"
+ensure_root() {
+    local reason_msg="$1"
+    shift # The rest of "$@" are the original script arguments.
+    if [[ $EUID -ne 0 ]]; then
+        printMsg "${T_INFO_ICON} ${reason_msg}"
+        printMsg "    ${C_L_BLUE}Attempting to re-run with sudo...${T_RESET}"
+        exec sudo bash "${BASH_SOURCE[1]}" "$@"
+    fi
+}
+
 # Helper to show systemd logs and exit on failure.
 show_logs_and_exit() {
     local message="$1"

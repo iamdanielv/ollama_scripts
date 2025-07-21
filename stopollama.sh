@@ -20,14 +20,7 @@ PROCESS_NAME="ollama"
 
 # --- Main Execution ---
 main() {
-    # Check if the script is run as root, and re-run with sudo if not.
-    if [[ $EUID -ne 0 ]]; then
-        printMsg "${T_INFO_ICON} This script requires root privileges to stop the systemd service."
-        printMsg "    ${C_L_BLUE}Attempting to re-run with sudo...${T_RESET}"
-        # Re-execute the script with sudo, passing all original arguments
-        exec sudo bash "$0" "$@"
-    fi
-
+    ensure_root "This script requires root privileges to stop the systemd service." "$@"
     printBanner "Ollama Service Stopper"
 
     printMsg "${T_INFO_ICON} Checking prerequisites..."
