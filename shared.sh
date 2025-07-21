@@ -25,7 +25,7 @@ export T_ERR_ICON="[${T_BOLD}${C_RED}✗${T_RESET}]"
 export T_OK_ICON="[${T_BOLD}${C_GREEN}✓${T_RESET}]"
 export T_INFO_ICON="[${T_BOLD}${C_YELLOW}i${T_RESET}]"
 export T_WARN_ICON="[${T_BOLD}${C_YELLOW}!${T_RESET}]"
-export T_QST_ICON="${T_BOLD}[?]${T_RESET}"
+export T_QST_ICON="[${T_BOLD}${C_L_CYAN}?${T_RESET}]"
 
 export DIV="-------------------------------------------------------------------------------"
 

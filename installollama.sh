@@ -172,10 +172,18 @@ main() {
                 verify_ollama_service
                 manage_network_exposure # Check and optionally configure network exposure
 
-                if [[ $comparison_result -eq 0 ]]; then
-                    printOkMsg "Ollama is up-to-date and running correctly."
+                # Check final network state to include in the summary message.
+                local net_stat_msg
+                if check_network_exposure; then
+                    net_stat_msg="(Exposed to Network)"
                 else
-                    printOkMsg "Ollama is running correctly."
+                    net_stat_msg="(Localhost Only)"
+                fi
+
+                if [[ $comparison_result -eq 0 ]]; then
+                    printOkMsg "Ollama is up-to-date and running correctly. ${C_L_YELLOW}${net_stat_msg}${T_RESET}"
+                else
+                    printOkMsg "Ollama is running correctly. ${C_L_YELLOW}${net_stat_msg}${T_RESET}"
                 fi
                 exit 0
             fi
