@@ -33,13 +33,8 @@ main() {
     local docker_compose_cmd
     docker_compose_cmd=$(get_docker_compose_cmd)
 
-    # Ensure we are running in the script's directory so docker-compose.yml is found
-    local SCRIPT_DIR
-    SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
-    if [[ "$PWD" != "$SCRIPT_DIR" ]]; then
-        printMsg "${T_INFO_ICON} Changing to script directory: ${C_L_BLUE}${SCRIPT_DIR}${T_RESET}"
-        cd "$SCRIPT_DIR"
-    fi
+    # Ensure we are running in the script's directory so docker-compose can find its files.
+    ensure_script_dir
 
     # Source .env file for configuration if it exists
     if [[ -f ".env" ]]; then

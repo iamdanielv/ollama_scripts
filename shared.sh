@@ -110,6 +110,20 @@ get_docker_compose_cmd() {
     fi
 }
 
+# Ensures the script is running from its own directory.
+# This is useful for scripts that need to find relative files (e.g., docker-compose.yml).
+# It uses BASH_SOURCE[1] to get the path of the calling script.
+ensure_script_dir() {
+    # BASH_SOURCE[1] is the path to the calling script.
+    # This is more robust than passing BASH_SOURCE[0] as an argument.
+    local SCRIPT_DIR
+    SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[1]}" )" &> /dev/null && pwd )
+    if [[ "$PWD" != "$SCRIPT_DIR" ]]; then
+        printMsg "${T_INFO_ICON} Changing to script directory: ${C_L_BLUE}${SCRIPT_DIR}${T_RESET}"
+        cd "$SCRIPT_DIR"
+    fi
+}
+
 # Helper to show systemd logs and exit on failure.
 show_logs_and_exit() {
     local message="$1"
