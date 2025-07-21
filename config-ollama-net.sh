@@ -63,7 +63,7 @@ main() {
             exit 0
             ;;
         *)
-            printErrMsg "\nInvalid option '${choice}'. Exiting."
+            printErrMsg "Invalid option '${choice}'. Exiting."
             exit 1
             ;;
     esac
