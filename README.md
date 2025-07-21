@@ -30,12 +30,13 @@ To get up and running quickly:
 
 | Script | Description |
 |---|---|
-| `./installollama.sh` | Installs or updates Ollama and configures it for network access. |
+| `./installollama.sh` | Installs or updates Ollama and prompts to configure it for network access. |
 | `./restartollama.sh` | Sometimes on wake from sleep, the `ollama` service will go into an inconsistent state. This script stops, resets GPU state (if applicable), and restarts the Ollama service using `systemd`. |
 | `./stopollama.sh` | Stops the Ollama service. |
-| `./openwebui/startopenwebui.sh` | Starts the OpenWebUI Docker containers.  Uses `docker-compose` to run the containers in detached mode. |
+| `./config-ollama-net.sh` | Interactively configures Ollama network access (localhost vs. network). |
+| `./openwebui/startopenwebui.sh` | Starts the OpenWebUI Docker containers in detached mode. |
 | `./openwebui/stopopenwebui.sh` | Stops the OpenWebUI Docker containers. |
-| `./openwebui/updateopenwebui.sh` | Pulls the latest Docker images for OpenWebUI. |
+| `./openwebui/updateopenwebui.sh` | Pulls the latest Docker images for OpenWebUI. After updating, restart with the `startopenwebui.sh` script. |
 
 ---
 ---
@@ -76,6 +77,21 @@ The script will:
 By default, Ollama only listens for requests from the local machine (`localhost`). For OpenWebUI (running in a Docker container) to connect to Ollama, the Ollama service must be configured to listen on all network interfaces (`0.0.0.0`).
 
 The `installollama.sh` script will detect if this is needed and prompt you to apply this configuration automatically. This is the recommended way to set it up.
+
+### Changing Network Configuration ⚙️ 🌐
+
+If you need to change the network setting after the initial installation, you can use the dedicated configuration script:
+
+```bash
+./config-ollama-net.sh
+```
+
+This script provides an interactive menu to switch between:
+
+- **Exposing to Network:** Allows connections from other devices and Docker containers.
+- **Restricting to Localhost:** The default, more secure setting where Ollama is only accessible from the host machine.
+
+This script requires `sudo` and will prompt for it if necessary.
 
 ## Restarting Ollama 🔄
 
@@ -171,8 +187,15 @@ The Docker Compose file (`docker-compose.yaml`) is pre-configured to use these e
   - Ensure Docker has sufficient resources (CPU, memory).
 - **OpenWebUI Can't Access Ollama Models:**
   - This usually means the Ollama service on your host machine is not accessible from inside the Docker container.
-  - **Solution:** Run the `./installollama.sh` script. It will prompt you to configure Ollama to listen on all network interfaces, which resolves this issue.
-  - **Verification:** The `docker-compose.yaml` is pre-configured to connect to Ollama at `http://host.docker.internal:11434`. Ensure your firewall is not blocking traffic on port `11434` (or your custom `OLLAMA_PORT`).
+  - **Solution:** Run the network configuration script and choose to expose Ollama to the network:
+
+    ```bash
+    ./config-ollama-net.sh
+    ```
+
+  - This script configures Ollama to listen on all network interfaces, which is required for Docker to connect.
+  - Alternatively, re-running the installer (`./installollama.sh`) will also detect this and prompt you to fix it.
+  - **Also check:** Ensure your firewall is not blocking traffic on port `11434` (or your custom `OLLAMA_PORT`).
 
 ## Tips 💡
 

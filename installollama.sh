@@ -54,58 +54,12 @@ compare_versions() {
     fi
 }
 
-# Checks if Ollama is configured to be exposed to the network.
-# Returns 0 if exposed, 1 if not.
-check_network_exposure() {
-    local current_host_config
-    current_host_config=$(systemctl show --no-pager --property=Environment ollama 2>/dev/null || echo "")
-    if echo "$current_host_config" | grep -q "OLLAMA_HOST=0.0.0.0"; then
-        return 0 # Is exposed
-    else
-        return 1 # Is not exposed
-    fi
-}
-
-# Applies the systemd override to expose Ollama to the network.
-# This function requires sudo to run its commands.
-expose_to_network() {
-    local override_dir="/etc/systemd/system/ollama.service.d"
-    local override_file="${override_dir}/10-expose-network.conf"
-
-    printMsg "${T_INFO_ICON} Creating systemd override to expose Ollama to network..."
-
-    if ! sudo mkdir -p "$override_dir"; then
-        printErrMsg "Failed to create override directory: $override_dir"
-        return 1
-    fi
-
-    local override_content="[Service]\nEnvironment=\"OLLAMA_HOST=0.0.0.0\""
-    if ! echo -e "$override_content" | sudo tee "$override_file" >/dev/null; then
-        printErrMsg "Failed to write override file: $override_file"
-        return 1
-    fi
-
-    printMsg "${T_INFO_ICON} Reloading systemd daemon and restarting Ollama service..."
-    if ! sudo systemctl daemon-reload; then
-        printErrMsg "Failed to reload systemd daemon."
-        return 1
-    fi
-    if ! sudo systemctl restart ollama; then
-        printErrMsg "Failed to restart Ollama service."
-        return 1
-    fi
-
-    printOkMsg "Ollama has been configured to be exposed to the network and was restarted."
-    return 0
-}
-
 # Manages the network exposure configuration for Ollama.
 # It checks if the configuration is needed and prompts the user before applying it.
 manage_network_exposure() {
     printMsg "${T_INFO_ICON} Checking network exposure for Ollama..."
 
-    # Check if systemd is running and if the ollama service is installed.
-    if ! command -v systemctl &>/dev/null || ! systemctl list-unit-files --type=service | grep -q '^ollama\.service'; then
+    if ! check_ollama_systemd_service_exists; then
         printMsg "    ${T_INFO_ICON} Not a systemd system or Ollama service not found. Skipping network exposure check."
         return
     fi
@@ -116,14 +70,14 @@ manage_network_exposure() {
     fi
 
     local override_file="/etc/systemd/system/ollama.service.d/10-expose-network.conf"
-    printMsg "${T_QST_ICON} To allow network access to Ollama (from Docker), \n    the script can configure it to listen on all interfaces (0.0.0.0)."
-    printMsg "    This will create a systemd override file at:\n    \t${C_L_BLUE}${override_file}${T_RESET}"
-    printMsg "    This requires sudo privileges."
-    printMsgNoNewline "    ${T_QST_ICON} Do you want to continue? (y/N) "
+    printMsg "${T_QST_ICON} To allow network access (e.g., from Docker), Ollama can be configured to listen on all network interfaces."
+    printMsg "    This creates a systemd override file at: ${C_L_BLUE}${override_file}${T_RESET}"
+    printMsg "    You can change this setting later by running: ${C_L_BLUE}./config-ollama-net.sh${T_RESET}"
+    printMsgNoNewline "    ${T_QST_ICON} Expose Ollama to the network now? (y/N) "
     local response
     read -r response
     if [[ ! "$response" =~ ^([yY][eE][sS]|[yY])$ ]]; then
-        printMsg "${T_INFO_ICON} Ollama service change cancelled by user."
+        printMsg "${T_INFO_ICON} Skipping network exposure. Ollama will only be accessible from localhost."
         return
     fi
 
@@ -175,7 +129,7 @@ main() {
                 # Check final network state to include in the summary message.
                 local net_stat_msg
                 if check_network_exposure; then
-                    net_stat_msg="(Exposed to Network)"
+                    net_stat_msg="(Network Exposed)"
                 else
                     net_stat_msg="(Localhost Only)"
                 fi
@@ -237,6 +191,11 @@ main() {
 
     # Check and configure network exposure
     manage_network_exposure
+
+    # Final message after install/update
+    printOkMsg "Ollama installation/update process complete."
+    printMsg "    You can manage network settings at any time by running:"
+    printMsg "    ${C_L_BLUE}./config-ollama-net.sh${T_RESET}"
 }
 
 # Run the main script logic

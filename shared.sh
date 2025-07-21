@@ -175,24 +175,176 @@ poll_service() {
     return 1
 }
 
+# --- Ollama Service Helpers ---
+
+# Cached check to see if this is a systemd-based system.
+# The result is stored in a global variable to avoid repeated checks.
+# Returns 0 if systemd, 1 otherwise.
+_is_systemd_system() {
+    # If the check has been run, return the cached result.
+    if [[ -n "$_IS_SYSTEMD" ]]; then
+        return "$_IS_SYSTEMD"
+    fi
+
+    if command -v systemctl &>/dev/null && systemctl is-system-running &>/dev/null; then
+        _IS_SYSTEMD=0 # true
+    else
+        _IS_SYSTEMD=1 # false
+    fi
+    return "$_IS_SYSTEMD"
+}
+
+# Checks if the ollama.service is known to systemd.
+# Assumes _is_systemd_system() has been checked.
+# Returns 0 if found, 1 otherwise.
+_is_ollama_service_known() {
+    if systemctl list-unit-files --type=service | grep -q '^ollama\.service'; then
+        return 0 # Found
+    else
+        return 1 # Not found
+    fi
+}
+
+# Public-facing check if the Ollama systemd service exists.
+# Returns 0 if it exists, 1 otherwise.
+check_ollama_systemd_service_exists() {
+    if ! _is_systemd_system || ! _is_ollama_service_known; then
+        return 1
+    fi
+    return 0
+}
+
+# Waits for the Ollama systemd service to become known, with retries.
+# Useful when running a script immediately after installation.
+# Exits if the service is not found after a few seconds.
+wait_for_ollama_service() {
+    if ! _is_systemd_system; then
+        printMsg "${T_INFO_ICON} Not a systemd system. Skipping service discovery."
+        return
+    fi
+
+    printMsgNoNewline "${T_INFO_ICON} Looking for Ollama service"
+    local ollama_found=false
+    for i in {1..5}; do
+        printMsgNoNewline "${C_L_BLUE}.${T_RESET}"
+        if _is_ollama_service_known; then
+            ollama_found=true
+            break
+        fi
+        sleep 1
+    done
+
+    echo # Newline after the dots
+
+    if ! $ollama_found; then
+        printErrMsg "Ollama service not found after 5 attempts. Please install it first with ./installollama.sh"
+        exit 1
+    fi
+
+    printOkMsg "Ollama service found"
+}
+
 # Verifies that the Ollama service is running and responsive.
 verify_ollama_service() {
     printMsg "${T_INFO_ICON} Verifying Ollama service status..."
-    if ! command -v systemctl &>/dev/null || ! systemctl list-units --type=service | grep -q 'ollama.service'; then
-        printMsg "    ${T_INFO_ICON} Not a systemd system or Ollama service not managed by systemd. Skipping service check."
-        return 0
+
+    if ! _is_systemd_system; then
+        printMsg "    ${T_INFO_ICON} Not a systemd system. Skipping systemd service check."
+    elif ! _is_ollama_service_known; then
+        printMsg "    ${T_INFO_ICON} Ollama service not found. Skipping systemd service check."
+    else
+        # This is a systemd system and the service exists.
+        if ! systemctl is-active --quiet ollama.service; then
+            show_logs_and_exit "Ollama service failed to activate according to systemd."
+        fi
+        printMsg "    ${T_OK_ICON} Systemd reports service is active."
     fi
 
-    # 1. Check if the service is active with systemd
-    if ! systemctl is-active --quiet ollama.service; then
-        show_logs_and_exit "Ollama service failed to activate according to systemd."
-    fi
-    printMsg "    ${T_OK_ICON} Systemd reports service is active."
-
+    # Regardless of systemd status, we check if the API is responsive.
+    # This covers non-systemd installs or cases where it's run manually.
     local ollama_port=${OLLAMA_PORT:-11434}
     local ollama_url="http://localhost:${ollama_port}"
 
     if ! poll_service "$ollama_url" "Ollama API"; then
-        show_logs_and_exit "Ollama service is active, but the API is not responding at ${ollama_url}."
+        # Only show systemd logs if we know it's a systemd failure.
+        if _is_systemd_system && _is_ollama_service_known; then
+            show_logs_and_exit "Ollama service is active, but the API is not responding at ${ollama_url}."
+        else
+            printErrMsg "Ollama API is not responding at ${ollama_url}."
+            printMsg "    ${T_INFO_ICON} Please ensure Ollama is installed and running."
+            exit 1
+        fi
     fi
+}
+
+# --- Ollama Network Configuration Helpers ---
+
+# Checks if Ollama is configured to be exposed to the network.
+# Returns 0 if exposed, 1 if not.
+check_network_exposure() {
+    local current_host_config
+    # Query systemd for the effective Environment setting for the service.
+    # Redirect stderr to hide "property not set" messages if the override doesn't exist.
+    current_host_config=$(systemctl show --no-pager --property=Environment ollama 2>/dev/null || echo "")
+    if echo "$current_host_config" | grep -q "OLLAMA_HOST=0.0.0.0"; then
+        return 0 # Is exposed
+    else
+        return 1 # Is not exposed
+    fi
+}
+
+# Applies the systemd override to expose Ollama to the network.
+# This function requires sudo to run its commands.
+expose_to_network() {
+    if check_network_exposure; then
+        printMsg "${T_INFO_ICON} Already exposed to the network. No changes made."
+        return 0
+    fi
+
+    local override_dir="/etc/systemd/system/ollama.service.d"
+    local override_file="${override_dir}/10-expose-network.conf"
+
+    printMsg "${T_INFO_ICON} Creating systemd override to expose Ollama to network..."
+
+    if ! sudo mkdir -p "$override_dir"; then
+        printErrMsg "Failed to create override directory: $override_dir"
+        return 1
+    fi
+
+    local override_content="[Service]\nEnvironment=\"OLLAMA_HOST=0.0.0.0\""
+    if ! echo -e "$override_content" | sudo tee "$override_file" >/dev/null; then
+        printErrMsg "Failed to write override file: $override_file"
+        return 1
+    fi
+
+    printMsg "${T_INFO_ICON} Reloading systemd daemon and restarting Ollama service..."
+    if ! sudo systemctl daemon-reload || ! sudo systemctl restart ollama; then
+        show_logs_and_exit "Failed to restart Ollama service after applying network override."
+    fi
+
+    printOkMsg "Ollama has been configured to be exposed to the network and was restarted."
+    return 0
+}
+
+# Removes the systemd override to restrict Ollama to localhost.
+# This function requires sudo to run its commands.
+restrict_to_localhost() {
+    if ! check_network_exposure; then
+        printMsg "${T_INFO_ICON} Already restricted to localhost. No changes made."
+        return 0
+    fi
+
+    local override_file="/etc/systemd/system/ollama.service.d/10-expose-network.conf"
+    printMsg "${T_INFO_ICON} Removing systemd override to restrict Ollama to localhost..."
+
+    if [[ ! -f "$override_file" ]]; then
+        printMsg "${T_INFO_ICON} Override file not found. No changes needed."
+    else
+        sudo rm -f "$override_file"
+    fi
+
+    printMsg "${T_INFO_ICON} Reloading systemd daemon and restarting Ollama service..."
+    sudo systemctl daemon-reload
+    sudo systemctl restart ollama
+    printOkMsg "Ollama has been restricted to localhost and was restarted."
 }
