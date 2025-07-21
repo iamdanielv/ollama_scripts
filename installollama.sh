@@ -19,9 +19,13 @@ fi
 # Returns the version string or an empty string if not installed.
 get_ollama_version() {
     if command -v ollama &>/dev/null; then
-        # ollama --version outputs "ollama version is 0.1.32"
-        # We extract the last field to get just the version number.
-        ollama --version | awk '{print $NF}'
+        # ollama --version can sometimes include warning lines (often on stderr).
+        # We need to reliably find the line containing the version string.
+        # The output can be "ollama version is 0.9.6" or include warnings like
+        # "Warning: client version is 0.9.6".
+        # This command redirects stderr, finds the last line with "version is",
+        # and extracts the version number (the last field).
+        ollama --version 2>&1 | grep 'version is' | tail -n 1 | awk '{print $NF}'
     else
         echo ""
     fi
@@ -59,9 +63,29 @@ compare_versions() {
 manage_network_exposure() {
     printMsg "${T_INFO_ICON} Checking network exposure for Ollama..."
 
-    if ! check_ollama_systemd_service_exists; then
-        printMsg "    ${T_INFO_ICON} Not a systemd system or Ollama service not found. Skipping network exposure check."
+    # First, check if this is a systemd system
+    if ! _is_systemd_system; then
+        printMsg "    ${T_INFO_ICON} Not a systemd system. Skipping network exposure check."
         return
+    fi
+
+    # Then, check if the service exists, with retries, as systemd might need a moment
+    # to recognize a newly installed service.
+    printMsgNoNewline "    ${T_INFO_ICON} Looking for Ollama service"
+    local ollama_found=false
+    for i in {1..5}; do
+        printMsgNoNewline "${C_L_BLUE}.${T_RESET}"
+        if _is_ollama_service_known; then
+            ollama_found=true
+            break
+        fi
+        sleep 1
+    done
+    echo # Newline for the dots
+
+    if ! $ollama_found; then
+        printMsg "    ${T_INFO_ICON} Ollama service not found after 5 attempts. Skipping network exposure check."
+        return # Not an error, just can't configure it.
     fi
 
     if check_network_exposure; then
@@ -70,10 +94,11 @@ manage_network_exposure() {
     fi
 
     local override_file="/etc/systemd/system/ollama.service.d/10-expose-network.conf"
-    printMsg "${T_QST_ICON} To allow network access (e.g., from Docker), Ollama can be configured to listen on all network interfaces."
-    printMsg "    This creates a systemd override file at: ${C_L_BLUE}${override_file}${T_RESET}"
-    printMsg "    You can change this setting later by running: ${C_L_BLUE}./config-ollama-net.sh${T_RESET}"
-    printMsgNoNewline "    ${T_QST_ICON} Expose Ollama to the network now? (y/N) "
+    printMsg "${T_INFO_ICON} To allow network access (e.g., from Docker),"
+    printMsg "${T_INFO_ICON} Ollama can be configured to listen on all network interfaces."
+    printMsg "${T_INFO_ICON} This creates a systemd override file at:\n    ${C_L_BLUE}${override_file}${T_RESET}"
+    printMsg "${T_INFO_ICON} You can change this setting later by running: ${C_L_BLUE}./config-ollama-net.sh${T_RESET}"
+    printMsgNoNewline "\n    ${T_QST_ICON} Expose Ollama to the network now? (y/N) "
     local response
     read -r response
     if [[ ! "$response" =~ ^([yY][eE][sS]|[yY])$ ]]; then
@@ -123,6 +148,7 @@ main() {
                     printMsg "${T_INFO_ICON} Your installed version (${installed_version}) is newer than the latest release (${latest_version})."
                 fi
 
+                wait_for_ollama_service
                 verify_ollama_service
                 manage_network_exposure # Check and optionally configure network exposure
 

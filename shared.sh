@@ -186,7 +186,10 @@ _is_systemd_system() {
         return "$_IS_SYSTEMD"
     fi
 
-    if command -v systemctl &>/dev/null && systemctl is-system-running &>/dev/null; then
+    # Check for the presence of systemctl and that systemd is the init process.
+    # `is-system-running` can fail on a "degraded" system, which is still usable.
+    # Checking for the /run/systemd/system directory is a more reliable way to detect systemd.
+    if command -v systemctl &>/dev/null && [ -d /run/systemd/system ]; then
         _IS_SYSTEMD=0 # true
     else
         _IS_SYSTEMD=1 # false
@@ -242,6 +245,21 @@ wait_for_ollama_service() {
     fi
 
     printOkMsg "Ollama service found"
+
+    # After finding the service, ensure it's running.
+    if ! systemctl is-active --quiet ollama.service; then
+        local current_state
+        # Get the state (e.g., "inactive", "failed"). This command has a non-zero
+        # exit code when not active, so `|| true` is needed to prevent `set -e` from exiting.
+        current_state=$(systemctl is-active ollama.service || true)
+        printMsg "    ${T_INFO_ICON} Service is not active (currently ${C_L_YELLOW}${current_state}${T_RESET}). Attempting to start it..."
+        # This requires sudo. The calling script should either be run with sudo
+        # or the user will be prompted for a password.
+        if ! sudo systemctl start ollama.service; then
+            show_logs_and_exit "Failed to start Ollama service."
+        fi
+        printMsg "    ${T_OK_ICON} Service started successfully."
+    fi
 }
 
 # Verifies that the Ollama service is running and responsive.
