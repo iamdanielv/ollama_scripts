@@ -46,33 +46,42 @@ main() {
     printMsg "\n${T_ULINE}Choose an option:${T_RESET}"
     printMsg "  ${T_BOLD}1)${T_RESET} ${C_L_YELLOW}Expose to Network${T_RESET} (allow connections from Docker, etc.)"
     printMsg "  ${T_BOLD}2)${T_RESET} ${C_L_BLUE}Restrict to Localhost${T_RESET} (default, more secure)"
-    printMsg "  ${T_BOLD}q)${T_RESET} Quit without changing"
-    printMsgNoNewline "${T_QST_ICON} Your choice: "
+    printMsg "  ${T_BOLD}q)${T_RESET} Quit without changing\n"
+    printMsgNoNewline " ${T_QST_ICON} Your choice: "
     local choice
     read -r choice || true
+    local network_change=0
 
     case $choice in
         1)
             expose_to_network
+            network_change=$?
             ;;
         2)
             restrict_to_localhost
-            ;;
-        [qQ])
-            printMsg "\nExiting. No changes made."
-            exit 0
+            network_change=$?
             ;;
         *)
-            printErrMsg "Invalid option '${choice}'. Exiting."
-            exit 1
+            if [[ "$choice" =~ ^[qQ]$ ]]; then
+                # Handles 'q', 'Q'
+                printMsg "\n Exiting. No changes made."
+            else
+                # Handle other invalid input
+                printMsg "\n Invalid option '${choice}'. No changes made."
+            fi
+            exit 0
             ;;
     esac
 
-    # After the action, verify the service is responsive and show the new status.
-    printMsg "\n${T_INFO_ICON} Verifying service after restart..."
+    # Exit code 2 means no change was needed. The function already printed a message.
+    if [[ $network_change -eq 2 ]]; then
+        exit 0
+    fi
+
+    # If we get here, a change was made. Verify the service and show the new status.
+    printMsg "\n${T_INFO_ICON} Verifying service after configuration change..."
     verify_ollama_service
     print_current_status
-    printOkMsg "Configuration updated successfully."
 }
 
 main "$@"

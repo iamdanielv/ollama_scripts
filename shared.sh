@@ -371,10 +371,15 @@ check_network_exposure() {
 
 # Applies the systemd override to expose Ollama to the network.
 # This function requires sudo to run its commands.
+# Returns:
+#   0 - on successful change.
+#   1 - on error creating override file.
+#   2 - if no change was needed (already exposed).
 expose_to_network() {
     if check_network_exposure; then
-        printMsg "${T_INFO_ICON} Already exposed to the network. No changes made."
-        return 0
+        printMsg "\n ${T_INFO_ICON} No change needed."
+        printMsg " ${T_INFO_ICON} Ollama is already ${C_L_YELLOW}EXPOSED to the network${T_RESET} (listening on 0.0.0.0)."
+        return 2 # 2 means no change was needed
     fi
 
     local override_dir="/etc/systemd/system/ollama.service.d"
@@ -404,10 +409,14 @@ expose_to_network() {
 
 # Removes the systemd override to restrict Ollama to localhost.
 # This function requires sudo to run its commands.
+# Returns:
+#   0 - on successful change.
+#   2 - if no change was needed (already restricted).
 restrict_to_localhost() {
     if ! check_network_exposure; then
-        printMsg "${T_INFO_ICON} Already restricted to localhost. No changes made."
-        return 0
+        printMsg "\n ${T_INFO_ICON} No change needed."
+        printMsg " ${T_INFO_ICON} Ollama is already ${C_L_BLUE}RESTRICTED to localhost${T_RESET} (listening on 127.0.0.1)."
+        return 2 # 2 means no change was needed
     fi
 
     local override_file="/etc/systemd/system/ollama.service.d/10-expose-network.conf"
@@ -423,4 +432,5 @@ restrict_to_localhost() {
     sudo systemctl daemon-reload
     sudo systemctl restart ollama
     printOkMsg "Ollama has been restricted to localhost and was restarted."
+    return 0
 }
