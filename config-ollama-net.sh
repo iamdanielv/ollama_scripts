@@ -49,7 +49,7 @@ main() {
     printMsg "  ${T_BOLD}q)${T_RESET} Quit without changing"
     printMsgNoNewline "${T_QST_ICON} Your choice: "
     local choice
-    read -r choice
+    read -r choice || true
 
     case $choice in
         1)

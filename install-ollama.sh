@@ -100,7 +100,7 @@ manage_network_exposure() {
     printMsg "${T_INFO_ICON} You can change this setting later by running: ${C_L_BLUE}./config-ollama-net.sh${T_RESET}"
     printMsgNoNewline "\n    ${T_QST_ICON} Expose Ollama to the network now? (y/N) "
     local response
-    read -r response
+    read -r response || true
     if [[ ! "$response" =~ ^([yY][eE][sS]|[yY])$ ]]; then
         printMsg "${T_INFO_ICON} Skipping network exposure. Ollama will only be accessible from localhost."
         return
@@ -178,7 +178,7 @@ main() {
     printMsg "${T_QST_ICON} The script will now download and execute the official installer from ${C_L_BLUE}https://ollama.com/install.sh${T_RESET}"
     printMsg "    This is a standard installation method, but it involves running a script from the internet."
     printMsgNoNewline "    ${T_QST_ICON} Do you want to proceed? (y/N) "
-    read -r response
+    read -r response || true
     if [[ ! "$response" =~ ^([yY][eE][sS]|[yY])$ ]]; then
         printMsg "${T_INFO_ICON} Installation cancelled by user."
         exit 0

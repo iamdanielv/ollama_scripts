@@ -63,6 +63,43 @@ function printBanner() {
   printMsg "${DIV}${T_RESET}"
 }
 
+# --- Error Handling & Traps ---
+
+# Centralized error handler function.
+# This function is triggered by the 'trap' command on any error when 'set -e' is active.
+script_error_handler() {
+    local exit_code=$? # Capture the exit code immediately!
+    trap - ERR # Disable the trap to prevent recursion if the handler itself fails.
+    local line_number=$1
+    local command="$2"
+    # BASH_SOURCE[1] is the path to the script that sourced this file.
+    local script_path="${BASH_SOURCE[1]:-${BASH_SOURCE[0]}}"
+    local script_name
+    script_name=$(basename "$script_path")
+
+    echo # Add a newline for better formatting before the error.
+    printErrMsg "A fatal error occurred."
+    printMsg "    Script:     ${C_L_BLUE}${script_name}${T_RESET}"
+    printMsg "    Line:       ${C_L_YELLOW}${line_number}${T_RESET}"
+    printMsg "    Command:    ${C_L_CYAN}${command}${T_RESET}"
+    printMsg "    Exit Code:  ${C_RED}${exit_code}${T_RESET}"
+    echo
+}
+
+# Function to handle Ctrl+C (SIGINT)
+script_interrupt_handler() {
+    trap - INT # Disable the trap to prevent recursion.
+    echo # Add a newline for better formatting.
+    printMsg "${T_WARN_ICON} ${C_L_YELLOW}Operation cancelled by user.${T_RESET}"
+    # Exit with a status code indicating cancellation (130 is common for Ctrl+C).
+    exit 130
+}
+
+# Set the trap. This will call our handler function whenever a command fails.
+# The arguments passed to the handler are the line number and the command that failed.
+trap 'script_error_handler $LINENO "$BASH_COMMAND"' ERR
+trap 'script_interrupt_handler' INT
+
 # Checks if the Ollama CLI is installed and exits if it's not.
 check_ollama_installed() {
     printMsgNoNewline "${T_INFO_ICON} Checking for Ollama installation... "
