@@ -33,7 +33,7 @@ main() {
     fi
 
     printOkMsg "OpenWebUI container images have been successfully updated."
-    printMsg "    ${T_INFO_ICON} You can now restart the service with: ${C_L_BLUE}./startopenwebui.sh${T_RESET}"
+    printMsg "    ${T_INFO_ICON} You can now restart the service with: ${C_L_BLUE}./start-openwebui.sh${T_RESET}"
 }
 
 # Run the main script logic

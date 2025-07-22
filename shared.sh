@@ -65,10 +65,11 @@ function printBanner() {
 
 # Checks if the Ollama CLI is installed and exits if it's not.
 check_ollama_installed() {
-    printMsg "${T_INFO_ICON} Checking for Ollama installation..."
+    printMsgNoNewline "${T_INFO_ICON} Checking for Ollama installation... "
     if ! command -v ollama &> /dev/null; then
+        echo >&2 # Newline before error message
         printErrMsg "Ollama is not installed."
-        printMsg "    ${T_INFO_ICON} Please run ${C_L_BLUE}./installollama.sh${T_RESET} to install it."
+        printMsg "    ${T_INFO_ICON} Please run ${C_L_BLUE}./install-ollama.sh${T_RESET} to install it."
         exit 1
     fi
     printOkMsg "Ollama is installed."
@@ -76,16 +77,18 @@ check_ollama_installed() {
 
 # Checks for Docker and Docker Compose. Exits if not found.
 check_docker_prerequisites() {
-    printMsg "${T_INFO_ICON} Checking for Docker..." >&2
+    printMsgNoNewline "${T_INFO_ICON} Checking for Docker... " >&2
     if ! command -v docker &>/dev/null; then
+        echo >&2 # Newline before error message
         printErrMsg "Docker is not installed. Please install Docker to continue." >&2
         exit 1
     fi
     printOkMsg "Docker is installed." >&2
 
-    printMsg "${T_INFO_ICON} Checking for Docker Compose..." >&2
+    printMsgNoNewline "${T_INFO_ICON} Checking for Docker Compose... " >&2
     # Check for either v2 (plugin) or v1 (standalone)
     if ! (command -v docker &>/dev/null && docker compose version &>/dev/null) && ! command -v docker-compose &>/dev/null; then
+        echo >&2 # Newline before error message
         printErrMsg "Docker Compose is not installed." >&2
         exit 1
     fi
@@ -175,6 +178,21 @@ poll_service() {
     return 1
 }
 
+# Checks if an endpoint is responsive without writing to terminal
+# Returns 0 on success, 1 on failure.
+# Usage: check_endpoint_status <url> [timeout_seconds]
+check_endpoint_status() {
+    local url="$1"
+    local timeout=${2:-5} # A shorter default timeout is fine for a status check.
+    # Use --connect-timeout to fail fast if the port isn't open.
+    # Use --max-time for the total operation.
+    if curl --silent --fail --head --connect-timeout 2 --max-time "$timeout" "$url" &>/dev/null; then
+        return 0 # Success
+    else
+        return 1 # Failure
+    fi
+}
+
 # --- Ollama Service Helpers ---
 
 # Cached check to see if this is a systemd-based system.
@@ -240,7 +258,7 @@ wait_for_ollama_service() {
     echo # Newline after the dots
 
     if ! $ollama_found; then
-        printErrMsg "Ollama service not found after 5 attempts. Please install it first with ./installollama.sh"
+        printErrMsg "Ollama service not found after 5 attempts. Please install it first with ./install-ollama.sh"
         exit 1
     fi
 

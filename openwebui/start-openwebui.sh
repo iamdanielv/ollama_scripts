@@ -53,10 +53,26 @@ main() {
     if ! poll_service "$ollama_url" "Ollama" 10; then
         printErrMsg "Ollama service is not responding at ${ollama_url}."
         printMsg "    ${T_INFO_ICON} Please ensure Ollama is running before starting OpenWebUI."
-        printMsg "    ${T_INFO_ICON} You can try running: ${C_L_BLUE}../restartollama.sh${T_RESET}"
+        printMsg "    ${T_INFO_ICON} You can try running: ${C_L_BLUE}../restart-ollama.sh${T_RESET}"
         exit 1
     fi
-    # The success message is already printed by poll_service_responsive.
+    # The success message is already printed by poll_service.
+
+    # Check if Ollama is exposed to the network, which is required for Docker to connect.
+    printMsg "${T_INFO_ICON} Checking Ollama network configuration for Docker access..."
+    if ! _is_systemd_system; then
+        printMsg "    ${T_INFO_ICON} Could not auto-detect network config (not a systemd system)."
+    elif ! _is_ollama_service_known; then
+        printMsg "    ${T_INFO_ICON} Could not auto-detect network config (Ollama service not found)."
+    else
+        if ! check_network_exposure; then
+            printMsg "    ${T_WARN_ICON} ${C_L_YELLOW}Warning: Ollama is only listening on localhost.${T_RESET}"
+            printMsg "    ${T_INFO_ICON} OpenWebUI (in Docker) may not be able to connect to it."
+            printMsg "    ${T_INFO_ICON} If you have issues, run ${C_L_BLUE}../config-ollama-net.sh${T_RESET} to expose Ollama."
+        else
+            printMsg "    ${T_OK_ICON} Ollama is exposed to the network."
+        fi
+    fi
 
     printMsg "${T_INFO_ICON} Starting OpenWebUI containers in detached mode..."
     if ! $docker_compose_cmd up -d; then

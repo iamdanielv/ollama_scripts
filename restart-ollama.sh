@@ -38,7 +38,7 @@ main() {
     # --- Stop Ollama Service ---
     printMsg "${T_INFO_ICON} Stopping Ollama service..."
     # We can just call the stop script directly
-    "$(dirname "$0")/stopollama.sh"
+    "$(dirname "$0")/stop-ollama.sh"
 
     # --- Reset NVIDIA UVM (if applicable) ---
     if [ "$IS_NVIDIA" = true ]; then
