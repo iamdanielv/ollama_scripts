@@ -256,7 +256,10 @@ _is_systemd_system() {
 # Assumes _is_systemd_system() has been checked.
 # Returns 0 if found, 1 otherwise.
 _is_ollama_service_known() {
-    if systemctl list-unit-files --type=service | grep -q '^ollama\.service'; then
+    # 'systemctl cat' is a direct way to check if a service exists
+    # It will return a non-zero exit code if the service doesn't exist.
+    # We redirect stdout and stderr to /dev/null to suppress all output.
+    if systemctl cat ollama.service &>/dev/null; then
         return 0 # Found
     else
         return 1 # Not found
