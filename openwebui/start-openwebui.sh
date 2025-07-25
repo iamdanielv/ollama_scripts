@@ -74,15 +74,22 @@ main() {
         fi
     fi
 
-    printMsg "${T_INFO_ICON} Starting OpenWebUI containers in detached mode..."
-    if ! $docker_compose_cmd up -d; then
-        show_docker_logs_and_exit "Failed to start OpenWebUI containers."
+    local docker_compose_cmd_parts=($docker_compose_cmd)
+    if ! run_with_spinner "Starting OpenWebUI containers" "${docker_compose_cmd_parts[@]}" up -d; then
+        # The error message is already printed by run_with_spinner.
+        # Print the captured output on failure for debugging.
+        if [[ -n "$SPINNER_OUTPUT" ]]; then
+            echo -e "${C_GRAY}--- Start of Docker Compose Output ---${T_RESET}"
+            echo "$SPINNER_OUTPUT" | sed 's/^/    /'
+            echo -e "${C_GRAY}--- End of Docker Compose Output ---${T_RESET}"
+        fi
+        exit 1
     fi
 
     local webui_port=${OPEN_WEBUI_PORT:-3000}
     local webui_url="http://localhost:${webui_port}"
 
-    if ! poll_service "$webui_url" "OpenWebUI" 60; then
+    if ! poll_service "$webui_url" "OpenWebUI UI" 60; then
         show_docker_logs_and_exit "OpenWebUI containers are running, but the UI is not responding at ${webui_url}."
     fi
 
