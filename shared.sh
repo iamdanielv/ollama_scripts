@@ -320,6 +320,64 @@ wait_for_ollama_service() {
     fi
 }
 
+# A function to display a spinner while a command runs in the background.
+# Usage: run_with_spinner "Description of task..." "command_to_run" "arg1" "arg2" ...
+# The command's stdout and stderr will be captured.
+# The function returns the exit code of the command.
+# The captured stdout is stored in the global variable SPINNER_OUTPUT.
+export SPINNER_OUTPUT=""
+run_with_spinner() {
+    local desc="$1"
+    shift
+    local cmd=("$@")
+
+    local spinner_chars="⣾⣷⣯⣟⡿⢿⣻⣽"
+    local i=0
+    local temp_output_file
+    temp_output_file=$(mktemp)
+
+    # Run the command in the background, redirecting its output to the temp file.
+    "${cmd[@]}" &> "$temp_output_file" &
+    local pid=$!
+
+    # Hide cursor
+    tput civis
+    # Trap to ensure cursor is shown again on exit/interrupt
+    trap 'tput cnorm; rm -f "$temp_output_file"; exit 130' INT TERM
+
+    # Initial spinner print
+    printMsgNoNewline "    ${C_L_BLUE}${spinner_chars:0:1}${T_RESET} ${desc}"
+
+    while ps -p $pid > /dev/null; do
+        # Move cursor to the beginning of the line, print spinner, and stay on the same line
+        echo -ne "\r    ${C_L_BLUE}${spinner_chars:$i:1}${T_RESET} ${desc}"
+        i=$(((i + 1) % ${#spinner_chars}))
+        sleep 0.1
+    done
+
+    # Wait for the command to finish and get its exit code
+    wait $pid
+    local exit_code=$?
+
+    # Read the output from the temp file into the global variable
+    SPINNER_OUTPUT=$(<"$temp_output_file")
+    rm "$temp_output_file"
+
+    # Show cursor again and clear the trap
+    tput cnorm
+    trap - INT TERM
+
+    # Overwrite the spinner line with the final status message
+    echo -ne "\r" # Move to beginning of line
+    if [[ $exit_code -eq 0 ]]; then
+        printOkMsg "${desc}"
+    else
+        printErrMsg "${desc}"
+    fi
+
+    return $exit_code
+}
+
 # Verifies that the Ollama service is running and responsive.
 verify_ollama_service() {
     printMsg "${T_INFO_ICON} Verifying Ollama service status..."
