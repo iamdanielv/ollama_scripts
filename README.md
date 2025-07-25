@@ -165,17 +165,16 @@ To stop the Ollama service:
 
 To view and search the logs for the `ollama` service, you can use the `logs-ollama.sh` script. This is particularly useful for debugging.
 
-```bash
-./logs-ollama.sh
-```
+This script is a simple wrapper that passes arguments directly to `journalctl -u ollama.service`.
 
-By default, this will "follow" the logs in real-time. You can pass any standard `journalctl` flags to it.
+- **View all logs (searchable):**
 
-- **Show the last 100 lines:**
   ```bash
-  ./logs-ollama.sh -n 100
+  ./logs-ollama.sh
   ```
+
 - **Show logs since a specific time:**
+
   ```bash
   ./logs-ollama.sh --since "1 hour ago"
   ```

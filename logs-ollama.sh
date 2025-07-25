@@ -14,16 +14,27 @@ if ! source "$(dirname "$0")/shared.sh"; then
 fi
 
 show_help() {
-    printMsg "Usage: $(basename "$0") [journalctl options]"
+    printBanner "Ollama Log Viewer"
     printMsg "A wrapper for 'journalctl -u ollama.service' to easily view logs."
-    printMsg "By default, it opens the logs in a searchable pager (like 'less')."
-    printMsg "\nExamples:"
-    printMsg "  $(basename "$0")              # View and search all logs (press '/' to search)"
-    printMsg "  $(basename "$0") -f           # Follow logs in real-time (press Ctrl+C to stop)"
-    printMsg "  $(basename "$0") -n 50         # Show the last 50 lines"
-    printMsg "  $(basename "$0") --since '1 hour ago' # Show logs from the last hour"
-    printMsg "\nAll arguments are passed directly to 'journalctl'."
-    printMsg "Press Ctrl+C to stop following logs."
+    printMsg "By default, it opens logs in a searchable pager (like 'less')."
+    printMsg "All arguments are passed directly to 'journalctl'."
+
+    printMsg "\n${T_ULINE}Usage:${T_RESET}"
+    printMsg "  $(basename "$0") [journalctl_options]"
+
+    printMsg "\n${T_ULINE}Common Options:${T_RESET}"
+    printMsg "  ${C_L_BLUE}-f${T_RESET}               Follow logs in real-time (press Ctrl+C to stop)."
+    printMsg "  ${C_L_BLUE}-n <lines>${T_RESET}       Show the last N lines (e.g., -n 100)."
+    printMsg "  ${C_L_BLUE}--since <time>${T_RESET}   Show logs since a specific time (e.g., '1 hour ago')."
+    printMsg "  ${C_L_BLUE}-h, --help${T_RESET}       Show this help message."
+
+    printMsg "\n${T_ULINE}Examples:${T_RESET}"
+    printMsg "  ${C_GRAY}# View and search all logs (press '/' to search, 'q' to quit)${T_RESET}"
+    printMsg "  $(basename "$0")"
+    printMsg "\n  ${C_GRAY}# Follow logs in real-time${T_RESET}"
+    printMsg "  $(basename "$0") -f"
+    printMsg "\n  ${C_GRAY}# Show the last 100 lines${T_RESET}"
+    printMsg "  $(basename "$0") -n 100"
 }
 
 main() {
