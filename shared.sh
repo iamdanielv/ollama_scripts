@@ -199,20 +199,37 @@ poll_service() {
     local service_name="$2"
     local timeout=${3:-15} # Default timeout 15 seconds
 
-    printMsgNoNewline "    ${C_BLUE}Waiting for ${service_name} to respond at ${url}... ${T_RESET}"
-    for ((i=0; i<timeout; i++)); do
+    local spinner_chars="⣾⣷⣯⣟⡿⢿⣻⣽"
+    local i=0
+    local desc="Waiting for ${service_name} to respond at ${url}"
+
+    # Hide cursor
+    tput civis
+    # Trap to ensure cursor is shown again on exit/interrupt
+    trap 'tput cnorm; exit 130' INT TERM
+
+    for ((j=0; j<timeout; j++)); do
         if curl --silent --fail --head "$url" &>/dev/null; then
-            echo # Newline for the dots
+            # Success
+            tput cnorm
+            trap - INT TERM
+            # Overwrite the spinner line with the final success message
+            echo -ne "\r"
             printMsg "    ${T_OK_ICON} ${service_name} is responsive."
             return 0
         fi
+
+        # Update spinner
+        echo -ne "\r    ${C_L_BLUE}${spinner_chars:$i:1}${T_RESET} ${desc}"
+        i=$(((i + 1) % ${#spinner_chars}))
         sleep 1
-        printMsgNoNewline "${C_L_BLUE}.${T_RESET}"
     done
 
-    echo # Newline after the dots
-    # The calling script should handle the failure message
-    return 1
+    # Timeout
+    tput cnorm
+    trap - INT TERM
+    echo -ne "\r\033[K" # Clear the spinner line
+    return 1 # The calling script should handle the failure message
 }
 
 # Checks if an endpoint is responsive without writing to terminal
