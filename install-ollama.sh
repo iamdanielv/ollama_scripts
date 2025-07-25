@@ -150,6 +150,24 @@ _run_test() {
     fi
 }
 
+# Helper to run a single string comparison test case for the run_tests function.
+# It accesses the `test_count` and `failures` variables from its caller's scope.
+# Usage: _run_string_test "actual_output" "expected_output" "description"
+_run_string_test() {
+    local actual="$1"
+    local expected="$2"
+    local description="$3"
+    ((test_count++))
+
+    printMsgNoNewline "  Test: ${description}... "
+    if [[ "$actual" == "$expected" ]]; then
+        printMsg "${C_L_GREEN}PASSED${T_RESET}"
+    else
+        printMsg "${C_RED}FAILED${T_RESET} (Expected: '$expected', Got: '$actual')"
+        ((failures++))
+    fi
+}
+
 # A function to run internal self-tests for the script's logic.
 run_tests() {
     printBanner "Running Self-Tests"
@@ -172,7 +190,60 @@ run_tests() {
     _run_test "1.0.1" "1.0" 1 "v1 > v2 (different length)"
     _run_test "1.0.0" "" 1 "v1 > empty v2"
     _run_test "" "1.0.0" 2 "empty v1 < v2"
-   
+
+    # --- get_ollama_version tests ---
+    printMsg "\n${T_ULINE}Testing get_ollama_version function:${T_RESET}"
+    # To test get_ollama_version, we mock the `ollama` and `command` commands.
+    # We use environment variables to control the mock's behavior for each test case.
+    ollama() {
+        if [[ "$1" == "--version" ]]; then
+            echo -e "$OLLAMA_MOCK_OUTPUT"
+        fi
+    }
+    export -f ollama
+    command() {
+        if [[ "$1" == "-v" && "$2" == "ollama" ]]; then
+            [[ "$COMMAND_V_MOCK_RETURN" -eq 0 ]] && return 0 || return 1
+        else
+            /usr/bin/command "$@" # Use real command for other calls
+        fi
+    }
+    export -f command
+
+    export COMMAND_V_MOCK_RETURN=0
+    export OLLAMA_MOCK_OUTPUT="ollama version is 0.1.25"
+    _run_string_test "$(get_ollama_version)" "0.1.25" "Parsing simple version string"
+
+    export OLLAMA_MOCK_OUTPUT="Warning: client version is 0.1.26\nollama version is 0.1.26"
+    _run_string_test "$(get_ollama_version)" "0.1.26" "Parsing version with stderr warning"
+
+    export OLLAMA_MOCK_OUTPUT="some other output"
+    _run_string_test "$(get_ollama_version)" "" "Parsing output with no version"
+
+    export COMMAND_V_MOCK_RETURN=1
+    _run_string_test "$(get_ollama_version)" "" "Command not found"
+
+    # --- get_latest_ollama_version tests ---
+    printMsg "\n${T_ULINE}Testing get_latest_ollama_version function:${T_RESET}"
+    # To test get_latest_ollama_version, we mock the `curl` command.
+    curl() {
+        echo -e "$CURL_MOCK_OUTPUT"
+    }
+    export -f curl
+
+    export CURL_MOCK_OUTPUT='some junk\n"tag_name": "v0.1.29",\nmore junk'
+    _run_string_test "$(get_latest_ollama_version)" "0.1.29" "Parsing valid GitHub API response"
+
+    export CURL_MOCK_OUTPUT='no tag name here'
+    _run_string_test "$(get_latest_ollama_version)" "" "Parsing invalid API response"
+
+    export CURL_MOCK_OUTPUT=""
+    _run_string_test "$(get_latest_ollama_version)" "" "Handling empty API response"
+
+    # --- Cleanup Mocks ---
+    # Unset the mock functions to restore original behavior
+    unset -f ollama command curl
+
     # --- Test Summary ---
     printMsg "\n${T_ULINE}Test Summary:${T_RESET}"
     if [[ $failures -eq 0 ]]; then
