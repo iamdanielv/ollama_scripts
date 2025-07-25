@@ -16,12 +16,22 @@ fi
 # --- Script Functions ---
 
 show_help() {
-    printMsg "Usage: $(basename "$0") [FLAG]"
-    printMsg "Installs or updates Ollama."
-    printMsg "\nFlags:"
-    printMsg "  -v, --version   Show the currently installed and latest available versions."
-    printMsg "  -h, --help      Show this help message"
-    printMsg "\nIf no flag is provided, the script will run in interactive install/update mode."
+    printBanner "Ollama Installer/Updater"
+    printMsg "Installs or updates Ollama on the local system."
+    printMsg "If run without flags, it enters an interactive install/update mode."
+
+    printMsg "\n${T_ULINE}Usage:${T_RESET}"
+    printMsg "  $(basename "$0") [-v | -h]"
+
+    printMsg "\n${T_ULINE}Options:${T_RESET}"
+    printMsg "  ${C_L_BLUE}-v, --version${T_RESET}   Displays the installed and latest available versions."
+    printMsg "  ${C_L_BLUE}-h, --help${T_RESET}      Shows this help message."
+
+    printMsg "\n${T_ULINE}Examples:${T_RESET}"
+    printMsg "  ${C_GRAY}# Run the interactive installer/updater${T_RESET}"
+    printMsg "  $(basename "$0")"
+    printMsg "  ${C_GRAY}# Check the current and latest versions without installing${T_RESET}"
+    printMsg "  $(basename "$0") -v"
 }
 
 # Function to get the current Ollama version.
