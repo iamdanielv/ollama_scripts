@@ -27,14 +27,24 @@ readonly STATUS_LOCALHOST="localhost"
 
 # --- Helper Functions ---
 show_help() {
-    printMsg "Usage: $(basename "$0") [FLAG]"
+    printBanner "Ollama Network Configurator"
     printMsg "Configures Ollama network exposure."
-    printMsg "\nFlags:"
-    printMsg "  -e, --expose    Expose Ollama to the network (listens on 0.0.0.0)"
-    printMsg "  -r, --restrict  Restrict Ollama to localhost (listens on 127.0.0.1)"
-    printMsg "  -v, --view      View the current network configuration"
-    printMsg "  -h, --help      Show this help message"
-    printMsg "\nIf no flag is provided, the script will run in interactive mode."
+    printMsg "If run without flags, it enters an interactive configuration mode."
+
+    printMsg "\n${T_ULINE}Usage:${T_RESET}"
+    printMsg "  $(basename "$0") [-e | -r | -v | -h]"
+
+    printMsg "\n${T_ULINE}Options:${T_RESET}"
+    printMsg "  ${C_L_BLUE}-e, --expose${T_RESET}    Expose Ollama to the network (listens on 0.0.0.0)."
+    printMsg "  ${C_L_BLUE}-r, --restrict${T_RESET}  Restrict Ollama to localhost (listens on 127.0.0.1)."
+    printMsg "  ${C_L_BLUE}-v, --view${T_RESET}      View the current network configuration and exit."
+    printMsg "  ${C_L_BLUE}-h, --help${T_RESET}      Show this help message."
+
+    printMsg "\n${T_ULINE}Examples:${T_RESET}"
+    printMsg "  ${C_GRAY}# Run the interactive configuration menu${T_RESET}"
+    printMsg "  $(basename "$0")"
+    printMsg "  ${C_GRAY}# Expose Ollama to the network non-interactively${T_RESET}"
+    printMsg "  $(basename "$0") --expose"
 }
 
 print_current_status() {
