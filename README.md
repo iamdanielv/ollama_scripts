@@ -41,7 +41,7 @@ To get up and running quickly:
 | `./install-ollama.sh` | Installs or updates Ollama and prompts to configure it for network access. |
 | `./restart-ollama.sh` | Sometimes on wake from sleep, the `ollama` service will go into an inconsistent state. This script stops, resets GPU state (if applicable), and restarts the Ollama service using `systemd`. |
 | `./stop-ollama.sh` | Stops the Ollama service. |
-| `./config-ollama-net.sh` | Interactively configures Ollama network access (localhost vs. network). |
+| `./config-ollama-net.sh` | Configures Ollama network access. Can be run interactively or with flags (`--expose`, `--restrict`, `--view`). |
 
 ### OpenWebUI Management Scripts
 
@@ -102,12 +102,18 @@ If you need to change the network setting after the initial installation, you ca
 ./config-ollama-net.sh
 ```
 
-This script provides an interactive menu to switch between:
+This script provides an interactive menu to switch between exposing Ollama to the network or restricting it to localhost.
 
-- **Exposing to Network:** Allows connections from other devices and Docker containers.
-- **Restricting to Localhost:** The default, more secure setting where Ollama is only accessible from the host machine.
+It can also be run non-interactively with the following flags:
 
-This script requires `sudo` and will prompt for it if necessary.
+| Flag | Alias | Description |
+|---|---|---|
+| `--expose` | `-e` | Exposes Ollama to the network. |
+| `--restrict` | `-r` | Restricts Ollama to localhost. |
+| `--view` | `-v` | Displays the current network configuration. |
+| `--help` | `-h` | Shows the help message. |
+
+This script requires `sudo` for modifications and will prompt for it if necessary.
 
 ## Restarting Ollama 🔄
 
@@ -245,4 +251,3 @@ This project is licensed under the MIT License. See the `LICENSE` file for detai
 ## Contact 📧
 
 Let me know if you have any questions. I can be reached at [@IAmDanielV](https://twitter.com/IAmDanielV) or [@iamdanielv.bsky.social](https://bsky.app/profile/iamdanielv.bsky.social).
-
