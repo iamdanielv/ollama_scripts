@@ -96,6 +96,7 @@ The installer can also be run with flags for specific actions:
 | Flag | Alias | Description |
 |---|---|---|
 | `--version` | `-v` | Displays the currently installed version and checks for the latest available version on GitHub without running the full installer. |
+| `--test` | `-t` | Runs internal self-tests for script functions. |
 | `--help` | `-h` | Shows the help message. |
 
 **Example:**

@@ -1,11 +1,6 @@
 #!/bin/bash
 # Install or update Ollama.
 
-# Exit immediately if a command exits with a non-zero status.
-set -e
-# The return value of a pipeline is the status of the last command to exit with a non-zero status.
-set -o pipefail
-
 # Source common utilities for colors and functions
 # shellcheck source=./shared.sh
 if ! source "$(dirname "$0")/shared.sh"; then
@@ -18,13 +13,14 @@ fi
 show_help() {
     printBanner "Ollama Installer/Updater"
     printMsg "Installs or updates Ollama on the local system."
-    printMsg "If run without flags, it enters an interactive install/update mode."
+    printMsg "If run without flags, it enters an interactive install/update mode. Also includes self-tests."
 
     printMsg "\n${T_ULINE}Usage:${T_RESET}"
-    printMsg "  $(basename "$0") [-v | -h]"
+    printMsg "  $(basename "$0") [-v | -t | -h]"
 
     printMsg "\n${T_ULINE}Options:${T_RESET}"
     printMsg "  ${C_L_BLUE}-v, --version${T_RESET}   Displays the installed and latest available versions."
+    printMsg "  ${C_L_BLUE}-t, --test${T_RESET}        Runs internal self-tests for script functions."
     printMsg "  ${C_L_BLUE}-h, --help${T_RESET}      Shows this help message."
 
     printMsg "\n${T_ULINE}Examples:${T_RESET}"
@@ -32,6 +28,8 @@ show_help() {
     printMsg "  $(basename "$0")"
     printMsg "  ${C_GRAY}# Check the current and latest versions without installing${T_RESET}"
     printMsg "  $(basename "$0") -v"
+    printMsg "  ${C_GRAY}# Run internal script tests${T_RESET}"
+    printMsg "  $(basename "$0") -t"
 }
 
 # Function to get the current Ollama version.
@@ -63,17 +61,19 @@ get_latest_ollama_version() {
 #   1 if version1 > version2
 #   2 if version1 < version2
 compare_versions() {
-    # If versions are identical, return 0
     if [[ "$1" == "$2" ]]; then
         return 0
     fi
-    # Use sort -V to compare versions. The highest version will be last.
-    local latest
-    latest=$(printf '%s\n' "$1" "$2" | sort -V | tail -n1)
-    if [[ "$1" == "$latest" ]]; then
-        return 1 # ver1 is greater
+
+    # Use sort -V for robust version comparison.
+    # The highest version will be the second line of the output.
+    local highest
+    highest=$(printf '%s\n' "$1" "$2" | sort -V | tail -n 1)
+
+    if [[ "$highest" == "$1" ]]; then
+        return 1 # v1 > v2
     else
-        return 2 # ver2 is greater
+        return 2 # v1 < v2
     fi
 }
 
@@ -128,6 +128,62 @@ manage_network_exposure() {
     expose_to_network
 }
 
+# Helper to run a single test case for the run_tests function.
+# It is defined at the script level to ensure it's available when called.
+# It accesses the `test_count` and `failures` variables from its caller's scope.
+# Usage: _run_test "v1" "v2" <expected_code> "description"
+_run_test() {
+    local v1="$1"
+    local v2="$2"
+    local expected_code="$3"
+    local description="$4"
+    ((test_count++))
+
+    printMsgNoNewline "  Test: ${description}... "
+    compare_versions "$v1" "$v2"
+    local actual_code=$?
+    if [[ $actual_code -eq $expected_code ]]; then
+        printMsg "${C_L_GREEN}PASSED${T_RESET}"
+    else
+        printMsg "${C_RED}FAILED${T_RESET} (Expected: $expected_code, Got: $actual_code)"
+        ((failures++))
+    fi
+}
+
+# A function to run internal self-tests for the script's logic.
+run_tests() {
+    printBanner "Running Self-Tests"
+    # These are not 'local' so the _run_test helper function can access them.
+    # This is a common pattern in shell scripting for test helpers.
+    test_count=0
+    failures=0
+
+    # --- compare_versions tests ---
+    printMsg "\n${T_ULINE}Testing compare_versions function:${T_RESET}"
+    _run_test "0.1.10" "0.1.10" 0 "Equal versions"
+    _run_test "0.1.9" "0.1.10" 2 "v1 < v2 (patch)"
+    _run_test "0.1.10" "0.1.9" 1 "v1 > v2 (patch)"
+    _run_test "0.1.10" "0.2.0" 2 "v1 < v2 (minor)"
+    _run_test "0.2.0" "0.1.10" 1 "v1 > v2 (minor)"
+    _run_test "0.9.0" "1.0.0" 2 "v1 < v2 (major)"
+    _run_test "1.0.0" "0.9.0" 1 "v1 > v2 (major)"
+    printMsg "  --- Edge Cases ---"
+    _run_test "1.0" "1.0.1" 2 "v1 < v2 (different length)"
+    _run_test "1.0.1" "1.0" 1 "v1 > v2 (different length)"
+    _run_test "1.0.0" "" 1 "v1 > empty v2"
+    _run_test "" "1.0.0" 2 "empty v1 < v2"
+   
+    # --- Test Summary ---
+    printMsg "\n${T_ULINE}Test Summary:${T_RESET}"
+    if [[ $failures -eq 0 ]]; then
+        printOkMsg "All ${test_count} tests passed!"
+        exit 0
+    else
+        printErrMsg "${failures} of ${test_count} tests failed."
+        exit 1
+    fi
+}
+
 # --- Main Execution ---
 
 main() {
@@ -156,6 +212,10 @@ main() {
                 else
                     printMsg "${C_RED}Could not fetch from GitHub${T_RESET}"
                 fi
+                exit 0
+                ;;
+            -t|--test)
+                run_tests
                 exit 0
                 ;;
             *)
@@ -190,7 +250,6 @@ main() {
             printMsg "${C_L_BLUE}${latest_version}${T_RESET}"
             compare_versions "$installed_version" "$latest_version"
             local comparison_result=$?
-
             if [[ $comparison_result -eq 2 ]]; then
                 printMsg "${T_OK_ICON} New version available: ${C_L_BLUE}${latest_version}${T_RESET}"
                 # Fall through to the installation block
