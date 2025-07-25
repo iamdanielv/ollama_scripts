@@ -102,10 +102,10 @@ The installer can also be run with flags for specific actions:
 ```bash
 $ ./install-ollama.sh --version
 -------------------------------------------------------------------------------
- Ollama Version Check
+ Ollama Version
 -------------------------------------------------------------------------------
-  [i] Installed version: 0.1.32
-  [i] Latest version:    0.1.32
+  [i] Installed: 0.9.6
+  [i] Latest:    0.9.6
 ```
 
 ### Network Access for Docker

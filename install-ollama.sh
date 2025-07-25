@@ -129,16 +129,16 @@ main() {
                 exit 0
                 ;;
             -v|--version)
-                printBanner "Ollama Version Check"
+                printBanner "Ollama Version"
                 local installed_version
                 installed_version=$(get_ollama_version)
                 if [[ -n "$installed_version" ]]; then
-                    printMsg "  ${T_INFO_ICON} Installed version: ${C_L_BLUE}${installed_version}${T_RESET}"
+                    printMsg "  ${T_INFO_ICON} Installed: ${C_L_BLUE}${installed_version}${T_RESET}"
                 else
-                    printMsg "  ${T_INFO_ICON} Installed version: ${C_L_YELLOW}Not installed${T_RESET}"
+                    printMsg "  ${T_INFO_ICON} Installed: ${C_L_YELLOW}Not installed${T_RESET}"
                 fi
 
-                printMsgNoNewline "  ${T_INFO_ICON} Latest version:    "
+                printMsgNoNewline "  ${T_INFO_ICON} Latest:    "
                 local latest_version
                 latest_version=$(get_latest_ollama_version)
                 if [[ -n "$latest_version" ]]; then
