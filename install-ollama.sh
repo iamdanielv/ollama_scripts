@@ -15,6 +15,15 @@ fi
 
 # --- Script Functions ---
 
+show_help() {
+    printMsg "Usage: $(basename "$0") [FLAG]"
+    printMsg "Installs or updates Ollama."
+    printMsg "\nFlags:"
+    printMsg "  -v, --version   Show the currently installed and latest available versions."
+    printMsg "  -h, --help      Show this help message"
+    printMsg "\nIf no flag is provided, the script will run in interactive install/update mode."
+}
+
 # Function to get the current Ollama version.
 # Returns the version string or an empty string if not installed.
 get_ollama_version() {
@@ -112,6 +121,41 @@ manage_network_exposure() {
 # --- Main Execution ---
 
 main() {
+    # --- Non-Interactive Argument Handling ---
+    if [[ -n "$1" ]]; then
+        case "$1" in
+            -h|--help)
+                show_help
+                exit 0
+                ;;
+            -v|--version)
+                printBanner "Ollama Version Check"
+                local installed_version
+                installed_version=$(get_ollama_version)
+                if [[ -n "$installed_version" ]]; then
+                    printMsg "  ${T_INFO_ICON} Installed version: ${C_L_BLUE}${installed_version}${T_RESET}"
+                else
+                    printMsg "  ${T_INFO_ICON} Installed version: ${C_L_YELLOW}Not installed${T_RESET}"
+                fi
+
+                printMsgNoNewline "  ${T_INFO_ICON} Latest version:    "
+                local latest_version
+                latest_version=$(get_latest_ollama_version)
+                if [[ -n "$latest_version" ]]; then
+                    printMsg "${C_L_GREEN}${latest_version}${T_RESET}"
+                else
+                    printMsg "${C_RED}Could not fetch from GitHub${T_RESET}"
+                fi
+                exit 0
+                ;;
+            *)
+                printMsg "\n${T_ERR}Invalid option: $1${T_RESET}"
+                show_help
+                exit 1
+                ;;
+        esac
+    fi
+
     printBanner "Ollama Installer/Updater"
 
     printMsg "${T_INFO_ICON} Checking prerequisites..."

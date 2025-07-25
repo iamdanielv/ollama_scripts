@@ -38,7 +38,7 @@ To get up and running quickly:
 
 | Script | Description |
 |---|---|
-| `./install-ollama.sh` | Installs or updates Ollama and prompts to configure it for network access. |
+| `./install-ollama.sh` | Installs or updates Ollama. Can also be run with `--version` to check for updates without installing. |
 | `./restart-ollama.sh` | Sometimes on wake from sleep, the `ollama` service will go into an inconsistent state. This script stops, resets GPU state (if applicable), and restarts the Ollama service using `systemd`. |
 | `./stop-ollama.sh` | Stops the Ollama service. |
 | `./config-ollama-net.sh` | Configures Ollama network access. Can be run interactively or with flags (`--expose`, `--restrict`, `--view`). |
@@ -87,6 +87,26 @@ The script will:
 - Check the current version and update if a newer one is available.
 - Verify that the `ollama` service is running.
 - **Prompt you to configure Ollama for network access.** This is **required** for OpenWebUI (in Docker) to connect to it. Please say **Yes (y)** when asked.
+
+### Available Flags
+
+The installer can also be run with flags for specific actions:
+
+| Flag | Alias | Description |
+|---|---|---|
+| `--version` | `-v` | Displays the currently installed version and checks for the latest available version on GitHub without running the full installer. |
+| `--help` | `-h` | Shows the help message. |
+
+**Example:**
+
+```bash
+$ ./install-ollama.sh --version
+-------------------------------------------------------------------------------
+ Ollama Version Check
+-------------------------------------------------------------------------------
+  [i] Installed version: 0.1.32
+  [i] Latest version:    0.1.32
+```
 
 ### Network Access for Docker
 
