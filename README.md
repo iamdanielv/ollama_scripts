@@ -49,8 +49,8 @@ To get up and running quickly:
 | Script | Description |
 |---|---|
 | `./openwebui/start-openwebui.sh` | Starts the OpenWebUI Docker containers in detached mode. |
-| `./openwebui/stop-openwebui.sh` | Stops the OpenWebUI Docker containers. |
-| `./openwebui/update-openwebui.sh` | Pulls the latest Docker images for OpenWebUI. After updating, restart with the `start-openwebui.sh` script. |
+| `./openwebui/stop-openwebui.sh`  | Stops the OpenWebUI Docker containers. |
+| `./openwebui/update-openwebui.sh`  | Pulls the latest Docker images for OpenWebUI. If new images are downloaded, it will prompt you to restart the service. |
 
 ---
 ---

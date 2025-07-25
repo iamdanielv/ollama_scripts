@@ -26,14 +26,42 @@ main() {
     # Ensure we are running in the script's directory so docker-compose can find its files.
     ensure_script_dir
 
-    printMsg "${T_INFO_ICON} Pulling latest OpenWebUI container images..."
-    if ! $docker_compose_cmd pull; then
-        printErrMsg "Failed to pull OpenWebUI container images."
+    # The run_with_spinner function will handle output and status.
+    # It stores the command's output in the global variable SPINNER_OUTPUT.
+    # We split the docker_compose_cmd string into an array to handle "docker compose".
+    local docker_compose_cmd_parts=($docker_compose_cmd)
+    if ! run_with_spinner "Pulling latest OpenWebUI container images..." "${docker_compose_cmd_parts[@]}" pull; then
+        # The error message is already printed by run_with_spinner.
+        # Print the captured output on failure for debugging.
+        if [[ -n "$SPINNER_OUTPUT" ]]; then
+            echo -e "${C_GRAY}--- Start of Docker Compose Output ---${T_RESET}"
+            echo "$SPINNER_OUTPUT" | sed 's/^/    /'
+            echo -e "${C_GRAY}--- End of Docker Compose Output ---${T_RESET}"
+        fi
         exit 1
     fi
 
-    printOkMsg "OpenWebUI container images have been successfully updated."
-    printMsg "    ${T_INFO_ICON} You can now restart the service with: ${C_L_BLUE}./start-openwebui.sh${T_RESET}"
+    local pull_output
+    pull_output="$SPINNER_OUTPUT"
+
+    # Check if the output indicates a new image was downloaded.
+    # Different versions of Docker Compose may have slightly different outputs.
+    # We check for "Downloaded newer image" or "Download complete" to be safe,
+    # as either indicates new layers were fetched.
+    if echo "$pull_output" | grep -E -i -q 'Downloaded newer image|Download complete'; then
+        printOkMsg "New OpenWebUI container images have been successfully downloaded."
+        printMsgNoNewline "    ${T_QST_ICON} Would you like to restart the service now to apply the update? (y/N) "
+        read -r response || true
+        echo # Add a newline after user input
+        if [[ "$response" =~ ^([yY][eE][sS]|[yY])$ ]]; then
+            printMsg "\n    ${T_INFO_ICON} Restarting OpenWebUI..."
+            "$(dirname "$0")/start-openwebui.sh"
+        else
+            printMsg "\n    ${T_INFO_ICON} Update complete. You can restart the service later with: ${C_L_BLUE}./start-openwebui.sh${T_RESET}"
+        fi
+    else
+        printOkMsg "All OpenWebUI images are already up-to-date."
+    fi
 }
 
 # Run the main script logic
