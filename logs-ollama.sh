@@ -16,8 +16,10 @@ fi
 show_help() {
     printMsg "Usage: $(basename "$0") [journalctl options]"
     printMsg "A wrapper for 'journalctl -u ollama.service' to easily view logs."
+    printMsg "By default, it opens the logs in a searchable pager (like 'less')."
     printMsg "\nExamples:"
-    printMsg "  $(basename "$0")              # Follow logs in real-time (default)"
+    printMsg "  $(basename "$0")              # View and search all logs (press '/' to search)"
+    printMsg "  $(basename "$0") -f           # Follow logs in real-time (press Ctrl+C to stop)"
     printMsg "  $(basename "$0") -n 50         # Show the last 50 lines"
     printMsg "  $(basename "$0") --since '1 hour ago' # Show logs from the last hour"
     printMsg "\nAll arguments are passed directly to 'journalctl'."
@@ -41,17 +43,12 @@ main() {
         exit 1
     fi
 
-    local journalctl_args=("$@")
-    # If no arguments are provided, default to following the logs.
-    if [[ $# -eq 0 ]]; then
-        journalctl_args=("-f")
-    fi
-
     printMsg "${T_INFO_ICON} Showing logs for ${C_L_BLUE}ollama.service${T_RESET}..."
-    printMsg "${T_INFO_ICON} Command: ${C_GRAY}journalctl -u ollama.service ${journalctl_args[*]}${T_RESET}"
+    # Use "$*" to show the user-provided args exactly as they typed them.
+    printMsg "${T_INFO_ICON} Command: ${C_GRAY}journalctl -u ollama.service $*${T_RESET}"
     printMsg "${C_BLUE}${DIV}${T_RESET}"
 
-    exec journalctl -u ollama.service "${journalctl_args[@]}"
+    exec journalctl -u ollama.service "$@"
 }
 
 main "$@"

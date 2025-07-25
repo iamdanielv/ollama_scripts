@@ -163,7 +163,7 @@ To stop the Ollama service:
 
 ## Viewing Ollama Logs 📜
 
-To view the logs for the `ollama` service, you can use the `logs-ollama.sh` script. This is particularly useful for debugging.
+To view and search the logs for the `ollama` service, you can use the `logs-ollama.sh` script. This is particularly useful for debugging.
 
 ```bash
 ./logs-ollama.sh
@@ -265,9 +265,11 @@ The Docker Compose file (`docker-compose.yaml`) is pre-configured to use these e
 
 - **DEBUG OLLAMA**:
   - To easily view the `ollama` service logs in real-time, use the dedicated script:
+
     ```bash
     ./logs-ollama.sh
     ```
+
   - This is helpful for debugging issues with the service itself. See the script's documentation above for more options, like viewing a specific number of past lines.
 
 - **DEBUG OPENWEBUI**:
