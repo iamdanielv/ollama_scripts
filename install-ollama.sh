@@ -238,11 +238,25 @@ main() {
         exit 0
     fi
 
-    printMsg "Downloading 📥 and running the official Ollama install script..."
-    if ! curl -fsSL https://ollama.com/install.sh | sh; then
+    local installer_script
+    installer_script=$(mktemp)
+
+    # Download the installer script using the spinner
+    if ! run_with_spinner "Downloading the official Ollama installer" \
+        curl -fsSL -o "$installer_script" https://ollama.com/install.sh; then
+        rm -f "$installer_script"
+        # Error message is printed by spinner function, no need for more output.
+        exit 1
+    fi
+
+    printMsg "${T_INFO_ICON} Running the downloaded installer..."
+    # The installer output should be shown to the user.
+    if ! sh "$installer_script"; then
+        rm -f "$installer_script"
         printErrMsg "Ollama installation script failed to execute."
         exit 1
     fi
+    rm -f "$installer_script"
     printOkMsg "Ollama installation script finished."
 
     # Clear the shell's command lookup cache to find the new executable.
