@@ -467,8 +467,12 @@ expose_to_network() {
         return 1
     fi
 
-    local override_content="[Service]\nEnvironment=\"OLLAMA_HOST=0.0.0.0\""
-    if ! echo -e "$override_content" | sudo tee "$override_file" >/dev/null; then
+    # Use a heredoc to safely write the multi-line configuration file
+    # The `<<-` operator strips leading tabs, allowing the heredoc to be indented.
+    if ! sudo tee "$override_file" >/dev/null <<-EOF; then
+		[Service]
+		Environment="OLLAMA_HOST=0.0.0.0"
+	EOF
         printErrMsg "Failed to write override file: $override_file"
         return 1
     fi
