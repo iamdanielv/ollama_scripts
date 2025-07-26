@@ -11,21 +11,17 @@ if ! source "$(dirname "$0")/shared.sh"; then
     exit 1
 fi
 
-# --- Helper Functions ---
-print_current_status() {
-    printMsg "\n${T_BOLD}Current Status:${T_RESET}"
-    if check_network_exposure; then
-        printMsg "  Ollama is currently ${C_L_YELLOW}EXPOSED to the network${T_RESET} (listening on 0.0.0.0)."
-    else
-        printMsg "  Ollama is currently ${C_L_BLUE}RESTRICTED to localhost${T_RESET} (listening on 127.0.0.1)."
-    fi
-}
-
 # --- Script Variables ---
 readonly STATUS_NETWORK="network"
 readonly STATUS_LOCALHOST="localhost"
 
 # --- Helper Functions ---
+_after_change_verification() {
+    printMsg "\n${T_INFO_ICON} Verifying service after configuration change..."
+    verify_ollama_service
+    print_current_status
+}
+
 show_help() {
     printBanner "Ollama Network Configurator"
     printMsg "Configures Ollama network exposure."
@@ -117,16 +113,12 @@ main() {
         1)
             ensure_root "Root privileges are required to modify systemd configuration." "--expose"
             expose_to_network
-            printMsg "\n${T_INFO_ICON} Verifying service after configuration change..."
-            verify_ollama_service
-            print_current_status
+            _after_change_verification
             ;;
         2)
             ensure_root "Root privileges are required to modify systemd configuration." "--restrict"
             restrict_to_localhost
-            printMsg "\n${T_INFO_ICON} Verifying service after configuration change..."
-            verify_ollama_service
-            print_current_status
+            _after_change_verification
             ;;
         *)
             if [[ "$choice" =~ ^[qQ]$ ]]; then
