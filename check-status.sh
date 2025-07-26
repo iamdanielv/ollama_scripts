@@ -99,9 +99,9 @@ check_openwebui_status() {
     local webui_port=${OPEN_WEBUI_PORT:-3000}
     local webui_url="http://localhost:${webui_port}"
     if check_endpoint_status "$webui_url" 5; then
-        printMsg "  ${T_OK_ICON} UI:       ${C_GREEN}Responsive${T_RESET} at ${C_L_BLUE}${webui_url}${T_RESET}"
+        printMsg "  ${T_OK_ICON} UI:        ${C_GREEN}Responsive${T_RESET} at ${C_L_BLUE}${webui_url}${T_RESET}"
     else
-        printMsg "  ${T_ERR_ICON} UI:       ${C_RED}Not Responding${T_RESET} at ${C_L_BLUE}${webui_url}${T_RESET}"
+        printMsg "  ${T_ERR_ICON} UI:        ${C_RED}Not Responding${T_RESET} at ${C_L_BLUE}${webui_url}${T_RESET}"
     fi
 }
 
