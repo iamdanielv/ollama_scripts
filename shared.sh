@@ -102,14 +102,14 @@ trap 'script_interrupt_handler' INT
 
 # Checks if the Ollama CLI is installed and exits if it's not.
 check_ollama_installed() {
-    printMsgNoNewline "${T_INFO_ICON} Checking for Ollama installation... "
+    printMsgNoNewline "${T_INFO_ICON} Checking for Ollama installation... " >&2
     if ! command -v ollama &> /dev/null; then
         echo >&2 # Newline before error message
-        printErrMsg "Ollama is not installed."
-        printMsg "    ${T_INFO_ICON} Please run ${C_L_BLUE}./install-ollama.sh${T_RESET} to install it."
+        printErrMsg "Ollama is not installed." >&2
+        printMsg "    ${T_INFO_ICON} Please run ${C_L_BLUE}./install-ollama.sh${T_RESET} to install it." >&2
         exit 1
     fi
-    printOkMsg "Ollama is installed."
+    printOkMsg "Ollama is installed." >&2
 }
 
 # Checks for Docker and Docker Compose. Exits if not found.
