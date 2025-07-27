@@ -228,39 +228,33 @@ show_logs_and_exit() {
 poll_service() {
     local url="$1"
     local service_name="$2"
-    local timeout=${3:-15} # Default timeout 15 seconds
+    # The number of tries is based on the timeout in seconds.
+    # We poll once per second.
+    local tries=${3:-10} # Default to 10 tries (10 seconds)
 
-    local spinner_chars="⣾⣷⣯⣟⡿⢿⣻⣽"
-    local i=0
     local desc="Waiting for ${service_name} to respond at ${url}"
 
-    # Hide cursor
-    tput civis
-    # Trap to ensure cursor is shown again on exit/interrupt
-    trap 'tput cnorm; exit 130' INT TERM
-
-    for ((j=0; j<timeout; j++)); do
-        if curl --silent --fail --head "$url" &>/dev/null; then
-            # Success
-            tput cnorm
-            trap - INT TERM
-            # Overwrite the spinner line with the final success message
-            echo -ne "\r"
+    # We need to run the loop in a subshell so that `run_with_spinner` can treat it
+    # as a single command. The subshell will exit with 0 on success and 1 on failure.
+    # We pass 'url' and 'tries' as arguments to the subshell to avoid quoting issues.
+    if run_with_spinner "${desc}" bash -c '
+        url="$1"
+        tries="$2"
+        for ((j=0; j<tries; j++)); do
+            # Use a short connect timeout for each attempt
+            if curl --silent --fail --head --connect-timeout 2 "$url" &>/dev/null; then
+                exit 0 # Success
+            fi
+            sleep 1
+        done
+        exit 1 # Failure
+    ' -- "$url" "$tries"; then
             printMsg "    ${T_OK_ICON} ${service_name} is responsive."
             return 0
-        fi
-
-        # Update spinner
-        echo -ne "\r    ${C_L_BLUE}${spinner_chars:$i:1}${T_RESET} ${desc}"
-        i=$(((i + 1) % ${#spinner_chars}))
-        sleep 1
-    done
-
-    # Timeout
-    tput cnorm
-    trap - INT TERM
-    echo -ne "\r\033[K" # Clear the spinner line
-    return 1 # The calling script should handle the failure message
+    else
+        printErrMsg "${service_name} is not responding at ${url}"
+        return 1
+    fi
 }
 
 # Checks if an endpoint is responsive without writing to terminal
