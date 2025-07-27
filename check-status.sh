@@ -18,18 +18,26 @@ fi
 check_ollama_status() {
     printMsg "${T_BOLD}--- Ollama Status ---${T_RESET}"
 
+    local is_systemd=false
+    local service_known=false
+    if _is_systemd_system; then
+        is_systemd=true
+        if _is_ollama_service_known; then
+            service_known=true
+        fi
+    fi
+
     # 1. Check systemd service status
-    if ! _is_systemd_system; then
+    if ! $is_systemd; then
         printMsg "  ${T_INFO_ICON} Service:  Not a systemd system. Skipping service check."
-    elif ! _is_ollama_service_known; then
+    elif ! $service_known; then
         printMsg "  ${T_INFO_ICON} Service:  Ollama systemd service not found."
     else
         # It is a systemd system and the service is known
         if systemctl is-active --quiet ollama.service; then
             printMsg "  ${T_OK_ICON} Service:  ${C_GREEN}Active${T_RESET} (via systemd)"
         else
-            local state
-            state=$(systemctl is-active ollama.service || true)
+            local state=$(systemctl is-active ollama.service || true)
             printMsg "  ${T_ERR_ICON} Service:  ${C_RED}Inactive (${state})${T_RESET} (via systemd)"
         fi
     fi
@@ -37,16 +45,16 @@ check_ollama_status() {
     # 2. Check API responsiveness
     local ollama_port=${OLLAMA_PORT:-11434}
     local ollama_url="http://localhost:${ollama_port}"
-    if check_endpoint_status "$ollama_url" 3; then
+    if check_endpoint_status "$ollama_url" 3; then # 3-second timeout
         printMsg "  ${T_OK_ICON} API:      ${C_GREEN}Responsive${T_RESET} at ${C_L_BLUE}${ollama_url}${T_RESET}"
     else
         printMsg "  ${T_ERR_ICON} API:      ${C_RED}Not Responding${T_RESET} at ${C_L_BLUE}${ollama_url}${T_RESET}"
     fi
 
     # 3. Check network exposure
-    if ! _is_systemd_system; then
+    if ! $is_systemd; then
         printMsg "  ${T_INFO_ICON} Network:  Cannot determine exposure (not a systemd system)."
-    elif ! _is_ollama_service_known; then
+    elif ! $service_known; then
         printMsg "  ${T_INFO_ICON} Network:  Cannot determine exposure (Ollama service not found)."
     elif check_network_exposure; then
         printMsg "  ${T_OK_ICON} Network:  ${C_L_YELLOW}Exposed (0.0.0.0)${T_RESET}"
