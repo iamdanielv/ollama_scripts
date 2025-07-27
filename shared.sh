@@ -176,6 +176,25 @@ ensure_script_dir() {
     fi
 }
 
+# Sources the project's .env file if it exists.
+# This is intended for scripts in the project root that need to access
+# configuration defined for OpenWebUI (e.g., custom ports).
+# It looks for an .env file in the 'openwebui' subdirectory.
+load_project_env() {
+    # BASH_SOURCE[1] is the path to the script that called this function.
+    local SCRIPT_DIR
+    SCRIPT_DIR=$(dirname -- "${BASH_SOURCE[1]}")
+    local ENV_FILE="${SCRIPT_DIR}/openwebui/.env"
+
+    if [[ -f "$ENV_FILE" ]]; then
+        printMsg "${T_INFO_ICON} Sourcing configuration from ${C_L_BLUE}openwebui/.env${T_RESET}"
+        set -a
+        # shellcheck source=/dev/null
+        source "$ENV_FILE"
+        set +a
+    fi
+}
+
 # Checks if the script is run as root. If not, it prints a message
 # and re-executes the script with sudo.
 # Usage: ensure_root "Reason why root is needed." "$@"
