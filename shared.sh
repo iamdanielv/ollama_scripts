@@ -132,6 +132,18 @@ check_docker_prerequisites() {
     printOkMsg "Docker Compose is available." >&2
 }
 
+# Checks if jq is installed. Exits if not found.
+check_jq_installed() {
+    printMsgNoNewline "${T_INFO_ICON} Checking for jq... " >&2
+    if ! command -v jq &>/dev/null; then
+        echo >&2 # Newline before error message
+        printErrMsg "jq is not installed. Please install it to parse model data." >&2
+        printMsg "    ${T_INFO_ICON} On Debian/Ubuntu: ${C_L_BLUE}sudo apt-get install jq${T_RESET}" >&2
+        exit 1
+    fi
+    printOkMsg "jq is installed." >&2
+}
+
 # Gets the correct Docker Compose command ('docker compose' or 'docker-compose').
 # Assumes prerequisites have been checked by check_docker_prerequisites.
 # Usage:
