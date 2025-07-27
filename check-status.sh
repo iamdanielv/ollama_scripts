@@ -186,7 +186,7 @@ print_ollama_models() {
     models_json=$(_get_installed_models_json)
 
     # Overwrite the querying message, this reduces visual clutter 
-    echo -ne "\e[1A\e[K"
+    clear_lines_up 1
 
     _print_models_detailed "$models_json"
 }

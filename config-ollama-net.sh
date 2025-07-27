@@ -132,7 +132,7 @@ main() {
             _after_change_verification
             ;;
         *)
-            echo -ne "\e[1A\e[K" # Move cursor up and clear line
+            clear_lines_up 2 # Move cursor up and clear line
             printOkMsg "Exiting. No changes made."
             exit 0
             ;;

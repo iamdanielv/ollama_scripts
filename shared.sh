@@ -63,6 +63,25 @@ function printBanner() {
   printMsg "${DIV}${T_RESET}"
 }
 
+# Clears the current line and returns the cursor to the start.
+clear_current_line() {
+    # \e[2K: clear entire line
+    # \r: move cursor to beginning of the line
+    echo -ne "\e[2K\r"
+}
+
+# Clears a specified number of lines above the current cursor position.
+# Usage: clear_lines_up [number_of_lines]
+clear_lines_up() {
+    local lines=${1:-1} # Default to 1 line if no argument is provided
+    for ((i=0; i<lines; i++)); do
+        # \e[1A: move cursor up one line
+        # \e[2K: clear entire line
+        echo -ne "\e[1A\e[2K"
+    done
+    echo -ne "\r" # Move cursor to the beginning of the line
+}
+
 # --- Error Handling & Traps ---
 
 # Centralized error handler function.
@@ -159,7 +178,7 @@ check_jq_installed() {
     fi
     
     # Overwrite the checking message, this reduces visual clutter 
-    echo -ne "\r\e[K" # Move to beginning of line and clear
+    clear_current_line
 }
 
 # Gets the correct Docker Compose command ('docker compose' or 'docker-compose').
@@ -267,7 +286,7 @@ poll_service() {
         done
         exit 1 # Failure
     ' -- "$url" "$tries"; then
-        echo -ne "\e[1A\e[K" # Move cursor up and clear line
+        clear_lines_up 1
         return 0
     else
         printErrMsg "${service_name} is not responding at ${url}"
@@ -362,7 +381,7 @@ wait_for_ollama_service() {
         exit 1
     fi
 
-    echo -ne "\e[1A\e[K" # Move cursor up and clear line
+    clear_lines_up 1
     #printOkMsg "Ollama service found"
 
     # After finding the service, ensure it's running.
@@ -403,7 +422,7 @@ wait_for_ollama_service2() {
             exit 1 # Failure
         fi
     '; then
-        echo -ne "\e[1A\e[K" # Move cursor up and clear line
+        clear_lines_up 1
         # printOkMsg "Ollama service found"
     else
         printErrMsg "Ollama service not found. Please install it with ./install-ollama.sh"
@@ -474,7 +493,7 @@ run_with_spinner() {
     trap - INT TERM
 
     # Overwrite the spinner line with the final status message
-    echo -ne "\r\e[2K" # Move to beginning of line
+    clear_current_line
     if [[ $exit_code -eq 0 ]]; then
         printOkMsg "${desc}"
     else

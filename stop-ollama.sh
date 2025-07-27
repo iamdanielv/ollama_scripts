@@ -28,7 +28,7 @@ main() {
     check_ollama_installed
 
     # Move up two lines and clear them to hide the prerequisite check output.
-    echo -ne "\e[1A\e[K\e[1A\e[K"
+    clear_lines_up 2
 
     # --- Stop Ollama Service ---
     printMsg "${T_INFO_ICON} Attempting to stop Ollama service..."
