@@ -23,18 +23,18 @@ main() {
     ensure_root "This script requires root privileges for systemd and kernel modules." "$@"
     printBanner "Ollama Service Restarter"
 
-    printMsg "${T_INFO_ICON} Checking prerequisites..."
+    # printMsg "${T_INFO_ICON} Checking prerequisites..."
 
     check_ollama_installed
 
     # --- GPU Detection ---
     local IS_NVIDIA=false
-    printMsg "${T_INFO_ICON} Checking for NVIDIA GPU..."
+    printMsgNoNewline "${T_INFO_ICON} Checking for NVIDIA GPU..."
     if nvidia-smi &> /dev/null; then
         IS_NVIDIA=true
-        printMsg "    ${T_OK_ICON} NVIDIA GPU detected."
+        printMsg "${T_OK_ICON} NVIDIA GPU detected."
     else
-        printMsg "    ${T_INFO_ICON} No NVIDIA GPU found. Assuming CPU-only operation."
+        printMsg "${T_INFO_ICON} No NVIDIA GPU found. Assuming CPU-only operation."
     fi
 
     # --- Stop Ollama Service ---
