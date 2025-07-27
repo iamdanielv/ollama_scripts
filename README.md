@@ -32,7 +32,7 @@ To get up and running quickly:
 
 | Script | Description |
 |---|---|
-| `./check-status.sh` | Checks the status of both the Ollama service and the OpenWebUI containers. |
+| `./check-status.sh` | Checks the status of Ollama and OpenWebUI. Can also list installed models (`--models`). |
 
 ### Ollama Management Scripts
 

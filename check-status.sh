@@ -14,6 +14,25 @@ if ! source "$(dirname "$0")/shared.sh"; then
     exit 1
 fi
 
+show_help() {
+    printBanner "Ollama & OpenWebUI Status Checker"
+    printMsg "Checks the status of the Ollama service and OpenWebUI containers."
+    printMsg "It can also list the installed Ollama models."
+
+    printMsg "\n${T_ULINE}Usage:${T_RESET}"
+    printMsg "  $(basename "$0") [-m | -h]"
+
+    printMsg "\n${T_ULINE}Options:${T_RESET}"
+    printMsg "  ${C_L_BLUE}-m, --models${T_RESET}   List all installed Ollama models."
+    printMsg "  ${C_L_BLUE}-h, --help${T_RESET}      Shows this help message."
+
+    printMsg "\n${T_ULINE}Examples:${T_RESET}"
+    printMsg "  ${C_GRAY}# Run the standard status check${T_RESET}"
+    printMsg "  $(basename "$0")"
+    printMsg "  ${C_GRAY}# List installed models${T_RESET}"
+    printMsg "  $(basename "$0") --models"
+}
+
 # --- Ollama Status ---
 check_ollama_status() {
     printMsg "${T_BOLD}--- Ollama Status ---${T_RESET}"
@@ -87,14 +106,6 @@ check_openwebui_status() {
         return
     fi
 
-    # Source .env file for custom ports
-    if [[ -f "${webui_dir}/.env" ]]; then
-        set -a
-        # shellcheck source=/dev/null
-        source "${webui_dir}/.env"
-        set +a
-    fi
-
     # 1. Check container status
     # Use --project-directory to avoid cd'ing
     if $compose_cmd --project-directory "$webui_dir" ps --filter "status=running" --services | grep -q "open-webui"; then
@@ -113,7 +124,62 @@ check_openwebui_status() {
     fi
 }
 
+# --- Ollama Models ---
+list_ollama_models() {
+    printBanner "Installed Ollama Models"
+
+    # 1. Check prerequisites
+    check_jq_installed
+    verify_ollama_api_responsive # This function handles the API check and exits on failure
+
+    # 2. Fetch and display models
+    printMsg "${T_INFO_ICON} Querying for installed models..."
+    local ollama_port=${OLLAMA_PORT:-11434}
+    local ollama_url="http://localhost:${ollama_port}"
+    local models_json
+    # Use a timeout for the curl command
+    models_json=$(curl --silent --max-time 10 "${ollama_url}/api/tags")
+
+    if [[ -z "$models_json" ]]; then
+        printErrMsg "Failed to fetch model list from Ollama API. The response was empty."
+        exit 1
+    fi
+
+    # Check if the response is valid JSON and contains the 'models' key
+    if ! echo "$models_json" | jq -e '.models' > /dev/null; then
+        printErrMsg "Received an invalid response from the Ollama API."
+        printMsg "    ${C_GRAY}--- API Response ---${T_RESET}"
+        echo "$models_json" | sed 's/^/    /'
+        printMsg "    ${C_GRAY}--------------------${T_RESET}"
+        exit 1
+    fi
+
+    # Use jq to extract names and format them.
+    # The `jq -r '.models[].name'` command will list each model name on a new line.
+    local models
+    mapfile -t models < <(echo "$models_json" | jq -r '.models[].name' | sort)
+
+    if [[ ${#models[@]} -eq 0 ]]; then
+        printMsg "  ${T_INFO_ICON} No models are currently installed."
+    else
+        printMsg "  ${T_OK_ICON} Found ${#models[@]} model(s):"
+        for model in "${models[@]}"; do
+            printMsg "    - ${C_L_CYAN}${model}${T_RESET}"
+        done
+    fi
+}
+
 main() {
+    load_project_env # Source openwebui/.env for custom ports
+
+    if [[ -n "$1" ]]; then
+        case "$1" in
+            -m|--models) list_ollama_models; exit 0 ;;
+            -h|--help)   show_help; exit 0 ;;
+            *)           printMsg "\n${T_ERR}Invalid option: $1${T_RESET}"; show_help; exit 1 ;;
+        esac
+    fi
+
     printBanner "Ollama & OpenWebUI Status"
     check_ollama_status
     check_openwebui_status

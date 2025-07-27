@@ -426,6 +426,26 @@ run_with_spinner() {
     return $exit_code
 }
 
+# Verifies that the Ollama API is responsive, with a spinner. Exits on failure.
+# This is useful as a precondition check in scripts that need to talk to the API.
+verify_ollama_api_responsive() {
+    local ollama_port=${OLLAMA_PORT:-11434}
+    local ollama_url="http://localhost:${ollama_port}"
+
+    # poll_service shows its own spinner and success message.
+    # It returns 1 on timeout without printing an error, so we handle that here.
+    if ! poll_service "$ollama_url" "Ollama API"; then
+        # Only show systemd logs if we know it's a systemd failure.
+        if _is_systemd_system && _is_ollama_service_known; then
+            show_logs_and_exit "Ollama service is active, but the API is not responding at ${ollama_url}."
+        else
+            printErrMsg "Ollama API is not responding at ${ollama_url}."
+            printMsg "    ${T_INFO_ICON} Please ensure Ollama is installed and running."
+            exit 1
+        fi
+    fi
+}
+
 # Verifies that the Ollama service is running and responsive.
 verify_ollama_service() {
     printMsg "${T_INFO_ICON} Verifying Ollama service status..."
@@ -444,19 +464,7 @@ verify_ollama_service() {
 
     # Regardless of systemd status, we check if the API is responsive.
     # This covers non-systemd installs or cases where it's run manually.
-    local ollama_port=${OLLAMA_PORT:-11434}
-    local ollama_url="http://localhost:${ollama_port}"
-
-    if ! poll_service "$ollama_url" "Ollama API"; then
-        # Only show systemd logs if we know it's a systemd failure.
-        if _is_systemd_system && _is_ollama_service_known; then
-            show_logs_and_exit "Ollama service is active, but the API is not responding at ${ollama_url}."
-        else
-            printErrMsg "Ollama API is not responding at ${ollama_url}."
-            printMsg "    ${T_INFO_ICON} Please ensure Ollama is installed and running."
-            exit 1
-        fi
-    fi
+    verify_ollama_api_responsive
 }
 
 # --- Ollama Network Configuration Helpers ---
