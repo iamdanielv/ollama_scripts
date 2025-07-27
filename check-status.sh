@@ -124,19 +124,14 @@ check_openwebui_status() {
     fi
 }
 
-# --- Ollama Models ---
-list_ollama_models() {
-    printBanner "Installed Ollama Models"
-
-    # 1. Check prerequisites
-    check_jq_installed
-    verify_ollama_api_responsive # This function handles the API check and exits on failure
-
-    # 2. Fetch and display models
-    printMsg "${T_INFO_ICON} Querying for installed models..."
+# Fetches a sorted list of installed model names from the Ollama API.
+# The models are printed one per line to stdout. Exits on failure.
+_get_installed_model_names() {
+    printMsg "${T_INFO_ICON} Querying for installed models..."  >&2
     local ollama_port=${OLLAMA_PORT:-11434}
     local ollama_url="http://localhost:${ollama_port}"
     local models_json
+
     # Use a timeout for the curl command
     models_json=$(curl --silent --max-time 10 "${ollama_url}/api/tags")
 
@@ -154,19 +149,37 @@ list_ollama_models() {
         exit 1
     fi
 
-    # Use jq to extract names and format them.
-    # The `jq -r '.models[].name'` command will list each model name on a new line.
-    local models
-    mapfile -t models < <(echo "$models_json" | jq -r '.models[].name' | sort)
+    # Use jq to extract names, sort them, and print them.
+    echo "$models_json" | jq -r '.models[].name' | sort
+}
 
+# Prints a list of model names
+# Expects model names to be passed as arguments.
+_print_model_names_list() {
+    local models=("$@")
     if [[ ${#models[@]} -eq 0 ]]; then
-        printMsg "  ${T_INFO_ICON} No models are currently installed."
+        printMsg "${T_INFO_ICON} No models are currently installed."
     else
-        printMsg "  ${T_OK_ICON} Found ${#models[@]} model(s):"
+        printMsg "${T_OK_ICON} Found ${#models[@]} model(s):"
         for model in "${models[@]}"; do
             printMsg "    - ${C_L_CYAN}${model}${T_RESET}"
         done
     fi
+}
+
+# Prints a list of all installed Ollama models.
+print_ollama_models() {
+    printBanner "Installed Ollama Models"
+
+    # 1. Check prerequisites
+    check_jq_installed
+    verify_ollama_api_responsive # This handles the API check and exits on failure
+
+    # 2. Fetch and display models
+    local models
+    mapfile -t models < <(_get_installed_model_names)
+
+    _print_model_names_list "${models[@]}"
 }
 
 main() {
@@ -174,7 +187,7 @@ main() {
 
     if [[ -n "$1" ]]; then
         case "$1" in
-            -m|--models) list_ollama_models; exit 0 ;;
+            -m|--models) print_ollama_models; exit 0 ;;
             -h|--help)   show_help; exit 0 ;;
             *)           printMsg "\n${T_ERR}Invalid option: $1${T_RESET}"; show_help; exit 1 ;;
         esac
