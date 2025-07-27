@@ -221,7 +221,7 @@ ensure_root() {
     shift # The rest of "$@" are the original script arguments.
     if [[ $EUID -ne 0 ]]; then
         printMsg "${T_INFO_ICON} ${reason_msg}"
-        printMsg "    ${C_L_BLUE}Attempting to re-run with sudo...${T_RESET}"
+        #printMsg "    ${C_L_BLUE}Attempting to re-run with sudo...${T_RESET}"
         exec sudo bash "${BASH_SOURCE[1]}" "$@"
     fi
 }
@@ -268,7 +268,7 @@ poll_service() {
         exit 1 # Failure
     ' -- "$url" "$tries"; then
         echo -ne "\e[1A\e[K" # Move cursor up and clear line
-            return 0
+        return 0
     else
         printErrMsg "${service_name} is not responding at ${url}"
         return 1
@@ -362,7 +362,53 @@ wait_for_ollama_service() {
         exit 1
     fi
 
-    printOkMsg "Ollama service found"
+    echo -ne "\e[1A\e[K" # Move cursor up and clear line
+    #printOkMsg "Ollama service found"
+
+    # After finding the service, ensure it's running.
+    if ! systemctl is-active --quiet ollama.service; then
+        local current_state
+        # Get the state (e.g., "inactive", "failed"). This command has a non-zero
+        # exit code when not active, so `|| true` is needed to prevent `set -e` from exiting.
+        current_state=$(systemctl is-active ollama.service || true)
+        printMsg "    ${T_INFO_ICON} Service is not active (currently ${C_L_YELLOW}${current_state}${T_RESET}). Attempting to start it..."
+        # This requires sudo. The calling script should either be run with sudo
+        # or the user will be prompted for a password.
+        if ! sudo systemctl start ollama.service; then
+            show_logs_and_exit "Failed to start Ollama service."
+        fi
+        printMsg "    ${T_OK_ICON} Service started successfully."
+    fi
+}
+
+wait_for_ollama_service2() {
+    if ! _is_systemd_system; then
+        printMsg "${T_INFO_ICON} Not a systemd system. Skipping service discovery."
+        return
+    fi
+
+    local desc="${T_INFO_ICON} Looking for Ollama service"
+
+    if run_with_spinner "${desc}" bash -c '
+        local ollama_found=false
+        for i in {1..5}; do
+            if _is_ollama_service_known; then
+                ollama_found=true
+                exit 0 # Success
+            fi
+            sleep 1
+        done
+
+        if ! $ollama_found; then
+            exit 1 # Failure
+        fi
+    '; then
+        echo -ne "\e[1A\e[K" # Move cursor up and clear line
+        # printOkMsg "Ollama service found"
+    else
+        printErrMsg "Ollama service not found. Please install it with ./install-ollama.sh"
+        exit 1
+    fi
 
     # After finding the service, ensure it's running.
     if ! systemctl is-active --quiet ollama.service; then
@@ -503,8 +549,8 @@ check_network_exposure() {
 #   2 - if no change was needed (already exposed).
 expose_to_network() {
     if check_network_exposure; then
-        printMsg "\n ${T_INFO_ICON} No change needed."
-        printMsg " ${T_INFO_ICON} Ollama is already ${C_L_YELLOW}EXPOSED to the network${T_RESET} (listening on 0.0.0.0)."
+        printMsg "${T_INFO_ICON} No change needed."
+        printMsg "${T_OK_ICON} Ollama is already ${C_L_YELLOW}EXPOSED to the network${T_RESET} (listening on 0.0.0.0)."
         return 2 # 2 means no change was needed
     fi
 

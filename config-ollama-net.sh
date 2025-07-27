@@ -23,11 +23,18 @@ _after_change_verification() {
 }
 
 show_help() {
-    printBanner "Ollama Network Configurator"
-    printMsg "Configures Ollama network exposure."
-    printMsg "If run without flags, it enters an interactive configuration mode."
+    local is_verbose=false
+    if [[ "$1" == "verbose" ]]; then
+        is_verbose=true
+    fi
 
-    printMsg "\n${T_ULINE}Usage:${T_RESET}"
+    if $is_verbose; then
+        printBanner "Ollama Network Configurator"
+        printMsg "Configures Ollama network exposure."
+        printMsg "If run without flags, it enters an interactive configuration mode.\n"
+    fi
+
+    printMsg "${T_ULINE}Usage:${T_RESET}"
     printMsg "  $(basename "$0") [-e | -r | -v | -h]"
 
     printMsg "\n${T_ULINE}Options:${T_RESET}"
@@ -36,19 +43,21 @@ show_help() {
     printMsg "  ${C_L_BLUE}-v, --view${T_RESET}      View the current network configuration and exit."
     printMsg "  ${C_L_BLUE}-h, --help${T_RESET}      Show this help message."
 
-    printMsg "\n${T_ULINE}Examples:${T_RESET}"
-    printMsg "  ${C_GRAY}# Run the interactive configuration menu${T_RESET}"
-    printMsg "  $(basename "$0")"
-    printMsg "  ${C_GRAY}# Expose Ollama to the network non-interactively${T_RESET}"
-    printMsg "  $(basename "$0") --expose"
+    if $is_verbose; then
+        printMsg "\n${T_ULINE}Examples:${T_RESET}"
+        printMsg "  ${C_GRAY}# Run the interactive configuration menu${T_RESET}"
+        printMsg "  $(basename "$0")"
+        printMsg "  ${C_GRAY}# Expose Ollama to the network non-interactively${T_RESET}"
+        printMsg "  $(basename "$0") --expose"
+    fi
 }
 
 print_current_status() {
-    printMsg "\n${T_BOLD}Current Status:${T_RESET}"
+    printMsgNoNewline "${T_BOLD}Status:${T_RESET}"
     if check_network_exposure; then
-        printMsg "  Ollama is currently ${C_L_YELLOW}EXPOSED to the network${T_RESET} (listening on 0.0.0.0)."
+        printMsg " ${C_L_YELLOW}EXPOSED to the network${T_RESET} (listening on 0.0.0.0)."
     else
-        printMsg "  Ollama is currently ${C_L_BLUE}RESTRICTED to localhost${T_RESET} (listening on 127.0.0.1)."
+        printMsg " ${C_L_BLUE}RESTRICTED to localhost${T_RESET} (listening on 127.0.0.1)."
     fi
 }
 
@@ -62,7 +71,7 @@ main() {
     if [[ -n "$command" ]]; then
         case "$command" in
             -h|--help)
-                show_help
+                show_help "verbose"
                 ;;
             -v|--view)
                 if check_network_exposure; then echo "$STATUS_NETWORK"; else echo "$STATUS_LOCALHOST"; fi
@@ -90,8 +99,8 @@ main() {
                 if check_network_exposure; then echo "$STATUS_NETWORK"; else echo "$STATUS_LOCALHOST"; fi
                 ;;
             *)
-                printMsg "\n${T_ERR}Invalid option: $command${T_RESET}"
                 show_help
+                printMsg "\n${T_ERR}Invalid option: $command${T_RESET}"
                 exit 1
                 ;;
         esac
@@ -123,11 +132,8 @@ main() {
             _after_change_verification
             ;;
         *)
-            if [[ "$choice" =~ ^[qQ]$ ]]; then
-                printMsg "\n Exiting. No changes made."
-            else
-                printMsg "\n Invalid option '${choice}'. No changes made."
-            fi
+            echo -ne "\e[1A\e[K" # Move cursor up and clear line
+            printOkMsg "Exiting. No changes made."
             exit 0
             ;;
     esac
