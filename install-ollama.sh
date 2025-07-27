@@ -258,6 +258,8 @@ run_tests() {
 # --- Main Execution ---
 
 main() {
+    load_project_env # Source openwebui/.env for custom ports
+
     # --- Non-Interactive Argument Handling ---
     if [[ -n "$1" ]]; then
         case "$1" in

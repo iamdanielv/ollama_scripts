@@ -18,6 +18,8 @@ fi
 # --- Main Execution ---
 
 main() {
+    load_project_env # Source openwebui/.env for custom ports
+
     ensure_root "This script requires root privileges for systemd and kernel modules." "$@"
     printBanner "Ollama Service Restarter"
 
