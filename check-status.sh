@@ -124,10 +124,9 @@ check_openwebui_status() {
     fi
 }
 
-# Fetches a sorted list of installed model names from the Ollama API.
-# The models are printed one per line to stdout. Exits on failure.
-_get_installed_model_names() {
-    printMsg "${T_INFO_ICON} Querying for installed models..."  >&2
+# Fetches the raw JSON of installed models from the Ollama API.
+# The JSON is printed to stdout. Exits on failure.
+_get_installed_models_json() {
     local ollama_port=${OLLAMA_PORT:-11434}
     local ollama_url="http://localhost:${ollama_port}"
     local models_json
@@ -149,22 +148,28 @@ _get_installed_model_names() {
         exit 1
     fi
 
-    # Use jq to extract names, sort them, and print them.
-    echo "$models_json" | jq -r '.models[].name' | sort
+    echo "$models_json"
 }
 
-# Prints a list of model names
-# Expects model names to be passed as arguments.
-_print_model_names_list() {
-    local models=("$@")
-    if [[ ${#models[@]} -eq 0 ]]; then
+# Prints a formatted list of models with details from the API JSON.
+# Expects the full JSON string as the first argument.
+_print_models_detailed() {
+    local models_json="$1"
+    local model_count
+    model_count=$(echo "$models_json" | jq '.models | length')
+
+    if [[ "$model_count" -eq 0 ]]; then
         printMsg "${T_INFO_ICON} No models are currently installed."
-    else
-        printMsg "${T_OK_ICON} Found ${#models[@]} model(s):"
-        for model in "${models[@]}"; do
-            printMsg "    - ${C_L_CYAN}${model}${T_RESET}"
-        done
+        return
     fi
+
+    printOkMsg "Found ${model_count} model(s):"
+    # Use jq to format the output and a while-read loop to print it in columns.
+    # The format uses a tab as a separator to handle names with spaces.
+    # The `printf` command formats the output into aligned columns.
+    while IFS=$'\t' read -r name size_gb modified; do
+        printf "    - ${C_L_CYAN}%-35s${T_RESET} ${C_L_YELLOW}%-12s${T_RESET} ${C_GRAY}(Updt: %s)${T_RESET}\n" "$name" "${size_gb} GB" "$modified"
+    done < <(echo "$models_json" | jq -r '.models | sort_by(.name)[] | "\(.name)\t\(.size / 1e9 | (. * 100 | floor) / 100)\t\(.modified_at | .[:10])"')
 }
 
 # Prints a list of all installed Ollama models.
@@ -176,10 +181,14 @@ print_ollama_models() {
     verify_ollama_api_responsive # This handles the API check and exits on failure
 
     # 2. Fetch and display models
-    local models
-    mapfile -t models < <(_get_installed_model_names)
+    printMsg "${T_INFO_ICON} Querying for installed models..." >&2
+    local models_json
+    models_json=$(_get_installed_models_json)
 
-    _print_model_names_list "${models[@]}"
+    # Overwrite the querying message, this reduces visual clutter 
+    echo -ne "\e[1A\e[K"
+
+    _print_models_detailed "$models_json"
 }
 
 main() {

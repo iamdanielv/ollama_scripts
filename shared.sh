@@ -100,16 +100,32 @@ script_interrupt_handler() {
 trap 'script_error_handler $LINENO "$BASH_COMMAND"' ERR
 trap 'script_interrupt_handler' INT
 
+# A variable to cache the result of the check.
+# Unset by default. Can be "true" or "false" after the first run.
+_OLLAMA_IS_INSTALLED=""
+
 # Checks if the Ollama CLI is installed and exits if it's not.
 check_ollama_installed() {
+    # 1. Perform the check only if the status is not already cached.
+    if [[ -z "${_OLLAMA_IS_INSTALLED:-}" ]]; then
+        if command -v ollama &> /dev/null; then
+            _OLLAMA_IS_INSTALLED="true"
+        else
+            _OLLAMA_IS_INSTALLED="false"
+        fi
+    fi
+
+    # 2. Print messages and act based on the cached status.
     printMsgNoNewline "${T_INFO_ICON} Checking for Ollama installation... " >&2
-    if ! command -v ollama &> /dev/null; then
+    if [[ "${_OLLAMA_IS_INSTALLED}" == "true" ]]; then
+        printOkMsg "Ollama is installed." >&2
+        return 0
+    else
         echo >&2 # Newline before error message
         printErrMsg "Ollama is not installed." >&2
         printMsg "    ${T_INFO_ICON} Please run ${C_L_BLUE}./install-ollama.sh${T_RESET} to install it." >&2
         exit 1
     fi
-    printOkMsg "Ollama is installed." >&2
 }
 
 # Checks for Docker and Docker Compose. Exits if not found.
@@ -141,7 +157,9 @@ check_jq_installed() {
         printMsg "    ${T_INFO_ICON} On Debian/Ubuntu: ${C_L_BLUE}sudo apt-get install jq${T_RESET}" >&2
         exit 1
     fi
-    printOkMsg "jq is installed." >&2
+    
+    # Overwrite the checking message, this reduces visual clutter 
+    echo -ne "\r\e[K" # Move to beginning of line and clear
 }
 
 # Gets the correct Docker Compose command ('docker compose' or 'docker-compose').
