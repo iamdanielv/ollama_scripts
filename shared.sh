@@ -267,7 +267,7 @@ poll_service() {
         done
         exit 1 # Failure
     ' -- "$url" "$tries"; then
-            printMsg "    ${T_OK_ICON} ${service_name} is responsive."
+        echo -ne "\e[1A\e[K" # Move cursor up and clear line
             return 0
     else
         printErrMsg "${service_name} is not responding at ${url}"
@@ -428,7 +428,7 @@ run_with_spinner() {
     trap - INT TERM
 
     # Overwrite the spinner line with the final status message
-    echo -ne "\r" # Move to beginning of line
+    echo -ne "\r\e[2K" # Move to beginning of line
     if [[ $exit_code -eq 0 ]]; then
         printOkMsg "${desc}"
     else
