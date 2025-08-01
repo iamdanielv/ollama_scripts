@@ -622,10 +622,11 @@ expose_to_network() {
 
     # Use a heredoc to safely write the multi-line configuration file
     # The `<<-` operator strips leading tabs, allowing the heredoc to be indented.
-    if ! sudo tee "$override_file" >/dev/null <<-EOF; then
+    if ! sudo tee "$override_file" >/dev/null <<-EOF
 		[Service]
 		Environment="OLLAMA_HOST=0.0.0.0"
 	EOF
+    then
         printErrMsg "Failed to write override file: $override_file"
         return 1
     fi
