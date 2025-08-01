@@ -155,6 +155,68 @@ prereq_checks() {
     clear_lines_up 1
 }
 
+# Prompts the user with a Yes/No question and returns an exit code.
+# Usage:
+#   if prompt_yes_no "Do you want to proceed?"; then
+#       # User said Yes
+#   else
+#       # User said No
+#   fi
+#   if prompt_yes_no "Do you want to proceed?" "y"; then
+#       # User said Yes (or pressed Enter for default Yes)
+#   else
+#       # User said No (or pressed Enter for default No)
+#   fi
+# Arguments:
+#   $1 - The question to ask the user.
+#   $2 - The default answer ('y' or 'n'). Optional.
+# Returns:
+#   0 (success) if the user answers Yes (or default is 'y' and user presses Enter).
+#   1 (failure) if the user answers No (or default is 'n' and user presses Enter).
+prompt_yes_no() {
+    local question="$1"
+    local default_answer="${2:-}" # Optional second argument
+    local prompt_suffix
+    local answer
+
+    # Determine the prompt suffix based on the default
+    if [[ "$default_answer" == "y" ]]; then
+        prompt_suffix="(Y/n)"
+    elif [[ "$default_answer" == "n" ]]; then
+        prompt_suffix="(y/N)"
+    else
+        prompt_suffix="(y/n)"
+    fi
+
+    while true; do
+        # The -r option to read prevents backslash interpretation.
+        read -p "$(echo -e "${T_QST_ICON} ${question} ${prompt_suffix} ")" -r answer
+
+        # If the answer is empty, use the default
+        if [[ -z "$answer" ]]; then
+            answer="$default_answer"
+        fi
+
+        case "$answer" in
+            [Yy] | [Yy][Ee][Ss])
+                #echo # Add a newline for cleaner output after the prompt.
+                clear_lines_up 1
+                return 0
+                ;;
+            [Nn] | [Nn][Oo])
+                #echo # Add a newline for cleaner output after the prompt.
+                clear_lines_up 1
+                return 1
+                ;;
+            *)
+                # We need to move the cursor up one line to overwrite the invalid prompt.
+                #echo -e "\e[1A\e[2K\r"
+                clear_lines_up 1
+                printErrMsg "Invalid input. Please enter 'y' or 'n'."
+                ;;
+        esac
+    done
+}
 
 # A variable to cache the result of the check.
 # Unset by default. Can be "true" or "false" after the first run.
