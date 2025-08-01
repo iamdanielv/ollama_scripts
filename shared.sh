@@ -534,7 +534,7 @@ run_with_spinner() {
     if [[ $exit_code -eq 0 ]]; then
         printOkMsg "${desc}"
     else
-        printErrMsg "${desc}"
+        printErrMsg "${SPINNER_OUTPUT}"
     fi
 
     return $exit_code
