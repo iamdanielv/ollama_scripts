@@ -3,9 +3,9 @@
 # Checks the status of both the Ollama service and the OpenWebUI containers.
 
 # Exit immediately if a command exits with a non-zero status.
-set -e
+#set -e
 # The return value of a pipeline is the status of the last command to exit with a non-zero status.
-set -o pipefail
+#set -o pipefail
 
 # Source common utilities for colors and functions
 # shellcheck source=./shared.sh
@@ -80,6 +80,51 @@ check_ollama_status() {
     else
         printMsg "  ${T_OK_ICON} Network:  ${C_L_BLUE}Localhost Only${T_RESET}"
     fi
+}
+
+# --- GPU Status ---
+check_gpu_status() {
+    # Only run if nvidia-smi is available
+    if ! command -v nvidia-smi &>/dev/null; then
+        return
+    fi
+
+    printMsg "\n${T_BOLD}--- GPU Status (NVIDIA) ---${T_RESET}"
+
+    # Use a timeout to prevent the script from hanging if nvidia-smi is slow
+    local smi_output
+        # nvidia-smi has a bug where querying driver_version and cuda_version can fail.
+    # We'll get them separately for robustness.
+    local driver_version cuda_version
+    driver_version=$(nvidia-smi --query-gpu=driver_version --format=csv,noheader,nounits | head -n 1)
+    cuda_version=$(nvidia-smi | grep -oP 'CUDA Version: \K[^ ]+' | head -n 1)
+    
+    printMsg "  ${T_INFO_ICON} Driver:   ${C_L_BLUE}${driver_version:-N/A}${T_RESET} (CUDA: ${C_L_BLUE}${cuda_version:-N/A}${T_RESET})"
+
+    # Use a timeout to prevent the script from hanging if nvidia-smi is slow
+    local smi_output
+    smi_output=$(timeout 5 nvidia-smi --query-gpu=name,memory.used,memory.total,utilization.gpu,temperature.gpu --format=csv,noheader,nounits)
+
+    if [[ -z "$smi_output" ]]; then
+        printMsg "  ${T_ERR_ICON} Could not retrieve GPU information from nvidia-smi."
+        return
+    fi
+
+    # The query command will output one line per GPU. We'll process each one.
+    local gpu_index=0
+    while IFS=',' read -r gpu_name mem_used mem_total gpu_util temp_gpu; do
+        # Trim leading/trailing whitespace that might sneak in
+        gpu_name=$(echo "$gpu_name" | xargs)
+        mem_used=$(echo "$mem_used" | xargs)
+        mem_total=$(echo "$mem_total" | xargs)
+        gpu_util=$(echo "$gpu_util" | xargs)
+        temp_gpu=$(echo "$temp_gpu" | xargs)
+
+        printMsg "  ${T_OK_ICON} GPU ${gpu_index}:   ${C_L_CYAN}${gpu_name}${T_RESET}"
+        printMsg "      - Memory: ${C_L_YELLOW}${mem_used} MiB / ${mem_total} MiB${T_RESET}"
+        printMsg "      - Usage:  ${C_L_YELLOW}${gpu_util}%${T_RESET} (Temp: ${C_L_YELLOW}${temp_gpu}°C${T_RESET})"
+        ((gpu_index++))
+    done <<< "$smi_output"
 }
 
 # --- OpenWebUI Status ---
@@ -204,6 +249,7 @@ main() {
 
     printBanner "Ollama & OpenWebUI Status"
     check_ollama_status
+    check_gpu_status
     check_openwebui_status
     printMsg "" # Final newline
 }
