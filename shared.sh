@@ -49,6 +49,14 @@ function printOkMsg() {
   printMsg "${T_OK_ICON} ${1}${T_RESET}"
 }
 
+function printInfoMsg() {
+  printMsg "${T_INFO_ICON} ${1}${T_RESET}"
+}
+
+function printWarnMsg() {
+  printMsg "${T_WARN_ICON} ${1}${T_RESET}"
+}
+
 function getFormattedDate() {
   date +"%Y-%m-%d %I:%M:%S"
 }
