@@ -545,6 +545,8 @@ wait_for_ollama_service2() {
 }
 
 # A function to display a spinner while a command runs in the background.
+# It detects if it's running in an interactive terminal and disables the
+# spinner animation if it's not, falling back to simpler output.
 # Usage: run_with_spinner "Description of task..." "command_to_run" "arg1" "arg2" ...
 # The command's stdout and stderr will be captured.
 # The function returns the exit code of the command.
@@ -554,20 +556,41 @@ run_with_spinner() {
     local desc="$1"
     shift
     local cmd=("$@")
-
-    local spinner_chars="⣾⣷⣯⣟⡿⢿⣻⣽"
-    local i=0
     local temp_output_file
     temp_output_file=$(mktemp)
+
+    # --- Non-Interactive Mode ---
+    # If not in an interactive terminal (e.g., in a script or CI/CD),
+    # run the command without the spinner animation for cleaner logs.
+    if [[ ! -t 1 ]]; then
+        printMsgNoNewline "    ${T_INFO_ICON} ${desc}... "
+        # Run the command in the foreground, capturing its output.
+        if SPINNER_OUTPUT=$("${cmd[@]}" 2>&1); then
+            # Using echo -e to process potential backspaces from the previous line
+            echo -e "${C_L_GREEN}Done.${T_RESET}"
+            rm "$temp_output_file"
+            return 0
+        else
+            local exit_code=$?
+            echo -e "${C_RED}Failed.${T_RESET}"
+            rm "$temp_output_file"
+            # The error message will be printed by the calling context if needed
+            # based on the non-zero exit code.
+            return $exit_code
+        fi
+    fi
+
+    # --- Interactive Mode ---
+    local spinner_chars="⣾⣷⣯⣟⡿⢿⣻⣽"
+    local i=0
 
     # Run the command in the background, redirecting its output to the temp file.
     "${cmd[@]}" &> "$temp_output_file" &
     local pid=$!
 
-    # Hide cursor
-    tput civis
-    # Trap to ensure cursor is shown again on exit/interrupt
-    trap 'tput cnorm; rm -f "$temp_output_file"; exit 130' INT TERM
+    # Hide cursor and set a trap to restore it on exit or interrupt.
+tput civis
+trap 'tput cnorm; rm -f "$temp_output_file"; exit 130' INT TERM
 
     # Initial spinner print
     printMsgNoNewline "    ${C_L_BLUE}${spinner_chars:0:1}${T_RESET} ${desc}"
@@ -596,7 +619,11 @@ run_with_spinner() {
     if [[ $exit_code -eq 0 ]]; then
         printOkMsg "${desc}"
     else
-        printErrMsg "${SPINNER_OUTPUT}"
+        # In case of failure, the spinner line is already cleared.
+        # We print the error message on a new line for clarity.
+        printErrMsg "Task failed: ${desc}"
+        # Indent the captured output for readability
+        echo -e "${SPINNER_OUTPUT}" | sed 's/^/    /'
     fi
 
     return $exit_code
