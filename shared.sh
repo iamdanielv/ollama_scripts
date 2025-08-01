@@ -127,6 +127,35 @@ script_interrupt_handler() {
 trap 'script_error_handler $LINENO "$BASH_COMMAND"' ERR
 trap 'script_interrupt_handler' INT
 
+# --- Prerequisite & Sanity Checks ---
+
+# Checks for command-line tools
+# Exits with an error if any of the specified commands are not found.
+# Usage: prereq_checks "command1" "command2" "..."
+prereq_checks() {
+    local missing_commands=()
+    printMsgNoNewline "${T_INFO_ICON} Running prereq checks"
+    for cmd in "$@"; do
+        echo -n "${C_L_BLUE}.${T_RESET}"
+        if ! command -v "$cmd" &>/dev/null; then
+            missing_commands+=("$cmd")
+        fi
+    done
+    echo # Newline after the dots
+
+    if [[ ${#missing_commands[@]} -gt 0 ]]; then
+        clear_lines_up 1
+        printErrMsg "Prerequisite checks failed. Missing commands:"
+        for cmd in "${missing_commands[@]}"; do
+            printMsg "    - ${C_L_YELLOW}${cmd}${T_RESET}"
+        done
+        printMsg "${T_INFO_ICON} Please install the missing commands and try again."
+        exit 1
+    fi
+    clear_lines_up 1
+}
+
+
 # A variable to cache the result of the check.
 # Unset by default. Can be "true" or "false" after the first run.
 _OLLAMA_IS_INSTALLED=""
