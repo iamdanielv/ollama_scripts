@@ -670,6 +670,34 @@ verify_ollama_service() {
     verify_ollama_api_responsive
 }
 
+# Fetches the raw JSON of installed models from the Ollama API.
+# The JSON is printed to stdout. It performs basic validation on the response.
+# Returns 1 on any failure (e.g., API down, invalid JSON).
+# Does NOT print error messages, allowing the caller to handle errors.
+# Usage:
+#   local models_json
+#   if ! models_json=$(get_ollama_models_json); then
+#       printErrMsg "Failed to get models."
+#       return 1
+#   fi
+get_ollama_models_json() {
+    local ollama_port=${OLLAMA_PORT:-11434}
+    local ollama_url="http://localhost:${ollama_port}"
+    local models_json=""
+
+    # Use a timeout for the curl command
+    if ! models_json=$(curl --silent --fail --max-time 10 "${ollama_url}/api/tags"); then
+        return 1
+    fi
+
+    # Check if the response is valid JSON and contains the 'models' key
+    if ! echo "$models_json" | jq -e '.models' > /dev/null; then
+        return 1
+    fi
+
+    echo "$models_json"
+}
+
 # --- Ollama Network Configuration Helpers ---
 
 # Checks if Ollama is configured to be exposed to the network.
