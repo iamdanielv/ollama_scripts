@@ -12,13 +12,14 @@ fi
 show_help() {
     printBanner "Ollama & OpenWebUI Status Checker"
     printMsg "Checks the status of the Ollama service and OpenWebUI containers."
-    printMsg "It can also list the installed Ollama models."
+    printMsg "It can also list installed models or watch loaded models in real-time."
 
     printMsg "\n${T_ULINE}Usage:${T_RESET}"
-    printMsg "  $(basename "$0") [-m | -h]"
+    printMsg "  $(basename "$0") [-m | -w | -h]"
 
     printMsg "\n${T_ULINE}Options:${T_RESET}"
     printMsg "  ${C_L_BLUE}-m, --models${T_RESET}   List all installed Ollama models."
+    printMsg "  ${C_L_BLUE}-w, --watch${T_RESET}    Watch currently loaded models, updating every second."
     printMsg "  ${C_L_BLUE}-h, --help${T_RESET}      Shows this help message."
 
     printMsg "\n${T_ULINE}Examples:${T_RESET}"
@@ -26,7 +27,109 @@ show_help() {
     printMsg "  $(basename "$0")"
     printMsg "  ${C_GRAY}# List installed models${T_RESET}"
     printMsg "  $(basename "$0") --models"
+    printMsg "  ${C_GRAY}# Watch loaded models in real-time${T_RESET}"
+    printMsg "  $(basename "$0") --watch"
 }
+
+# --- Watch Function ---
+watch_ollama_ps() {
+    # 1. Prerequisites
+    check_ollama_installed
+    clear_lines_up 1 # from check_ollama_installed
+    verify_ollama_api_responsive
+    check_jq_installed
+
+    # 2. Setup UI
+    printBanner "Watching Ollama Processes (Ctrl+C to exit)"
+    tput civis # Hide cursor
+    trap 'tput cnorm; script_interrupt_handler' INT TERM
+
+    local old_output=""
+    local old_lines=0
+    local ollama_port=${OLLAMA_PORT:-11434}
+    local ps_url="http://localhost:${ollama_port}/api/ps"
+
+    # 3. Watch loop
+    while true; do
+        local new_output raw_output
+        # Capture stdout and stderr from curl. Use -sS for silent mode but show errors.
+        raw_output=$(curl -sS "$ps_url" 2>&1)
+        local exit_code=$?
+
+        if [[ $exit_code -ne 0 ]]; then
+            # If curl fails, format it as an error.
+            new_output="${T_ERR_ICON}${T_ERR} Could not connect to Ollama API at ${ps_url}${T_RESET}"
+        else
+            # Use jq to parse the JSON response from the /api/ps endpoint.
+            # This is far more robust than parsing the CLI's text output.
+            # The jq query creates a header and then TSV rows for each model.
+            new_output=$(echo "$raw_output" | jq -r '
+                # Header
+                ["NAME", "SIZE", "PROCESSOR", "CONTEXT"],
+                # Data rows from the .models array
+                (.models[] | [
+                    .name,
+                    # Convert size in bytes to a human-readable GB format
+                    (.size / 1073741824 | tostring | .[0:4] + " GB"),
+                    # Determine processor by checking if size_vram is greater than 0
+                    (if .size_vram > 0 then "GPU" else "CPU" end),
+                    .context_length
+                ])
+                # Format the result as Tab-Separated Values (TSV)
+                | @tsv
+            ')
+
+            # If jq produces no output or only a header, no models are loaded.
+            if [[ -z "$new_output" || $(echo "$new_output" | wc -l) -lt 2 ]]; then
+                 new_output="   ${C_L_YELLOW}No models are currently loaded.${T_RESET}"
+            else
+                # Format the TSV from jq into a clean, aligned table using a two-pass awk script.
+                # This is more robust than `column -t` as it gives us full control over formatting.
+                new_output=$(echo -e "$new_output" | awk '
+                    BEGIN { FS="\t"; PADDING=4 } # Use tab as separator, add 4 spaces padding
+                    { 
+                        # First pass: read all data and find max width for each column
+                        for(i=1; i<=NF; i++) {
+                            if(length($i) > width[i]) {
+                                width[i] = length($i)
+                            }
+                        }
+                        data[NR] = $0
+                    }
+                    END {
+                        # Second pass: print formatted data
+                        for(row=1; row<=NR; row++) {
+                            split(data[row], fields, FS)
+                            for(col=1; col<=NF; col++) {
+                                # Print field, left-aligned, with padding
+                                printf "%-" (width[col] + PADDING) "s", fields[col]
+                            }
+                            printf "\n"
+                        }
+                    }
+                ')
+            fi
+        fi
+
+        # Add a timestamped footer to the output
+        local footer
+        footer="$(getPrettyDate) ${C_WHITE}Watching for loaded models...${T_RESET}"
+        local full_output="${new_output}\n${footer}"
+
+        # Only redraw the screen if the output has actually changed
+        if [[ "$full_output" != "$old_output" ]]; then
+            if [[ $old_lines -gt 0 ]]; then
+                clear_lines_up "$old_lines"
+            fi
+            printMsg "${full_output}"
+            old_output="$full_output"
+            old_lines=$(echo -e "${full_output}" | wc -l)
+        fi
+
+        sleep 1
+    done
+}
+
 
 # --- Ollama Status ---
 check_ollama_status() {
@@ -192,9 +295,14 @@ main() {
 
     if [[ -n "$1" ]]; then
         case "$1" in
-            -m|--models) print_ollama_models; exit 0 ;;
-            -h|--help)   show_help; exit 0 ;;
-            *)           printMsg "\n${T_ERR}Invalid option: $1${T_RESET}"; show_help; exit 1 ;;
+            -m|--models) print_ollama_models; exit 0;;
+            -w|--watch)  watch_ollama_ps; exit 0;;
+            -h|--help)   show_help; exit 0;;
+            *)    
+                show_help
+                printMsg "\n${T_ERR}Invalid option: $1${T_RESET}"
+                exit 1
+                ;; 
         esac
     fi
 

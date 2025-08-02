@@ -79,7 +79,7 @@ After it starts, open the link provided (usually `http://localhost:3000`) and fo
 
 | Script | Description |
 |---|---|
-| `./check-status.sh` | 🔄 Checks the status of Ollama and OpenWebUI. Can also list installed models (`--models`). |
+| `./check-status.sh` | 🔄 Checks the status of Ollama and OpenWebUI. Can also list installed models (`--models`) or watch loaded models in real-time (`--watch`). |
 
 ### 🤖 Ollama Management Scripts
 
