@@ -15,6 +15,15 @@ export C_L_MAGENTA='\e[35;1m'
 export C_L_CYAN='\e[36;1m'
 export C_L_WHITE='\e[37;1m'
 
+# Background Colors
+export BG_RED='\e[41;1m'
+export BG_GREEN='\e[42;1m'
+export BG_YELLOW='\e[43;1m'
+export BG_BLUE='\e[44;1m'
+
+# Text Colors
+export C_BLACK='\e[30;1m'
+
 export T_RESET='\e[0m'
 export T_BOLD='\e[1m'
 export T_ULINE='\e[4m'
