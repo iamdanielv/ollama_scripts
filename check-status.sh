@@ -2,11 +2,6 @@
 
 # Checks the status of both the Ollama service and the OpenWebUI containers.
 
-# Exit immediately if a command exits with a non-zero status.
-#set -e
-# The return value of a pipeline is the status of the last command to exit with a non-zero status.
-#set -o pipefail
-
 # Source common utilities for colors and functions
 # shellcheck source=./shared.sh
 if ! source "$(dirname "$0")/shared.sh"; then
