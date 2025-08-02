@@ -731,7 +731,20 @@ print_ollama_models_table() {
     local i=1
 
     while IFS=$'\t' read -r name size_gb modified; do
-        printf "  %-5s ${C_L_CYAN}%-40s${T_RESET} ${C_L_YELLOW}%10s${T_RESET}  ${C_GRAY}%-15s${T_RESET}\n" "$i" "$name" "${size_gb} GB" "$modified"
+        # Determine color for size based on GB.
+        # < 3GB: Green (Small), 3-6GB: Blue (Medium), 6-9GB: Yellow (Large), >= 9GB: Red (Extra Large)
+        local size_color="${C_L_GREEN}" # Default to Small
+        local size_gb_int=${size_gb%.*}
+
+        if [[ "$size_gb_int" -ge 9 ]]; then
+            size_color="${C_L_RED}"      # Extra Large
+        elif [[ "$size_gb_int" -ge 6 ]]; then
+            size_color="${C_L_YELLOW}"   # Large
+        elif [[ "$size_gb_int" -ge 3 ]]; then
+            size_color="${C_L_BLUE}"     # Medium
+        fi
+
+        printf "  %-5s ${T_BOLD}%-40s${T_RESET} ${size_color}%10s${T_RESET}  ${C_GRAY}%-15s${T_RESET}\n" "$i" "$name" "${size_gb} GB" "$modified"
         ((i++))
     done < <(_parse_models_to_tsv "$models_json")
 
