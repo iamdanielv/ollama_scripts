@@ -169,33 +169,6 @@ check_openwebui_status() {
     fi
 }
 
-# Fetches the raw JSON of installed models from the Ollama API.
-# The JSON is printed to stdout. Exits on failure.
-_get_installed_models_json() {
-    local ollama_port=${OLLAMA_PORT:-11434}
-    local ollama_url="http://localhost:${ollama_port}"
-    local models_json
-
-    # Use a timeout for the curl command
-    models_json=$(curl --silent --max-time 10 "${ollama_url}/api/tags")
-
-    if [[ -z "$models_json" ]]; then
-        printErrMsg "Failed to fetch model list from Ollama API. The response was empty."
-        exit 1
-    fi
-
-    # Check if the response is valid JSON and contains the 'models' key
-    if ! echo "$models_json" | jq -e '.models' > /dev/null; then
-        printErrMsg "Received an invalid response from the Ollama API."
-        printMsg "    ${C_GRAY}--- API Response ---${T_RESET}"
-        echo "$models_json" | sed 's/^/    /'
-        printMsg "    ${C_GRAY}--------------------${T_RESET}"
-        exit 1
-    fi
-
-    echo "$models_json"
-}
-
 # Prints a formatted list of models with details from the API JSON.
 # Expects the full JSON string as the first argument.
 _print_models_detailed() {
@@ -228,7 +201,10 @@ print_ollama_models() {
     # 2. Fetch and display models
     printMsg "${T_INFO_ICON} Querying for installed models..." >&2
     local models_json
-    models_json=$(_get_installed_models_json)
+    if ! models_json=$(get_ollama_models_json); then
+        printErrMsg "Failed to fetch model list from Ollama API. The service may be down or the response was invalid."
+        exit 1
+    fi
 
     # Overwrite the querying message, this reduces visual clutter 
     clear_lines_up 1
