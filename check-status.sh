@@ -176,18 +176,26 @@ _print_models_detailed() {
     local model_count
     model_count=$(echo "$models_json" | jq '.models | length')
 
-    if [[ "$model_count" -eq 0 ]]; then
-        printMsg "${T_INFO_ICON} No models are currently installed."
-        return
+    # Check if any models are installed
+    if [[ -z "$(echo "$models_json" | jq '.models | .[]')" ]]; then
+        printWarnMsg "No local models found."
+        printInfoMsg "You can pull a model with the command: ${C_L_BLUE}ollama pull <model_name>${T_RESET}"
+        return 0
     fi
 
-    printOkMsg "Found ${model_count} model(s):"
-    # Use jq to format the output and a while-read loop to print it in columns.
-    # The format uses a tab as a separator to handle names with spaces.
-    # The `printf` command formats the output into aligned columns.
+    # --- Table Header ---
+    printf "  %-5s %-40s %10s  %-15s\n" "#" "NAME" "SIZE" "MODIFIED"
+    printMsg "${C_BLUE}${DIV}${T_RESET}"
+
+    # --- Table Body ---
+    local i=1
+
     while IFS=$'\t' read -r name size_gb modified; do
-        printf "    - ${C_L_CYAN}%-35s${T_RESET} ${C_L_YELLOW}%-12s${T_RESET} ${C_GRAY}(Updt: %s)${T_RESET}\n" "$name" "${size_gb} GB" "$modified"
-    done < <(echo "$models_json" | jq -r '.models | sort_by(.name)[] | "\(.name)\t\(.size / 1e9 | (. * 100 | floor) / 100)\t\(.modified_at | .[:10])"')
+        printf "  %-5s ${C_L_CYAN}%-40s${T_RESET} ${C_L_YELLOW}%10s${T_RESET}  ${C_GRAY}%-15s${T_RESET}\n" "$i" "$name" "${size_gb} GB" "$modified"
+        ((i++))
+    done < <(_parse_models_to_tsv "$models_json")
+    
+    printMsg "${C_BLUE}${DIV}${T_RESET}"
 }
 
 # Prints a list of all installed Ollama models.
