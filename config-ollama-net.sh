@@ -135,7 +135,7 @@ main() {
             ;;
         *)
             clear_lines_up 2 # Move cursor up and clear line
-            printOkMsg "Exiting. No changes made."
+            printOkMsg "Goodbye! No changes made."
             exit 0
             ;;
     esac
