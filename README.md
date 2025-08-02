@@ -21,6 +21,7 @@ These scripts provide a user-friendly way to:
 ├── install-ollama.sh    # 📦 Installs or updates Ollama with version checking  
 ├── config-ollama-net.sh # 🌐 Configures network access (localhost vs public)  
 ├── restart-ollama.sh    # 🔄 Restarts Ollama service after system wake/sleep issues  
+├── manage-models.sh     # ⚙️ Interactively pull, delete, and manage models
 ├── stop-ollama.sh       # 🛑 Stops the Ollama service cleanly  
 ├── logs-ollama.sh       # 📜 View Ollama service logs via journalctl  
 ├── check-status.sh      # 🔄 Checks status of services and lists installed models  
@@ -85,6 +86,7 @@ After it starts, open the link provided (usually `http://localhost:3000`) and fo
 | Script | Description |
 |---|---|
 | `./install-ollama.sh` | 📦 Installs or updates Ollama. Can also be run with `--version` to check for updates without installing. |
+| `./manage-models.sh` | ⚙️ An interactive script to list, pull (add), and delete local Ollama models. |
 | `./logs-ollama.sh` | 📜 A convenient wrapper to view the Ollama service logs using `journalctl`. |
 | `./restart-ollama.sh` | 🔄 Sometimes on wake from sleep, the `ollama` service will go into an inconsistent state. This script stops, resets GPU state (if applicable), and restarts the Ollama service using `systemd`. |
 | `./stop-ollama.sh` | 🛑 Stops the Ollama service. |
@@ -138,6 +140,41 @@ $ ./install-ollama.sh --version
 ```
 
 ---
+
+## ⚙️ Model Management (`manage-models.sh`)
+
+This script provides a user-friendly interactive menu to manage your local Ollama models. You can list, pull (add), and delete models without needing to remember the specific `ollama` commands.
+
+### Interactive Mode
+
+Run the script without any arguments to launch the interactive menu.
+
+```bash
+./manage-models.sh
+```
+
+The menu allows you to perform actions with single keypresses (`R` for Refresh, `P` for Pull, etc.), making model management easier.
+
+### Non-Interactive Mode (Flags)
+
+The script can also be used non-interactively with flags, making it suitable for scripting and automation.
+
+| Flag | Alias | Description |
+|---|---|---|
+| `--list` | `-l` | Lists all installed models. |
+| `--pull <model>` | `-p <model>` | Pulls a new model from the registry. |
+| `--delete <model>` | `-d <model>` | Deletes a local model. |
+| `--help` | `-h` | Shows the help message. |
+
+**Examples:**
+
+```bash
+# Pull the 'llama3.1' model
+./manage-models.sh --pull llama3.1
+
+# Delete the 'gemma' model
+./manage-models.sh --delete gemma
+```
 
 ### 🔌 Ollama Network Access for Docker
 
