@@ -698,6 +698,18 @@ get_ollama_models_json() {
     echo "$models_json"
 }
 
+# Parses model JSON from the Ollama API and returns a tab-separated list of
+# model details, sorted by name.
+# Expects the full JSON string as the first argument.
+# Output format: name\tsize_gb\tmodified_date
+_parse_models_to_tsv() {
+    local models_json="$1"
+    # This jq filter sorts models by name, then extracts the name, size (converted to GB
+    # and rounded to 2 decimal places), and the date part of the modified timestamp.
+    # The output is tab-separated to handle model names that might contain spaces.
+    echo "$models_json" | jq -r '.models | sort_by(.name)[] | "\(.name)\t\(.size / 1e9 | (. * 100 | floor) / 100)\t\(.modified_at | .[:10])"'
+}
+
 # --- Ollama Network Configuration Helpers ---
 
 # Checks if Ollama is configured to be exposed to the network.
