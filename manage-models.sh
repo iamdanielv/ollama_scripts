@@ -62,7 +62,7 @@ list_models() {
     while IFS=$'\t' read -r name size_gb modified; do
         printf "  %-5s ${C_L_CYAN}%-40s${T_RESET} ${C_L_YELLOW}%10s${T_RESET}  ${C_GRAY}%-15s${T_RESET}\n" "$i" "$name" "${size_gb} GB" "$modified"
         ((i++))
-    done < <(echo "$models_json" | jq -r '.models | sort_by(.name)[] | "\(.name)\t\(.size / 1e9 | (. * 100 | floor) / 100)\t\(.modified_at | .[:10])"')
+    done < <(_parse_models_to_tsv "$models_json")
     
     printMsg "${C_BLUE}${DIV}${T_RESET}"
 }
