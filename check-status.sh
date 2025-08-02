@@ -56,7 +56,8 @@ check_ollama_status() {
         if systemctl is-active --quiet ollama.service; then
             printMsg "  ${T_OK_ICON} Service:  ${C_GREEN}Active${T_RESET} (via systemd)"
         else
-            local state=$(systemctl is-active ollama.service || true)
+            local state
+            state=$(systemctl is-active ollama.service || true)
             printMsg "  ${T_ERR_ICON} Service:  ${C_RED}Inactive (${state})${T_RESET} (via systemd)"
         fi
     fi

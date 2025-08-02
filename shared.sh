@@ -517,18 +517,15 @@ wait_for_ollama_service2() {
     local desc="${T_INFO_ICON} Looking for Ollama service"
 
     if run_with_spinner "${desc}" bash -c '
-        local ollama_found=false
         for i in {1..5}; do
-            if _is_ollama_service_known; then
-                ollama_found=true
+            # _is_ollama_service_known is not available in the subshell,
+            # so we use its implementation directly to check if the service exists.
+            if systemctl cat ollama.service &>/dev/null; then
                 exit 0 # Success
             fi
             sleep 1
         done
-
-        if ! $ollama_found; then
-            exit 1 # Failure
-        fi
+        exit 1 # Failure: loop completed without finding the service.
     '; then
         clear_lines_up 1
         # printOkMsg "Ollama service found"
