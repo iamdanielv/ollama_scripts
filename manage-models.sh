@@ -45,26 +45,7 @@ list_models() {
         fi
     fi
 
-    # Check if any models are installed
-    if [[ -z "$(echo "$models_json" | jq '.models | .[]')" ]]; then
-        printWarnMsg "No local models found."
-        printInfoMsg "You can pull a model with the command: ${C_L_BLUE}ollama pull <model_name>${T_RESET}"
-        return 0
-    fi
-
-    # Table Header
-    printf "  %-5s %-40s %10s  %-15s\n" "#" "NAME" "SIZE" "MODIFIED"
-    printMsg "${C_BLUE}${DIV}${T_RESET}"
-
-    # Table Body
-    local i=1
-
-    while IFS=$'\t' read -r name size_gb modified; do
-        printf "  %-5s ${C_L_CYAN}%-40s${T_RESET} ${C_L_YELLOW}%10s${T_RESET}  ${C_GRAY}%-15s${T_RESET}\n" "$i" "$name" "${size_gb} GB" "$modified"
-        ((i++))
-    done < <(_parse_models_to_tsv "$models_json")
-    
-    printMsg "${C_BLUE}${DIV}${T_RESET}"
+    print_ollama_models_table "$models_json"
 }
 
 
