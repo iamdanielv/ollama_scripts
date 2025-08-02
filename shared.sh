@@ -710,6 +710,34 @@ _parse_models_to_tsv() {
     echo "$models_json" | jq -r '.models | sort_by(.name)[] | "\(.name)\t\(.size / 1e9 | (. * 100 | floor) / 100)\t\(.modified_at | .[:10])"'
 }
 
+# Prints a formatted table of models with details from the API JSON.
+# Expects the full JSON string as the first argument.
+# Usage: print_ollama_models_table "$models_json"
+print_ollama_models_table() {
+    local models_json="$1"
+
+    # Check if any models are installed
+    if [[ -z "$(echo "$models_json" | jq '.models | .[]')" ]]; then
+        printWarnMsg "No local models found."
+        printInfoMsg "You can pull a model with the command: ${C_L_BLUE}ollama pull <model_name>${T_RESET}"
+        return 0
+    fi
+
+    # --- Table Header ---
+    printf "  %-5s %-40s %10s  %-15s\n" "#" "NAME" "SIZE" "MODIFIED"
+    printMsg "${C_BLUE}${DIV}${T_RESET}"
+
+    # --- Table Body ---
+    local i=1
+
+    while IFS=$'\t' read -r name size_gb modified; do
+        printf "  %-5s ${C_L_CYAN}%-40s${T_RESET} ${C_L_YELLOW}%10s${T_RESET}  ${C_GRAY}%-15s${T_RESET}\n" "$i" "$name" "${size_gb} GB" "$modified"
+        ((i++))
+    done < <(_parse_models_to_tsv "$models_json")
+
+    printMsg "${C_BLUE}${DIV}${T_RESET}"
+}
+
 # --- Ollama Network Configuration Helpers ---
 
 # Checks if Ollama is configured to be exposed to the network.
