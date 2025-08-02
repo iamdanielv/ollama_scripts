@@ -121,7 +121,7 @@ check_gpu_status() {
         gpu_util=$(echo "$gpu_util" | xargs)
         temp_gpu=$(echo "$temp_gpu" | xargs)
 
-        printMsg "  ${T_OK_ICON} GPU ${gpu_index}:   ${C_L_CYAN}${gpu_name}${T_RESET}"
+        printMsg "  ${T_OK_ICON} GPU ${gpu_index}:    ${C_L_CYAN}${gpu_name}${T_RESET}"
         printMsg "      - Memory: ${C_L_YELLOW}${mem_used} MiB / ${mem_total} MiB${T_RESET}"
         printMsg "      - Usage:  ${C_L_YELLOW}${gpu_util}%${T_RESET} (Temp: ${C_L_YELLOW}${temp_gpu}°C${T_RESET})"
         ((gpu_index++))
