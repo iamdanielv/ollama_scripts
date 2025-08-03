@@ -298,7 +298,7 @@ main() {
             -m|--models) print_ollama_models; exit 0;;
             -w|--watch)  watch_ollama_ps; exit 0;;
             -h|--help)   show_help; exit 0;;
-            *)    
+            *)
                 show_help
                 printMsg "\n${T_ERR}Invalid option: $1${T_RESET}"
                 exit 1
