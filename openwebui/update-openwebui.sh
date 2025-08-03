@@ -55,7 +55,7 @@ main() {
         echo # Add a newline after user input
         if [[ "$response" =~ ^([yY][eE][sS]|[yY])$ ]]; then
             printMsg "\n    ${T_INFO_ICON} Restarting OpenWebUI..."
-            "$(dirname "$0")/start-openwebui.sh"
+            "./start-openwebui.sh"
         else
             printMsg "\n    ${T_INFO_ICON} Update complete. You can restart the service later with: ${C_L_BLUE}./start-openwebui.sh${T_RESET}"
         fi
