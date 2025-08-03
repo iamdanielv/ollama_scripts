@@ -15,9 +15,35 @@ if ! source "$(dirname "$0")/shared.sh"; then
     exit 1
 fi
 
+show_help() {
+    printBanner "Ollama Service Restarter"
+    printMsg "Stops, resets, and starts the Ollama systemd service."
+    printMsg "This is useful if the service becomes unresponsive."
+
+    printMsg "\n${T_ULINE}Usage:${T_RESET}"
+    printMsg "  $(basename "$0") [-h]"
+
+    printMsg "\n${T_ULINE}Options:${T_RESET}"
+    printMsg "  ${C_L_BLUE}-h, --help${T_RESET}      Show this help message."
+}
+
 # --- Main Execution ---
 
 main() {
+    if [[ -n "$1" ]]; then
+        case "$1" in
+            -h|--help) 
+                show_help
+                exit 0
+                ;; 
+            *)
+                show_help
+                printMsg "\n${T_ERR}Invalid option: $1${T_RESET}"
+                exit 1
+                ;; 
+        esac
+    fi
+
     load_project_env # Source openwebui/.env for custom ports
 
     ensure_root "This script requires root privileges for systemd and kernel modules." "$@"
