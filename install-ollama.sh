@@ -292,8 +292,8 @@ main() {
                 exit 0
                 ;;
             *)
-                printMsg "\n${T_ERR}Invalid option: $1${T_RESET}"
                 show_help
+                printMsg "\n${T_ERR}Invalid option: $1${T_RESET}"
                 exit 1
                 ;;
         esac
