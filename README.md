@@ -34,7 +34,6 @@ These scripts provide a user-friendly way to:
 
 ---
 
-
 ## 🧰 Prerequisites
 
 - 📡 **curl**: Required by the Ollama installer.  
@@ -222,6 +221,12 @@ This script will:
 - 🔄 Restart the Ollama service using `systemd`.
 - 📊 Check the status of the service after restarting.
 
+### `./restart-ollama.sh` Available Flags
+
+| Flag | Alias | Description |
+|---|---|---|
+| `--help` | `-h` | Shows the help message. |
+
 ## 🛑 Stopping Ollama
 
 To stop the Ollama service:
@@ -229,6 +234,12 @@ To stop the Ollama service:
 ```bash
 ./stop-ollama.sh
 ```
+
+### `./stop-ollama.sh` Available Flags
+
+| Flag | Alias | Description |
+|---|---|---|
+| `--help` | `-h` | Shows the help message. |
 
 > [!NOTE]  
 > The `restart-ollama.sh` and `stop-ollama.sh` scripts require `sudo` to manage the systemd service. They will automatically attempt to re-run themselves with `sudo` if needed.
@@ -267,6 +278,12 @@ This script uses `docker-compose` to run the OpenWebUI container in detached mod
 ./openwebui/start-openwebui.sh
 ```
 
+### `./openwebui/start-openwebui.sh` Available Flags
+
+| Flag | Alias | Description |
+|---|---|---|
+| `--help` | `-h` | Shows the help message. |
+
 ### ⚙️ OpenWebUI First-Time Setup
 
 On your first visit, OpenWebUI will prompt you to create an administrator account. The connection to your local Ollama instance is configured automatically.  
@@ -279,6 +296,12 @@ To stop the OpenWebUI containers:
 ```bash
 ./openwebui/stop-openwebui.sh
 ```
+
+### `./openwebui/stop-openwebui.sh` Available Flags
+
+| Flag | Alias | Description |
+|---|---|---|
+| `--help` | `-h` | Shows the help message. |
 
 ### ⬆️ Updating OpenWebUI
 
