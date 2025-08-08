@@ -131,8 +131,8 @@ manage_network_exposure() {
 # Helper to run a single test case for the run_tests function.
 # It is defined at the script level to ensure it's available when called.
 # It accesses the `test_count` and `failures` variables from its caller's scope.
-# Usage: _run_test "v1" "v2" <expected_code> "description"
-_run_test() {
+# Usage: _run_compare_versions_test "v1" "v2" <expected_code> "description"
+_run_compare_versions_test() {
     local v1="$1"
     local v2="$2"
     local expected_code="$3"
@@ -141,6 +141,26 @@ _run_test() {
 
     printMsgNoNewline "  Test: ${description}... "
     compare_versions "$v1" "$v2"
+    local actual_code=$?
+    if [[ $actual_code -eq $expected_code ]]; then
+        printMsg "${C_L_GREEN}PASSED${T_RESET}"
+    else
+        printMsg "${C_RED}FAILED${T_RESET} (Expected: $expected_code, Got: $actual_code)"
+        ((failures++))
+    fi
+}
+
+# Helper to run a single return code test case.
+# Usage: _run_test "command_to_run" <expected_code> "description"
+_run_test() {
+    local cmd_string="$1"
+    local expected_code="$2"
+    local description="$3"
+    ((test_count++))
+
+    printMsgNoNewline "  Test: ${description}... "
+    # Run command in a subshell to not affect the test script's state
+    (eval "$cmd_string") &>/dev/null # Redirect output to keep test output clean
     local actual_code=$?
     if [[ $actual_code -eq $expected_code ]]; then
         printMsg "${C_L_GREEN}PASSED${T_RESET}"
@@ -168,6 +188,55 @@ _run_string_test() {
     fi
 }
 
+test_manage_network_exposure() {
+    printMsg "\n${T_ULINE}Testing manage_network_exposure function:${T_RESET}"
+
+    # --- Mock dependencies ---
+    _is_systemd_system() { [[ "$MOCK_IS_SYSTEMD" == "true" ]]; }
+    _is_ollama_service_known() { [[ "$MOCK_SERVICE_KNOWN" == "true" ]]; }
+    check_network_exposure() { [[ "$MOCK_IS_EXPOSED" == "true" ]]; }
+
+    # Mock the function that performs the action, and track if it was called.
+    expose_to_network() { MOCK_EXPOSE_CALLED=true; }
+    export -f _is_systemd_system _is_ollama_service_known check_network_exposure expose_to_network
+
+    # --- Test Cases ---
+
+    # Scenario 1: Not a systemd system. Should exit early.
+    export MOCK_IS_SYSTEMD=false
+    MOCK_EXPOSE_CALLED=false
+    manage_network_exposure &>/dev/null
+    _run_string_test "$MOCK_EXPOSE_CALLED" "false" "Skips on non-systemd system"
+
+    # Scenario 2: Ollama service not found. Should exit early.
+    export MOCK_IS_SYSTEMD=true
+    export MOCK_SERVICE_KNOWN=false
+    MOCK_EXPOSE_CALLED=false
+    manage_network_exposure &>/dev/null
+    _run_string_test "$MOCK_EXPOSE_CALLED" "false" "Skips when service is not found"
+
+    # Scenario 3: Network already exposed. Should exit early.
+    export MOCK_IS_SYSTEMD=true
+    export MOCK_SERVICE_KNOWN=true
+    export MOCK_IS_EXPOSED=true
+    MOCK_EXPOSE_CALLED=false
+    manage_network_exposure &>/dev/null
+    _run_string_test "$MOCK_EXPOSE_CALLED" "false" "Skips when already exposed"
+
+    # Scenario 4: Not exposed, user says 'y'. Should call expose_to_network.
+    export MOCK_IS_EXPOSED=false
+    MOCK_EXPOSE_CALLED=false
+    # Use a "here string" instead of a pipe to avoid a subshell.
+    manage_network_exposure &>/dev/null <<< 'y'
+    _run_string_test "$MOCK_EXPOSE_CALLED" "true" "Calls expose_to_network when user confirms"
+
+    # Scenario 5: Not exposed, user says 'n'. Should NOT call expose_to_network.
+    MOCK_EXPOSE_CALLED=false
+    # Use a "here string" here as well.
+    manage_network_exposure &>/dev/null <<< 'n'
+    _run_string_test "$MOCK_EXPOSE_CALLED" "false" "Skips when user denies"
+}
+
 # A function to run internal self-tests for the script's logic.
 run_tests() {
     printBanner "Running Self-Tests"
@@ -178,18 +247,18 @@ run_tests() {
 
     # --- compare_versions tests ---
     printMsg "\n${T_ULINE}Testing compare_versions function:${T_RESET}"
-    _run_test "0.1.10" "0.1.10" 0 "Equal versions"
-    _run_test "0.1.9" "0.1.10" 2 "v1 < v2 (patch)"
-    _run_test "0.1.10" "0.1.9" 1 "v1 > v2 (patch)"
-    _run_test "0.1.10" "0.2.0" 2 "v1 < v2 (minor)"
-    _run_test "0.2.0" "0.1.10" 1 "v1 > v2 (minor)"
-    _run_test "0.9.0" "1.0.0" 2 "v1 < v2 (major)"
-    _run_test "1.0.0" "0.9.0" 1 "v1 > v2 (major)"
+    _run_compare_versions_test "0.1.10" "0.1.10" 0 "Equal versions"
+    _run_compare_versions_test "0.1.9" "0.1.10" 2 "v1 < v2 (patch)"
+    _run_compare_versions_test "0.1.10" "0.1.9" 1 "v1 > v2 (patch)"
+    _run_compare_versions_test "0.1.10" "0.2.0" 2 "v1 < v2 (minor)"
+    _run_compare_versions_test "0.2.0" "0.1.10" 1 "v1 > v2 (minor)"
+    _run_compare_versions_test "0.9.0" "1.0.0" 2 "v1 < v2 (major)"
+    _run_compare_versions_test "1.0.0" "0.9.0" 1 "v1 > v2 (major)"
     printMsg "  --- Edge Cases ---"
-    _run_test "1.0" "1.0.1" 2 "v1 < v2 (different length)"
-    _run_test "1.0.1" "1.0" 1 "v1 > v2 (different length)"
-    _run_test "1.0.0" "" 1 "v1 > empty v2"
-    _run_test "" "1.0.0" 2 "empty v1 < v2"
+    _run_compare_versions_test "1.0" "1.0.1" 2 "v1 < v2 (different length)"
+    _run_compare_versions_test "1.0.1" "1.0" 1 "v1 > v2 (different length)"
+    _run_compare_versions_test "1.0.0" "" 1 "v1 > empty v2"
+    _run_compare_versions_test "" "1.0.0" 2 "empty v1 < v2"
 
     # --- get_ollama_version tests ---
     printMsg "\n${T_ULINE}Testing get_ollama_version function:${T_RESET}"
@@ -240,9 +309,13 @@ run_tests() {
     export CURL_MOCK_OUTPUT=""
     _run_string_test "$(get_latest_ollama_version)" "" "Handling empty API response"
 
+    # --- manage_network_exposure tests ---
+    test_manage_network_exposure
+
     # --- Cleanup Mocks ---
     # Unset the mock functions to restore original behavior
     unset -f ollama command curl
+    unset -f _is_systemd_system _is_ollama_service_known check_network_exposure expose_to_network
 
     # --- Test Summary ---
     printMsg "\n${T_ULINE}Test Summary:${T_RESET}"
