@@ -370,6 +370,55 @@ test_pull_model() {
     unset -f ollama
 }
 
+test_perform_model_updates() {
+    printMsg "\n${T_ULINE}Testing _perform_model_updates function:${T_RESET}"
+
+    # --- Mock dependencies ---
+    # This mock tracks the number of calls and which models were requested.
+    # It can be configured to fail for a specific model name.
+    ollama() {
+        if [[ "$1" == "pull" ]]; then
+            ((MOCK_OLLAMA_CALL_COUNT++))
+            MOCK_OLLAMA_CALLED_WITH+=("$2")
+            if [[ "$2" == "$MOCK_OLLAMA_FAIL_ON" ]]; then
+                return 1
+            fi
+            return 0
+        fi
+    }
+    export -f ollama
+
+    # --- Test Cases ---
+
+    # Scenario 1: Successfully updates multiple models. We run the function directly
+    # to capture its exit code and check the side-effect on the mock counter.
+    MOCK_OLLAMA_CALL_COUNT=0
+    MOCK_OLLAMA_CALLED_WITH=()
+    export MOCK_OLLAMA_FAIL_ON=""
+    _perform_model_updates "model1" "model2" &>/dev/null
+    local exit_code_success=$?
+    _run_test "[[ $exit_code_success -eq 0 ]]" 0 "Succeeds when all updates work"
+    _run_string_test "$MOCK_OLLAMA_CALL_COUNT" "2" "Calls ollama for each model"
+
+    # Scenario 2: Fails if one of the model updates fails.
+    MOCK_OLLAMA_CALL_COUNT=0
+    MOCK_OLLAMA_CALLED_WITH=()
+    export MOCK_OLLAMA_FAIL_ON="model2"
+    _perform_model_updates "model1" "model2" &>/dev/null
+    local exit_code_fail=$?
+    _run_test "[[ $exit_code_fail -eq 1 ]]" 0 "Fails when one update fails"
+    _run_string_test "$MOCK_OLLAMA_CALL_COUNT" "2" "Attempts all models even if one fails"
+
+    # Scenario 3: Handles being called with no models.
+    MOCK_OLLAMA_CALL_COUNT=0
+    _perform_model_updates &>/dev/null
+    _run_test "[[ $? -eq 0 ]]" 0 "Handles being called with no models"
+    _run_string_test "$MOCK_OLLAMA_CALL_COUNT" "0" "Does not call ollama if no models are given"
+
+    # --- Cleanup ---
+    unset -f ollama
+}
+
 # A function to run internal self-tests for the script's logic.
 run_tests() {
     printBanner "Running Self-Tests for manage-models.sh"
@@ -378,6 +427,7 @@ run_tests() {
 
     # --- Run Suites ---
     test_pull_model
+    test_perform_model_updates
 
     # --- Test Summary ---
     printMsg "\n${T_ULINE}Test Summary:${T_RESET}"
