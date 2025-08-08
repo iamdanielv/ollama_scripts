@@ -57,6 +57,10 @@ To get up and running quickly:
 > [!IMPORTANT]  
 > During installation, the script will prompt you to configure Ollama for network access. This is **required** for OpenWebUI (in Docker) to connect to it. Please choose **Yes (y)**.
 
+> [!IMPORTANT]  
+> **⚠️ Ensure port 11434** (or your custom OLLAMA_PORT) is open in your firewall.
+> Example: `sudo ufw allow 11434` on Ubuntu.
+
 ### 1. 📦 Install/Update Ollama
 
 ```bash
