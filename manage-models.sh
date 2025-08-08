@@ -419,6 +419,83 @@ test_perform_model_updates() {
     unset -f ollama
 }
 
+test_delete_model() {
+    printMsg "\n${T_ULINE}Testing delete_model function:${T_RESET}"
+
+    # --- Mock dependencies ---
+    # Mock the API call to get a predictable list of models.
+    # Note: The function under test sorts these by name, so gemma is #1, llama3 is #2.
+    get_ollama_models_json() {
+        echo '{
+            "models": [
+                { "name": "llama3:latest", "size": 4700000000, "modified_at": "2024-04-24T10:00:00.0Z" },
+                { "name": "gemma:2b", "size": 2900000000, "modified_at": "2024-03-15T12:00:00.0Z" }
+            ]
+        }'
+    }
+
+    # Mock the user confirmation prompt.
+    prompt_yes_no() {
+        MOCK_PROMPT_CALLED_WITH="$1"
+        return "${MOCK_PROMPT_RETURN_CODE:-0}" # Default to 'yes'
+    }
+
+    # Mock the spinner which makes the actual API call.
+    run_with_spinner() {
+        shift # Remove the description
+        MOCK_SPINNER_CALLED_WITH_CMD=("$@")
+        return "${MOCK_SPINNER_RETURN_CODE:-0}" # Default to success
+    }
+    export -f get_ollama_models_json prompt_yes_no run_with_spinner
+
+    # --- Test Cases ---
+
+    # Scenario 1: Delete by name, user confirms.
+    export MOCK_PROMPT_RETURN_CODE=0
+    export MOCK_SPINNER_RETURN_CODE=0
+    MOCK_SPINNER_CALLED_WITH_CMD=()
+    delete_model "llama3" &>/dev/null
+    local exit_code_s1=$?
+    _run_test "[[ $exit_code_s1 -eq 0 ]]" 0 "Succeeds when deleting by name with confirmation"
+    _run_string_test "${MOCK_SPINNER_CALLED_WITH_CMD[4]}" "-X" "Calls curl with correct method (-X)"
+
+    # Scenario 2: Delete by name, user denies.
+    export MOCK_PROMPT_RETURN_CODE=1
+    MOCK_SPINNER_CALLED_WITH_CMD=()
+    delete_model "llama3" &>/dev/null
+    local exit_code_s2=$?
+    _run_test "[[ $exit_code_s2 -eq 1 ]]" 0 "Fails when user denies deletion"
+    _run_string_test "${#MOCK_SPINNER_CALLED_WITH_CMD[@]}" "0" "Does not call API when user denies"
+
+    # Scenario 3: Delete by number, user confirms.
+    export MOCK_PROMPT_RETURN_CODE=0
+    MOCK_SPINNER_CALLED_WITH_CMD=()
+    MOCK_PROMPT_CALLED_WITH=""
+    delete_model "2" &>/dev/null
+    local exit_code_s3=$?
+    _run_test "[[ $exit_code_s3 -eq 0 ]]" 0 "Succeeds when deleting by number"
+    # The prompt should contain the resolved model name, which is llama3 (the 2nd in sorted list).
+    _run_test '[[ "$MOCK_PROMPT_CALLED_WITH" == *"llama3"* ]]' 0 "Resolves number to correct model name for prompt"
+
+    # Scenario 4: Delete with invalid number.
+    _run_test 'delete_model "99"' 1 "Fails when given an invalid model number"
+
+    # Scenario 5: API call fails during deletion.
+    export MOCK_PROMPT_RETURN_CODE=0
+    export MOCK_SPINNER_RETURN_CODE=1
+    _run_test 'delete_model "llama3"' 1 "Fails when the API call fails"
+    export MOCK_SPINNER_RETURN_CODE=0 # Reset
+
+    # Scenario 6: No models exist.
+    # Override the mock to return an empty list.
+    get_ollama_models_json() { echo '{"models": []}'; }
+    export -f get_ollama_models_json
+    _run_test 'delete_model ""' 0 "Handles no models existing gracefully"
+
+    # --- Cleanup ---
+    unset -f get_ollama_models_json prompt_yes_no run_with_spinner
+}
+
 # A function to run internal self-tests for the script's logic.
 run_tests() {
     printBanner "Running Self-Tests for manage-models.sh"
@@ -428,6 +505,11 @@ run_tests() {
     # --- Run Suites ---
     test_pull_model
     test_perform_model_updates
+    test_delete_model
+
+    # --- Cleanup Mocks ---
+    # Unset all mock functions to restore original behavior
+    unset -f ollama get_ollama_models_json prompt_yes_no run_with_spinner
 
     # --- Test Summary ---
     printMsg "\n${T_ULINE}Test Summary:${T_RESET}"
