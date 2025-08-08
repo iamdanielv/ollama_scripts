@@ -283,45 +283,6 @@ print_ollama_models() {
     print_ollama_models_table "$models_json"
 }
 
-# --- Test Framework ---
-
-# Helper to run a single return code test case.
-_run_test() {
-    local cmd_string="$1"
-    local expected_code="$2"
-    local description="$3"
-    ((test_count++))
-
-    printMsgNoNewline "  Test: ${description}... "
-    (eval "$cmd_string") &>/dev/null
-    local actual_code=$?
-    if [[ $actual_code -eq $expected_code ]]; then
-        printMsg "${C_L_GREEN}PASSED${T_RESET}"
-    else
-        printMsg "${C_RED}FAILED${T_RESET} (Expected: $expected_code, Got: $actual_code)"
-        ((failures++))
-    fi
-}
-
-# Helper to run a single string comparison test case.
-_run_string_test() {
-    local actual="$1"
-    local expected="$2"
-    local description="$3"
-    ((test_count++))
-
-    printMsgNoNewline "  Test: ${description}... "
-    if [[ "$actual" == "$expected" ]]; then
-        printMsg "${C_L_GREEN}PASSED${T_RESET}"
-    else
-        printMsg "${C_RED}FAILED${T_RESET}"
-        # Use printf for better formatting of multi-line strings
-        printf "\n    Expected:\n---\n%s\n---\n" "$expected"
-        printf "    Got:\n---\n%s\n---\n" "$actual"
-        ((failures++))
-    fi
-}
-
 # --- Test Suites ---
 
 test_format_ps_output() {

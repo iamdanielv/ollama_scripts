@@ -843,3 +843,69 @@ restrict_to_localhost() {
     printOkMsg "Ollama has been restricted to localhost and was restarted."
     return 0
 }
+
+# --- Test Framework ---
+# These are not 'local' so the helper functions can access them.
+test_count=0
+failures=0
+
+# Helper to run a single string comparison test case.
+# Usage: _run_string_test "actual_output" "expected_output" "description"
+_run_string_test() {
+    local actual="$1"
+    local expected="$2"
+    local description="$3"
+    ((test_count++))
+
+    printMsgNoNewline "  Test: ${description}... "
+    if [[ "$actual" == "$expected" ]]; then
+        printMsg "${C_L_GREEN}PASSED${T_RESET}"
+    else
+        printMsg "${C_RED}FAILED${T_RESET}"
+        echo "    Expected: '$expected'"
+        echo "    Got:      '$actual'"
+        ((failures++))
+    fi
+}
+
+# Helper to run a single return code test case.
+# Usage: _run_test "command_to_run" <expected_code> "description"
+_run_test() {
+    local cmd_string="$1"
+    local expected_code="$2"
+    local description="$3"
+    ((test_count++))
+
+    printMsgNoNewline "  Test: ${description}... "
+    # Run command in a subshell to not affect the test script's state
+    (eval "$cmd_string")
+    local actual_code=$?
+    if [[ $actual_code -eq $expected_code ]]; then
+        printMsg "${C_L_GREEN}PASSED${T_RESET}"
+    else
+        printMsg "${C_RED}FAILED${T_RESET} (Expected: $expected_code, Got: $actual_code)"
+        ((failures++))
+    fi
+}
+
+# Helper to run a single test case for the run_tests function.
+# It is defined at the script level to ensure it's available when called.
+# It accesses the `test_count` and `failures` variables from its caller's scope.
+# Usage: _run_compare_versions_test "v1" "v2" <expected_code> "description"
+_run_compare_versions_test() {
+    local v1="$1"
+    local v2="$2"
+    local expected_code="$3"
+    local description="$4"
+    ((test_count++))
+
+    printMsgNoNewline "  Test: ${description}... "
+    compare_versions "$v1" "$v2"
+    local actual_code=$?
+    if [[ $actual_code -eq $expected_code ]]; then
+        printMsg "${C_L_GREEN}PASSED${T_RESET}"
+    else
+        printMsg "${C_RED}FAILED${T_RESET} (Expected: $expected_code, Got: $actual_code)"
+        ((failures++))
+    fi
+}

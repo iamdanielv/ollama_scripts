@@ -291,46 +291,6 @@ show_pull_menu() {
     esac
 }
 
-# --- Test Framework ---
-
-# Helper to run a single return code test case.
-# Usage: _run_test "command_to_run" <expected_code> "description"
-_run_test() {
-    local cmd_string="$1"
-    local expected_code="$2"
-    local description="$3"
-    ((test_count++))
-
-    printMsgNoNewline "  Test: ${description}... "
-    # Run command in a subshell to not affect the test script's state
-    # Redirect output to keep test output clean
-    (eval "$cmd_string") &>/dev/null
-    local actual_code=$?
-    if [[ $actual_code -eq $expected_code ]]; then
-        printMsg "${C_L_GREEN}PASSED${T_RESET}"
-    else
-        printMsg "${C_RED}FAILED${T_RESET} (Expected: $expected_code, Got: $actual_code)"
-        ((failures++))
-    fi
-}
-
-# Helper to run a single string comparison test case.
-# Usage: _run_string_test "actual_output" "expected_output" "description"
-_run_string_test() {
-    local actual="$1"
-    local expected="$2"
-    local description="$3"
-    ((test_count++))
-
-    printMsgNoNewline "  Test: ${description}... "
-    if [[ "$actual" == "$expected" ]]; then
-        printMsg "${C_L_GREEN}PASSED${T_RESET}"
-    else
-        printMsg "${C_RED}FAILED${T_RESET} (Expected: '$expected', Got: '$actual')"
-        ((failures++))
-    fi
-}
-
 # --- Test Suites ---
 
 test_pull_model() {
@@ -360,11 +320,11 @@ test_pull_model() {
 
     # Scenario 3: Function fails if the underlying ollama command fails.
     export MOCK_OLLAMA_PULL_EXIT_CODE=1
-    _run_test 'pull_model "fail-model"' 1 "Fails when ollama pull fails"
+    _run_test 'pull_model "fail-model" &>/dev/null' 1 "Fails when ollama pull fails"
     export MOCK_OLLAMA_PULL_EXIT_CODE=0 # Reset for next tests
 
     # Scenario 4: Function fails if no model name is provided interactively.
-    _run_test 'pull_model <<< ""' 1 "Fails when no model name is given interactively"
+    _run_test 'pull_model <<< "" &>/dev/null' 1 "Fails when no model name is given interactively"
 
     # --- Cleanup ---
     unset -f ollama
@@ -478,19 +438,19 @@ test_delete_model() {
     _run_test '[[ "$MOCK_PROMPT_CALLED_WITH" == *"llama3"* ]]' 0 "Resolves number to correct model name for prompt"
 
     # Scenario 4: Delete with invalid number.
-    _run_test 'delete_model "99"' 1 "Fails when given an invalid model number"
+    _run_test 'delete_model "99" &>/dev/null' 1 "Fails when given an invalid model number"
 
     # Scenario 5: API call fails during deletion.
     export MOCK_PROMPT_RETURN_CODE=0
     export MOCK_SPINNER_RETURN_CODE=1
-    _run_test 'delete_model "llama3"' 1 "Fails when the API call fails"
+    _run_test 'delete_model "llama3" &>/dev/null' 1 "Fails when the API call fails"
     export MOCK_SPINNER_RETURN_CODE=0 # Reset
 
     # Scenario 6: No models exist.
     # Override the mock to return an empty list.
     get_ollama_models_json() { echo '{"models": []}'; }
     export -f get_ollama_models_json
-    _run_test 'delete_model ""' 0 "Handles no models existing gracefully"
+    _run_test 'delete_model "" &>/dev/null' 0 "Handles no models existing gracefully"
 
     # --- Cleanup ---
     unset -f get_ollama_models_json prompt_yes_no run_with_spinner
