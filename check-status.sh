@@ -466,6 +466,61 @@ test_check_gpu_status() {
     _run_test '[[ "$(check_gpu_status)" == *"Could not retrieve GPU information"* ]]' 0 "Handles nvidia-smi failure gracefully"
 }
 
+test_check_openwebui_status() {
+    printMsg "\n${T_ULINE}Testing check_openwebui_status function:${T_RESET}"
+
+    # --- Mock dependencies ---
+    command() {
+        if [[ "$1" == "-v" && "$2" == "docker" ]]; then
+            [[ "$MOCK_DOCKER_EXISTS" == "true" ]] && return 0 || return 1
+        else
+            # Allow other command checks to pass through
+            /usr/bin/command "$@"
+        fi
+    }
+    get_docker_compose_cmd() {
+        if [[ "$MOCK_COMPOSE_EXISTS" == "true" ]]; then
+            echo "mock_compose_cmd"
+        else
+            echo ""
+        fi
+    }
+    mock_compose_cmd() {
+        # We only care about the 'ps' subcommand for this test
+        if [[ "$3" == "ps" ]]; then
+            echo "$MOCK_COMPOSE_PS_OUTPUT"
+        fi
+    }
+    # This mock is already used by test_check_ollama_status, but we redefine it here
+    # to control it for our specific scenarios.
+    check_endpoint_status() { [[ "$MOCK_WEBUI_RESPONSIVE" == "true" ]]; }
+    export -f command get_docker_compose_cmd mock_compose_cmd check_endpoint_status
+
+    # --- Test Cases ---
+    local actual_output
+    local actual_output_no_color
+
+    # Scenario 1: All good
+    export MOCK_DOCKER_EXISTS=true MOCK_COMPOSE_EXISTS=true MOCK_COMPOSE_PS_OUTPUT="open-webui" MOCK_WEBUI_RESPONSIVE=true
+    actual_output=$(check_openwebui_status)
+    actual_output_no_color=$(echo "$actual_output" | sed 's/\x1b\[[0-9;]*m//g')
+    _run_test "[[ \"$actual_output_no_color\" == *\"Container: Running\"* ]]" 0 "Reports running container"
+    _run_test "[[ \"$actual_output_no_color\" == *\"UI:        Responsive\"* ]]" 0 "Reports responsive UI"
+
+    # Scenario 2: Docker not installed
+    export MOCK_DOCKER_EXISTS=false
+    actual_output=$(check_openwebui_status)
+    actual_output_no_color=$(echo "$actual_output" | sed 's/\x1b\[[0-9;]*m//g')
+    _run_test "[[ \"$actual_output_no_color\" == *\"Docker not found\"* ]]" 0 "Handles missing Docker"
+
+    # Scenario 3: Container is not running
+    export MOCK_DOCKER_EXISTS=true MOCK_COMPOSE_EXISTS=true MOCK_COMPOSE_PS_OUTPUT="" MOCK_WEBUI_RESPONSIVE=false
+    actual_output=$(check_openwebui_status)
+    actual_output_no_color=$(echo "$actual_output" | sed 's/\x1b\[[0-9;]*m//g')
+    _run_test "[[ \"$actual_output_no_color\" == *\"Container: Not Running\"* ]]" 0 "Reports not running container"
+    _run_test "[[ \"$actual_output_no_color\" == *\"UI:        Not Responding\"* ]]" 0 "Reports unresponsive UI when container is down"
+}
+
 # A function to run internal self-tests for the script's logic.
 run_tests() {
     printBanner "Running Self-Tests for check-status.sh"
@@ -476,6 +531,7 @@ run_tests() {
     test_format_ps_output
     test_check_ollama_status
     test_check_gpu_status
+    test_check_openwebui_status
 
     # --- Test Summary ---
     printMsg "\n${T_ULINE}Test Summary:${T_RESET}"
@@ -484,12 +540,14 @@ run_tests() {
         # Unset mocks before exiting successfully
         unset -f _is_systemd_system _is_ollama_service_known systemctl check_endpoint_status check_network_exposure
         unset -f command nvidia-smi timeout
+        unset -f get_docker_compose_cmd mock_compose_cmd
         exit 0
     else
         printErrMsg "${failures} of ${test_count} tests failed."
         # Unset mocks before exiting with failure
         unset -f _is_systemd_system _is_ollama_service_known systemctl check_endpoint_status check_network_exposure
         unset -f command nvidia-smi timeout
+        unset -f get_docker_compose_cmd mock_compose_cmd
         exit 1
     fi
 }
