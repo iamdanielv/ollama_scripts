@@ -40,6 +40,7 @@ These scripts provide a user-friendly way to:
 - 🐳 **Docker**: Required for running OpenWebUI. See [Docker installation docs](https://docs.docker.com/get-docker/) for instructions.  
 - 🧩 **Docker Compose**: Required for running OpenWebUI containers.  
 - 🧰 **systemd**: The Ollama management scripts (`stop-ollama.sh`, `restart-ollama.sh`) are designed for Linux systems using `systemd`. They will not work on systems without it (e.g., macOS or WSL without systemd enabled).
+- 📦 **jq**: Required for parsing JSON model data in `manage-models.sh` and `check-status.sh`.
 
 > [!NOTE]  
 > Most of these scripts require `sudo` to manage system services or write to protected directories. They will automatically prompt for a password if needed.
@@ -391,3 +392,4 @@ This project is licensed under the MIT License. See the `LICENSE` file for detai
 ## 📧 Contact
 
 Let me know if you have any questions. I can be reached at [@IAmDanielV](https://twitter.com/IAmDanielV) or [@iamdanielv.bsky.social](https://bsky.app/profile/iamdanielv.bsky.social).
+
