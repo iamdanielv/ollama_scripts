@@ -19,6 +19,7 @@ show_help() {
     printMsg "  ${C_L_BLUE}-ua, --update-all${T_RESET}  Update all existing local models."
     printMsg "  ${C_L_BLUE}-d, --delete <model>${T_RESET} Delete a local model."
     printMsg "  ${C_L_BLUE}-h, --help${T_RESET}           Show this help message."
+    printMsg "  ${C_L_BLUE}-t, --test${T_RESET}           Run internal self-tests for script logic."
 
     printMsg "\n${T_ULINE}Examples:${T_RESET}"
     printMsg "  ${C_GRAY}# Run the interactive menu${T_RESET}"
@@ -33,6 +34,8 @@ show_help() {
     printMsg "  $(basename "$0") --update-all"
     printMsg "  ${C_GRAY}# Delete the 'llama2' model${T_RESET}"
     printMsg "  $(basename "$0") --delete llama2"
+    printMsg "  ${C_GRAY}# Run internal script tests${T_RESET}"
+    printMsg "  $(basename "$0") --test"
 }
 
 # --- Main Logic ---
@@ -288,6 +291,105 @@ show_pull_menu() {
     esac
 }
 
+# --- Test Framework ---
+
+# Helper to run a single return code test case.
+# Usage: _run_test "command_to_run" <expected_code> "description"
+_run_test() {
+    local cmd_string="$1"
+    local expected_code="$2"
+    local description="$3"
+    ((test_count++))
+
+    printMsgNoNewline "  Test: ${description}... "
+    # Run command in a subshell to not affect the test script's state
+    # Redirect output to keep test output clean
+    (eval "$cmd_string") &>/dev/null
+    local actual_code=$?
+    if [[ $actual_code -eq $expected_code ]]; then
+        printMsg "${C_L_GREEN}PASSED${T_RESET}"
+    else
+        printMsg "${C_RED}FAILED${T_RESET} (Expected: $expected_code, Got: $actual_code)"
+        ((failures++))
+    fi
+}
+
+# Helper to run a single string comparison test case.
+# Usage: _run_string_test "actual_output" "expected_output" "description"
+_run_string_test() {
+    local actual="$1"
+    local expected="$2"
+    local description="$3"
+    ((test_count++))
+
+    printMsgNoNewline "  Test: ${description}... "
+    if [[ "$actual" == "$expected" ]]; then
+        printMsg "${C_L_GREEN}PASSED${T_RESET}"
+    else
+        printMsg "${C_RED}FAILED${T_RESET} (Expected: '$expected', Got: '$actual')"
+        ((failures++))
+    fi
+}
+
+# --- Test Suites ---
+
+test_pull_model() {
+    printMsg "\n${T_ULINE}Testing pull_model function:${T_RESET}"
+
+    # --- Mock dependencies ---
+    # Mock the `ollama` command to track calls and control its exit code.
+    ollama() {
+        if [[ "$1" == "pull" ]]; then
+            MOCK_OLLAMA_PULL_CALLED_WITH="$2"
+            return "${MOCK_OLLAMA_PULL_EXIT_CODE:-0}"
+        fi
+    }
+    export -f ollama
+
+    # --- Test Cases ---
+
+    # Scenario 1: Non-interactive call with a model name.
+    MOCK_OLLAMA_PULL_CALLED_WITH=""
+    pull_model "llama3" &>/dev/null
+    _run_string_test "$MOCK_OLLAMA_PULL_CALLED_WITH" "llama3" "Non-interactive pull calls ollama correctly"
+
+    # Scenario 2: Interactive call with user input.
+    MOCK_OLLAMA_PULL_CALLED_WITH=""
+    pull_model <<< "gemma" &>/dev/null
+    _run_string_test "$MOCK_OLLAMA_PULL_CALLED_WITH" "gemma" "Interactive pull calls ollama correctly"
+
+    # Scenario 3: Function fails if the underlying ollama command fails.
+    export MOCK_OLLAMA_PULL_EXIT_CODE=1
+    _run_test 'pull_model "fail-model"' 1 "Fails when ollama pull fails"
+    export MOCK_OLLAMA_PULL_EXIT_CODE=0 # Reset for next tests
+
+    # Scenario 4: Function fails if no model name is provided interactively.
+    _run_test 'pull_model <<< ""' 1 "Fails when no model name is given interactively"
+
+    # --- Cleanup ---
+    unset -f ollama
+}
+
+# A function to run internal self-tests for the script's logic.
+run_tests() {
+    printBanner "Running Self-Tests for manage-models.sh"
+    test_count=0
+    failures=0
+
+    # --- Run Suites ---
+    test_pull_model
+
+    # --- Test Summary ---
+    printMsg "\n${T_ULINE}Test Summary:${T_RESET}"
+    if [[ $failures -eq 0 ]]; then
+        printOkMsg "All ${test_count} tests passed!"
+        exit 0
+    else
+        printErrMsg "${failures} of ${test_count} tests failed."
+        exit 1
+    fi
+}
+
 # --- Main Menu ---
 show_menu() {
     local menu_str
@@ -352,6 +454,10 @@ main() {
                 ;;
             -h | --help)
                 show_help
+                exit 0
+                ;;
+            -t | --test)
+                run_tests
                 exit 0
                 ;;
             *)
