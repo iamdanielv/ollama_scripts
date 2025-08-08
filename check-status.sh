@@ -21,6 +21,7 @@ show_help() {
     printMsg "  ${C_L_BLUE}-m, --models${T_RESET}   List all installed Ollama models."
     printMsg "  ${C_L_BLUE}-w, --watch${T_RESET}    Watch currently loaded models, updating every second."
     printMsg "  ${C_L_BLUE}-h, --help${T_RESET}      Shows this help message."
+    printMsg "  ${C_L_BLUE}-t, --test${T_RESET}      Run internal self-tests for script logic."
 
     printMsg "\n${T_ULINE}Examples:${T_RESET}"
     printMsg "  ${C_GRAY}# Run the standard status check${T_RESET}"
@@ -29,6 +30,47 @@ show_help() {
     printMsg "  $(basename "$0") --models"
     printMsg "  ${C_GRAY}# Watch loaded models in real-time${T_RESET}"
     printMsg "  $(basename "$0") --watch"
+    printMsg "  ${C_GRAY}# Run internal script tests${T_RESET}"
+    printMsg "  $(basename "$0") --test"
+}
+
+# Formats the raw JSON from the /api/ps endpoint into a human-readable table.
+# This function is separated from the watch loop to make it testable.
+# Usage: _format_ps_output <json_string>
+_format_ps_output() {
+    local raw_output="$1"
+
+    # Use jq to parse the JSON response from the /api/ps endpoint.
+    # This is far more robust than parsing the CLI's text output.
+    # The jq query creates a header and then TSV rows for each model.
+    local tsv_output
+    tsv_output=$(echo "$raw_output" | jq -r '
+        # Header
+        ["NAME", "SIZE", "PROCESSOR", "CONTEXT"],
+        # Data rows from the .models array, sorted by name
+        (.models | sort_by(.name)[] | [
+            .name,
+            # Convert size in bytes to a human-readable GB format, formatted to one decimal place
+            ((.size / 1e9 | (. * 10 | floor) / 10 | tostring | if test("\\.") then . else . + ".0" end) + " GB"),
+            # Determine processor by checking if size_vram is greater than 0
+            (if .size_vram > 0 then "GPU" else "CPU" end),
+            .context_length
+        ])
+        # Format the result as Tab-Separated Values (TSV)
+        | @tsv
+    ' 2>/dev/null)
+
+    # If jq produces no output or only a header, no models are loaded
+    if [[ -z "$tsv_output" || $(echo "$tsv_output" | wc -l) -lt 2 ]]; then
+         echo "   ${C_L_YELLOW}No models are currently loaded.${T_RESET}"
+    else
+        # Format the TSV from jq into a clean, aligned table using a two-pass awk script.
+        # This is more robust than `column -t` as it gives us full control over formatting.
+        # The BEGIN block sets the field separator to a tab and defines padding.
+        # The first block reads all data and finds the max width for each column.
+        # The END block prints the formatted data, left-aligned, with padding.
+        echo -e "$tsv_output" | awk 'BEGIN { FS="\t"; PADDING=4 } { for(i=1; i<=NF; i++) { if(length($i) > width[i]) { width[i] = length($i) } } data[NR] = $0 } END { for(row=1; row<=NR; row++) { split(data[row], fields, FS); for(col=1; col<=NF; col++) { printf "%-" (width[col] + PADDING) "s", fields[col] } printf "\n" } }'
+    fi
 }
 
 # --- Watch Function ---
@@ -60,55 +102,7 @@ watch_ollama_ps() {
             # If curl fails, format it as an error.
             new_output="${T_ERR_ICON}${T_ERR} Could not connect to Ollama API at ${ps_url}${T_RESET}"
         else
-            # Use jq to parse the JSON response from the /api/ps endpoint.
-            # This is far more robust than parsing the CLI's text output.
-            # The jq query creates a header and then TSV rows for each model.
-            new_output=$(echo "$raw_output" | jq -r '
-                # Header
-                ["NAME", "SIZE", "PROCESSOR", "CONTEXT"],
-                # Data rows from the .models array
-                (.models[] | [
-                    .name,
-                    # Convert size in bytes to a human-readable GB format
-                    (.size / 1073741824 | tostring | .[0:4] + " GB"),
-                    # Determine processor by checking if size_vram is greater than 0
-                    (if .size_vram > 0 then "GPU" else "CPU" end),
-                    .context_length
-                ])
-                # Format the result as Tab-Separated Values (TSV)
-                | @tsv
-            ')
-
-            # If jq produces no output or only a header, no models are loaded.
-            if [[ -z "$new_output" || $(echo "$new_output" | wc -l) -lt 2 ]]; then
-                 new_output="   ${C_L_YELLOW}No models are currently loaded.${T_RESET}"
-            else
-                # Format the TSV from jq into a clean, aligned table using a two-pass awk script.
-                # This is more robust than `column -t` as it gives us full control over formatting.
-                new_output=$(echo -e "$new_output" | awk '
-                    BEGIN { FS="\t"; PADDING=4 } # Use tab as separator, add 4 spaces padding
-                    { 
-                        # First pass: read all data and find max width for each column
-                        for(i=1; i<=NF; i++) {
-                            if(length($i) > width[i]) {
-                                width[i] = length($i)
-                            }
-                        }
-                        data[NR] = $0
-                    }
-                    END {
-                        # Second pass: print formatted data
-                        for(row=1; row<=NR; row++) {
-                            split(data[row], fields, FS)
-                            for(col=1; col<=NF; col++) {
-                                # Print field, left-aligned, with padding
-                                printf "%-" (width[col] + PADDING) "s", fields[col]
-                            }
-                            printf "\n"
-                        }
-                    }
-                ')
-            fi
+            new_output=$(_format_ps_output "$raw_output")
         fi
 
         # Add a timestamped footer to the output
@@ -129,7 +123,6 @@ watch_ollama_ps() {
         sleep 1
     done
 }
-
 
 # --- Ollama Status ---
 check_ollama_status() {
@@ -290,6 +283,95 @@ print_ollama_models() {
     print_ollama_models_table "$models_json"
 }
 
+# --- Test Framework ---
+
+# Helper to run a single return code test case.
+_run_test() {
+    local cmd_string="$1"
+    local expected_code="$2"
+    local description="$3"
+    ((test_count++))
+
+    printMsgNoNewline "  Test: ${description}... "
+    (eval "$cmd_string") &>/dev/null
+    local actual_code=$?
+    if [[ $actual_code -eq $expected_code ]]; then
+        printMsg "${C_L_GREEN}PASSED${T_RESET}"
+    else
+        printMsg "${C_RED}FAILED${T_RESET} (Expected: $expected_code, Got: $actual_code)"
+        ((failures++))
+    fi
+}
+
+# Helper to run a single string comparison test case.
+_run_string_test() {
+    local actual="$1"
+    local expected="$2"
+    local description="$3"
+    ((test_count++))
+
+    printMsgNoNewline "  Test: ${description}... "
+    if [[ "$actual" == "$expected" ]]; then
+        printMsg "${C_L_GREEN}PASSED${T_RESET}"
+    else
+        printMsg "${C_RED}FAILED${T_RESET}"
+        # Use printf for better formatting of multi-line strings
+        printf "\n    Expected:\n---\n%s\n---\n" "$expected"
+        printf "    Got:\n---\n%s\n---\n" "$actual"
+        ((failures++))
+    fi
+}
+
+# --- Test Suites ---
+
+test_format_ps_output() {
+    printMsg "\n${T_ULINE}Testing _format_ps_output function:${T_RESET}"
+
+    # Scenario 1: Two models are loaded
+    local two_models_json='{
+        "models": [
+            { "name": "llama3:latest", "size": 8000000000, "size_vram": 8000000000, "context_length": 8192 },
+            { "name": "gemma:2b", "size": 2900000000, "size_vram": 0, "context_length": 4096 }
+        ]
+    }'
+    # Use $'...' to interpret escape sequences like \n.
+    # The awk script adds 4 spaces of padding.
+    local expected_two_models_output=$'NAME             SIZE      PROCESSOR    CONTEXT    \ngemma:2b         2.9 GB    CPU          4096       \nllama3:latest    8.0 GB    GPU          8192       '
+    local actual_two_models_output
+    actual_two_models_output="$(_format_ps_output "$two_models_json")"
+    _run_string_test "$actual_two_models_output" "$expected_two_models_output" "Formats multiple loaded models correctly"
+
+    # Scenario 2: No models are loaded
+    local no_models_json='{"models": []}'
+    local expected_no_models_output="   ${C_L_YELLOW}No models are currently loaded.${T_RESET}"
+    _run_string_test "$(_format_ps_output "$no_models_json")" "$expected_no_models_output" "Handles empty model list"
+
+    # Scenario 3: Invalid JSON input
+    local invalid_json='this is not json'
+    # The function should still produce the "no models" message because jq will fail and produce empty output.
+    _run_string_test "$(_format_ps_output "$invalid_json")" "$expected_no_models_output" "Handles invalid JSON input gracefully"
+}
+
+# A function to run internal self-tests for the script's logic.
+run_tests() {
+    printBanner "Running Self-Tests for check-status.sh"
+    test_count=0
+    failures=0
+
+    # --- Run Suites ---
+    test_format_ps_output
+
+    # --- Test Summary ---
+    printMsg "\n${T_ULINE}Test Summary:${T_RESET}"
+    if [[ $failures -eq 0 ]]; then
+        printOkMsg "All ${test_count} tests passed!"
+        exit 0
+    else
+        printErrMsg "${failures} of ${test_count} tests failed."
+        exit 1
+    fi
+}
+
 main() {
     load_project_env # Source openwebui/.env for custom ports
 
@@ -298,6 +380,7 @@ main() {
             -m|--models) print_ollama_models; exit 0;;
             -w|--watch)  watch_ollama_ps; exit 0;;
             -h|--help)   show_help; exit 0;;
+            -t|--test)   run_tests; exit 0;;
             *)
                 show_help
                 printMsg "\n${T_ERR}Invalid option: $1${T_RESET}"
