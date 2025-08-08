@@ -163,12 +163,20 @@ The script can also be used non-interactively with flags, making it suitable for
 |---|---|---|
 | `--list` | `-l` | Lists all installed models. |
 | `--pull <model>` | `-p <model>` | Pulls a new model from the registry. |
+| `--update <model>` | `-u <model>` | Updates a specific local model. |
+| `--update-all` | `-ua` | Updates all existing local models. |
 | `--delete <model>` | `-d <model>` | Deletes a local model. |
 | `--help` | `-h` | Shows the help message. |
 
 **Examples:**
 
 ```bash
+# Update the 'llama3' model
+./manage-models.sh --update llama3
+
+# Update all local models
+./manage-models.sh --update-all
+
 # Pull the 'llama3.1' model
 ./manage-models.sh --pull llama3.1
 

@@ -15,6 +15,8 @@ show_help() {
     printMsg "\n${T_ULINE}Commands:${T_RESET}"
     printMsg "  ${C_L_BLUE}-l, --list${T_RESET}           List all installed models."
     printMsg "  ${C_L_BLUE}-p, --pull <model>${T_RESET}   Pull a new model from the registry."
+    printMsg "  ${C_L_BLUE}-u, --update <model>${T_RESET} Update a specific local model."
+    printMsg "  ${C_L_BLUE}-ua, --update-all${T_RESET}  Update all existing local models."
     printMsg "  ${C_L_BLUE}-d, --delete <model>${T_RESET} Delete a local model."
     printMsg "  ${C_L_BLUE}-h, --help${T_RESET}           Show this help message."
 
@@ -25,6 +27,10 @@ show_help() {
     printMsg "  $(basename "$0") --list"
     printMsg "  ${C_GRAY}# Pull the 'llama3' model${T_RESET}"
     printMsg "  $(basename "$0") --pull llama3"
+    printMsg "  ${C_GRAY}# Update the 'llama3' model${T_RESET}"
+    printMsg "  $(basename "$0") --update llama3"
+    printMsg "  ${C_GRAY}# Update all local models non-interactively${T_RESET}"
+    printMsg "  $(basename "$0") --update-all"
     printMsg "  ${C_GRAY}# Delete the 'llama2' model${T_RESET}"
     printMsg "  $(basename "$0") --delete llama2"
 }
@@ -77,6 +83,105 @@ pull_model() {
         printInfoMsg "Please check the model name and your network connection."
         return 1
     fi
+}
+
+# --- Model Updating ---
+
+# Private helper to perform the actual 'ollama pull' for a list of models.
+# Not intended to be called directly by the user.
+# Usage: _perform_model_updates "model1" "model2" ...
+_perform_model_updates() {
+    local models_to_update=("$@")
+
+    if [[ ${#models_to_update[@]} -eq 0 ]]; then
+        printWarnMsg "No models specified for update."
+        return 0
+    fi
+
+    printInfoMsg "The following models will be updated: ${C_L_BLUE}${models_to_update[*]}${T_RESET}"
+    local -a failed_model_names=()
+    for model_name in "${models_to_update[@]}"; do
+        printMsg "\n${C_BLUE}${DIV}${T_RESET}"
+        printInfoMsg "Updating model: ${C_L_BLUE}${model_name}${T_RESET}"
+        if ! ollama pull "$model_name"; then
+            printErrMsg "Failed to update model: ${C_L_BLUE}${model_name}${T_RESET}"
+            failed_model_names+=("$model_name")
+        fi
+    done
+    printMsg "${C_BLUE}${DIV}${T_RESET}"
+
+    if [[ ${#failed_model_names[@]} -gt 0 ]]; then
+        local failed_count=${#failed_model_names[@]}
+        printWarnMsg "Finished updating, but ${failed_count} model(s) failed to update."
+        printMsg "    ${T_ERR_ICON} Failed models: ${C_L_RED}${failed_model_names[*]}${T_RESET}"
+        return 1
+    else
+        printOkMsg "Finished updating models successfully."
+        return 0
+    fi
+}
+
+# Updates one or more existing models interactively.
+# Usage: update_models_interactive <models_json>
+update_models_interactive() {
+    local models_json="$1"
+
+    # Check if there are any models to update.
+    if [[ -z "$(echo "$models_json" | jq '.models | .[]')" ]]; then
+        printWarnMsg "No local models found to update."
+        return 0 # Exit gracefully.
+    fi
+
+    # Prompt for input. -a reads into an array.
+    local -a model_inputs
+    read -r -p "$(echo -e "${T_QST_ICON} Enter model number(s) to update (e.g., 1 3 4), or 'all': ")" -a model_inputs
+    if [[ ${#model_inputs[@]} -eq 0 ]]; then
+        printErrMsg "No input provided. Aborting."
+        return 1
+    fi
+
+    local models_to_update=()
+    local invalid_inputs=()
+    local total_models
+    total_models=$(echo "$models_json" | jq '.models | length')
+
+    # Handle 'all' keyword (case-insensitive)
+    if [[ "${model_inputs[0],,}" == "all" ]]; then
+        # Get all model names, sorted to be predictable
+        mapfile -t models_to_update < <(echo "$models_json" | jq -r '.models | sort_by(.name)[] | .name')
+    else
+        # Process numeric inputs
+        for num in "${model_inputs[@]}"; do
+            if [[ "$num" =~ ^[1-9][0-9]*$ && "$num" -le "$total_models" ]]; then
+                local model_name
+                model_name=$(echo "$models_json" | jq -r "(.models | sort_by(.name))[$((num - 1))].name")
+                if [[ -n "$model_name" && "$model_name" != "null" ]]; then
+                    # Avoid duplicates
+                    if ! [[ " ${models_to_update[*]} " =~ " ${model_name} " ]]; then
+                        models_to_update+=("$model_name")
+                    fi
+                else
+                    invalid_inputs+=("$num")
+                fi
+            else
+                invalid_inputs+=("$num")
+            fi
+        done
+    fi
+
+    # Report invalid inputs
+    if [[ ${#invalid_inputs[@]} -gt 0 ]]; then
+        printWarnMsg "Ignoring invalid inputs: ${invalid_inputs[*]}"
+    fi
+
+    # Check if there are any valid models to update
+    if [[ ${#models_to_update[@]} -eq 0 ]]; then
+        printErrMsg "No valid models selected for update."
+        return 1
+    fi
+
+    # Update the selected models
+    _perform_model_updates "${models_to_update[@]}"
 }
 
 # --- Model Deletion ---
@@ -150,9 +255,40 @@ delete_model() {
     fi
 }
 
+# --- Interactive Menus ---
+
+# Shows the sub-menu for pulling/updating models.
+# Usage: show_pull_menu <models_json>
+show_pull_menu() {
+    local models_json="$1"
+
+    # The main menu was already cleared. Now we show our sub-menu.
+    printMsg "\n${T_ULINE}Pull / Update Models:${T_RESET}"
+    printMsg " ${T_BOLD}1)${T_RESET} ${C_L_GREEN}Add a new model${T_RESET}"
+    printMsg " ${T_BOLD}2)${T_RESET} ${C_L_YELLOW}Update existing models${T_RESET}"
+    printMsg " ${T_BOLD}q)${T_RESET} Back to main menu\n"
+    printMsgNoNewline " ${T_QST_ICON} Your choice: "
+    local choice
+    read -r choice || true
+
+    # Clear the sub-menu (6 lines) before executing the action
+    clear_lines_up 6
+
+    case "$choice" in
+        1)
+            pull_model
+            ;;
+        2)
+            update_models_interactive "$models_json"
+            ;;
+        *)
+            # Any other key goes back to the main menu.
+            # The main loop will redraw everything.
+            ;;
+    esac
+}
 
 # --- Main Menu ---
-
 show_menu() {
     local menu_str
     menu_str="  ${C_L_BLUE}(R)efresh${T_RESET} List  ${C_GRAY}|${T_RESET}"
@@ -183,6 +319,31 @@ main() {
                 ;;
             -p | --pull)
                 pull_model "$2"
+                exit $?
+                ;;
+            -u | --update)
+                local model_name="$2"
+                if [[ -z "$model_name" || "$model_name" =~ ^- ]]; then
+                    printErrMsg "The --update flag requires a model name."
+                    exit 1
+                fi
+                _perform_model_updates "$model_name"
+                exit $?
+                ;;
+            -ua | --update-all)
+                printInfoMsg "Fetching list of all local models to update..."
+                local models_json
+                if ! models_json=$(get_ollama_models_json); then
+                    printErrMsg "Failed to get model list from Ollama API. Cannot update."
+                    exit 1
+                fi
+                local -a all_models
+                mapfile -t all_models < <(echo "$models_json" | jq -r '.models[].name')
+                if [[ ${#all_models[@]} -eq 0 ]]; then
+                    printOkMsg "No local models found to update."
+                    exit 0
+                fi
+                _perform_model_updates "${all_models[@]}"
                 exit $?
                 ;;
             -d | --delete)
@@ -254,9 +415,10 @@ main() {
                 continue
                 ;;
             p|P)
-                pull_model
+                show_pull_menu "$cached_models_json"
                 if run_with_spinner "Refreshing model list..." get_ollama_models_json; then
                     cached_models_json="$SPINNER_OUTPUT"
+                    clear_lines_up 1
                 fi
                 ;;
             d|D)
