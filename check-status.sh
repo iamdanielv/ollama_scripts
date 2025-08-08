@@ -60,7 +60,7 @@ _format_ps_output() {
         | @tsv
     ' 2>/dev/null)
 
-    # If jq produces no output or only a header, no models are loaded
+    # If jq produces no output or only a header, no models are loaded.
     if [[ -z "$tsv_output" || $(echo "$tsv_output" | wc -l) -lt 2 ]]; then
          echo "   ${C_L_YELLOW}No models are currently loaded.${T_RESET}"
     else
@@ -352,6 +352,120 @@ test_format_ps_output() {
     _run_string_test "$(_format_ps_output "$invalid_json")" "$expected_no_models_output" "Handles invalid JSON input gracefully"
 }
 
+test_check_ollama_status() {
+    printMsg "\n${T_ULINE}Testing check_ollama_status function:${T_RESET}"
+
+    # --- Mock dependencies ---
+    # These are all the functions that check_ollama_status depends on.
+    _is_systemd_system() { [[ "$MOCK_IS_SYSTEMD" == "true" ]]; }
+    _is_ollama_service_known() { [[ "$MOCK_SERVICE_KNOWN" == "true" ]]; }
+    systemctl() {
+        if [[ "$1" == "is-active" && "$2" == "--quiet" ]]; then
+            [[ "$MOCK_SERVICE_ACTIVE" == "true" ]] && return 0 || return 1
+        fi
+        # Return a dummy state for the non-quiet call
+        echo "inactive"
+    }
+    check_endpoint_status() { [[ "$MOCK_API_RESPONSIVE" == "true" ]]; }
+    check_network_exposure() { [[ "$MOCK_NETWORK_EXPOSED" == "true" ]]; }
+    export -f _is_systemd_system _is_ollama_service_known systemctl check_endpoint_status check_network_exposure
+
+    # --- Test Cases ---
+    local actual_output
+    local actual_output_no_color
+
+    # Scenario 1: Ideal case - all systems go
+    export MOCK_IS_SYSTEMD=true MOCK_SERVICE_KNOWN=true MOCK_SERVICE_ACTIVE=true MOCK_API_RESPONSIVE=true MOCK_NETWORK_EXPOSED=true
+    actual_output=$(check_ollama_status)
+    actual_output_no_color=$(echo "$actual_output" | sed 's/\x1b\[[0-9;]*m//g')
+    _run_test "[[ \"$actual_output_no_color\" == *\"Service:  Active\"* ]]" 0 "Reports Active service"
+    _run_test "[[ \"$actual_output_no_color\" == *\"API:      Responsive\"* ]]" 0 "Reports Responsive API"
+    _run_test "[[ \"$actual_output_no_color\" == *\"Network:  Exposed\"* ]]" 0 "Reports Exposed network"
+
+    # Scenario 2: Service is inactive
+    export MOCK_SERVICE_ACTIVE=false
+    actual_output=$(check_ollama_status)
+    actual_output_no_color=$(echo "$actual_output" | sed 's/\x1b\[[0-9;]*m//g')
+    _run_test "[[ \"$actual_output_no_color\" == *\"Service:  Inactive\"* ]]" 0 "Reports Inactive service"
+
+    # Scenario 3: API is not responsive
+    export MOCK_SERVICE_ACTIVE=true MOCK_API_RESPONSIVE=false
+    actual_output=$(check_ollama_status)
+    actual_output_no_color=$(echo "$actual_output" | sed 's/\x1b\[[0-9;]*m//g')
+    _run_test "[[ \"$actual_output_no_color\" == *\"API:      Not Responding\"* ]]" 0 "Reports unresponsive API"
+
+    # Scenario 4: Network is restricted
+    export MOCK_API_RESPONSIVE=true MOCK_NETWORK_EXPOSED=false
+    actual_output=$(check_ollama_status)
+    actual_output_no_color=$(echo "$actual_output" | sed 's/\x1b\[[0-9;]*m//g')
+    _run_test "[[ \"$actual_output_no_color\" == *\"Network:  Localhost Only\"* ]]" 0 "Reports restricted network"
+
+    # Scenario 5: Not a systemd system
+    export MOCK_IS_SYSTEMD=false
+    actual_output=$(check_ollama_status)
+    _run_test "[[ \"$actual_output\" == *\"Not a systemd system\"* ]]" 0 "Handles non-systemd systems"
+
+    # Scenario 6: Service not found on a systemd system
+    export MOCK_IS_SYSTEMD=true MOCK_SERVICE_KNOWN=false
+    actual_output=$(check_ollama_status)
+    _run_test "[[ \"$actual_output\" == *\"Ollama systemd service not found\"* ]]" 0 "Handles missing service file"
+}
+
+test_check_gpu_status() {
+    printMsg "\n${T_ULINE}Testing check_gpu_status function:${T_RESET}"
+
+    # --- Mock dependencies ---
+    command() {
+        if [[ "$1" == "-v" && "$2" == "nvidia-smi" ]]; then
+            [[ "$MOCK_NVIDIA_SMI_EXISTS" == "true" ]] && return 0 || return 1
+        else
+            # Allow other command checks to pass through
+            /usr/bin/command "$@"
+        fi
+    }
+    nvidia-smi() {
+        case "$*" in
+            *"--query-gpu=driver_version"*)
+                echo "$MOCK_DRIVER_VERSION"
+                ;;
+            *"--query-gpu=name,memory.used"*)
+                echo "$MOCK_GPU_DATA"
+                ;;
+            *) # This is the plain `nvidia-smi` call for CUDA version
+                echo "CUDA Version: $MOCK_CUDA_VERSION"
+                ;;
+        esac
+    }
+    timeout() {
+        # Mock timeout to just run the command. We simulate a timeout by
+        # having the mock nvidia-smi return empty output.
+        shift # remove timeout duration
+        "$@"
+    }
+    export -f command nvidia-smi timeout
+
+    # --- Test Cases ---
+    local actual_output
+    local actual_output_no_color
+
+    # Scenario 1: nvidia-smi is not installed.
+    export MOCK_NVIDIA_SMI_EXISTS=false
+    _run_string_test "$(check_gpu_status)" "" "Does nothing if nvidia-smi is not found"
+
+    # Scenario 2: nvidia-smi is installed and returns valid data.
+    export MOCK_NVIDIA_SMI_EXISTS=true
+    export MOCK_DRIVER_VERSION="550.78" MOCK_CUDA_VERSION="12.4"
+    export MOCK_GPU_DATA="NVIDIA GeForce RTX 4090, 2048, 24564, 10, 50"
+    actual_output=$(check_gpu_status)
+    actual_output_no_color=$(echo "$actual_output" | sed 's/\x1b\[[0-9;]*m//g')
+    _run_test "[[ \"$actual_output_no_color\" == *\"Driver:   550.78 (CUDA: 12.4)\"* ]]" 0 "Reports correct driver and CUDA versions"
+    _run_test "[[ \"$actual_output_no_color\" == *\"GPU 0:    NVIDIA GeForce RTX 4090\"* ]]" 0 "Reports correct GPU name"
+
+    # Scenario 3: nvidia-smi returns empty data for the main query.
+    export MOCK_GPU_DATA=""
+    _run_test '[[ "$(check_gpu_status)" == *"Could not retrieve GPU information"* ]]' 0 "Handles nvidia-smi failure gracefully"
+}
+
 # A function to run internal self-tests for the script's logic.
 run_tests() {
     printBanner "Running Self-Tests for check-status.sh"
@@ -360,14 +474,22 @@ run_tests() {
 
     # --- Run Suites ---
     test_format_ps_output
+    test_check_ollama_status
+    test_check_gpu_status
 
     # --- Test Summary ---
     printMsg "\n${T_ULINE}Test Summary:${T_RESET}"
     if [[ $failures -eq 0 ]]; then
         printOkMsg "All ${test_count} tests passed!"
+        # Unset mocks before exiting successfully
+        unset -f _is_systemd_system _is_ollama_service_known systemctl check_endpoint_status check_network_exposure
+        unset -f command nvidia-smi timeout
         exit 0
     else
         printErrMsg "${failures} of ${test_count} tests failed."
+        # Unset mocks before exiting with failure
+        unset -f _is_systemd_system _is_ollama_service_known systemctl check_endpoint_status check_network_exposure
+        unset -f command nvidia-smi timeout
         exit 1
     fi
 }
