@@ -27,7 +27,6 @@ show_help() {
 
 # --- Script Variables ---
 SERVICE_NAME="ollama.service"
-PROCESS_NAME="ollama"
 
 # --- Main Execution ---
 main() {
@@ -48,35 +47,39 @@ main() {
     ensure_root "This script requires root privileges to stop the systemd service." "$@"
     printBanner "Ollama Service Stopper"
 
-    printMsg "${T_INFO_ICON} Checking prerequisites..."
-
-    check_ollama_installed
-
-    # Move up two lines and clear them to hide the prerequisite check output.
-    clear_lines_up 2
-
-    # --- Stop Ollama Service ---
-    printMsg "${T_INFO_ICON} Attempting to stop Ollama service..."
-    if systemctl is-active --quiet "$SERVICE_NAME"; then
-        printMsgNoNewline "    ${C_BLUE}Executing 'systemctl stop'...${T_RESET}\t"
-        if systemctl stop "$SERVICE_NAME"; then
-            printMsg "${T_OK_ICON} Stopped via systemctl."
-        else
-            printMsg "    ${T_WARN_ICON} 'systemctl stop' failed. This can happen if the service is stuck."
-            printMsgNoNewline "    ${C_L_BLUE}Attempting fallback with 'pkill'...${T_RESET}\t"
-            if pkill -f "$PROCESS_NAME"; then
-                sleep 2 # Give the process a moment to terminate
-                printMsg "${T_OK_ICON} Stopped via pkill."
-            else
-                printErrMsg "Failed to stop Ollama service with both systemctl and pkill."
-                exit 1
-            fi
-        fi
-    else
-        printMsg "    ${T_INFO_ICON} Ollama service is already stopped."
+    if ! _is_ollama_service_known; then
+        printWarnMsg "Ollama service (${SERVICE_NAME}) not found by systemd."
+        printInfoMsg "Nothing to stop. Is Ollama installed correctly?"
+        return 0 # Not an error, just nothing to do.
     fi
 
-    printOkMsg "Ollama service has been successfully stopped."
+    # --- Stop Ollama Service ---
+    # First, check if the service is already stopped.
+    if ! systemctl is-active --quiet "$SERVICE_NAME"; then
+        printOkMsg "Ollama service is already stopped."
+        return 0 # It's already in the desired state, success.
+    fi
+
+    printMsg "${T_INFO_ICON} Attempting to stop Ollama service..."
+    run_with_spinner "Stopping Ollama service via systemctl..." sudo systemctl stop "$SERVICE_NAME"
+    
+    # Verification step: Check if the service is still active after the stop command.
+    printMsgNoNewline "${T_INFO_ICON} Verifying service shutdown"
+    for _ in {1..5}; do
+        printMsgNoNewline "${C_L_BLUE}.${T_RESET}"
+        if ! systemctl is-active --quiet "$SERVICE_NAME"; then
+            clear_lines_up 2
+            printOkMsg "Ollama service has been successfully stopped."
+            return 0 # Use return instead of exit to be reusable in other scripts
+        fi
+        sleep 1
+    done
+
+    # If the loop finishes and the service is still active, it's a hard failure.
+    clear_lines_up 1
+    printErrMsg "Failed to stop the Ollama service."
+    printMsg "    ${T_INFO_ICON} The service '${SERVICE_NAME}' is still reported as active by systemd."
+    exit 1
 }
 
 # Run the main script logic, passing all arguments to it
