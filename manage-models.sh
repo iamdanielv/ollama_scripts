@@ -266,7 +266,7 @@ show_pull_menu() {
     local models_json="$1"
 
     # The main menu was already cleared. Now we show our sub-menu.
-    printMsg "\n${T_ULINE}Pull / Update Models:${T_RESET}"
+    printMsg "${T_ULINE}Pull / Update Models:${T_RESET}"
     printMsg " ${T_BOLD}1)${T_RESET} ${C_L_GREEN}Add a new model${T_RESET}"
     printMsg " ${T_BOLD}2)${T_RESET} ${C_L_YELLOW}Update existing models${T_RESET}"
     printMsg " ${T_BOLD}q)${T_RESET} Back to main menu\n"
@@ -490,7 +490,7 @@ show_menu() {
     menu_str+="  ${C_L_RED}(D)elete${T_RESET} Model  ${C_GRAY}|${T_RESET}"
     menu_str+="  ${C_GRAY}(Q)uit"
 
-    printMsg "\n${C_BLUE}${DIV}${T_RESET}"
+    printMsg "${C_BLUE}${DIV}${T_RESET}"
     printMsg "${menu_str}"
     printMsg "${C_BLUE}${DIV}${T_RESET}"
 }
@@ -582,6 +582,7 @@ main() {
         clear
         printBanner "Ollama Model Manager"
         list_models "$cached_models_json"
+        clear_lines_up 1
         show_menu
 
         local choice
@@ -600,9 +601,9 @@ main() {
             fi
         fi
 
-        # The menu takes up 4 lines (newline, div, menu, div).
+        # The menu takes up 2 lines (menu, div).
         # We clear it before executing an action for a cleaner interface.
-        clear_lines_up 4
+        clear_lines_up 2
 
         case "$choice" in
             r|R)
