@@ -81,46 +81,22 @@ compare_versions() {
 # It checks if the configuration is needed and prompts the user before applying it.
 manage_network_exposure() {
     printMsg "${T_INFO_ICON} Checking network exposure for Ollama..."
-
-    # First, check if this is a systemd system
-    if ! _is_systemd_system; then
-        printMsg "    ${T_INFO_ICON} Not a systemd system. Skipping network exposure check."
-        return
-    fi
-
-    # Then, check if the service exists, with retries, as systemd might need a moment
-    # to recognize a newly installed service.
-    printMsgNoNewline "    ${T_INFO_ICON} Looking for Ollama service"
-    local ollama_found=false
-    for i in {1..5}; do
-        printMsgNoNewline "${C_L_BLUE}.${T_RESET}"
-        if _is_ollama_service_known; then
-            ollama_found=true
-            break
-        fi
-        sleep 1
-    done
-    echo # Newline for the dots
-
-    if ! $ollama_found; then
-        printMsg "    ${T_INFO_ICON} Ollama service not found after 5 attempts. Skipping network exposure check."
-        return # Not an error, just can't configure it.
-    fi
+    
+    # Use the service checker from shared.sh. This will also start the service if needed.
+    wait_for_ollama_service
 
     if check_network_exposure; then
         printOkMsg "Ollama is already exposed to the network."
         return
     fi
 
+    # Use the prompt from shared.sh
     local override_file="/etc/systemd/system/ollama.service.d/10-expose-network.conf"
     printMsg "${T_INFO_ICON} To allow network access (e.g., from Docker),"
     printMsg "${T_INFO_ICON} Ollama can be configured to listen on all network interfaces."
     printMsg "${T_INFO_ICON} This creates a systemd override file at:\n    ${C_L_BLUE}${override_file}${T_RESET}"
     printMsg "${T_INFO_ICON} You can change this setting later by running: ${C_L_BLUE}./config-ollama-net.sh${T_RESET}"
-    printMsgNoNewline "\n    ${T_QST_ICON} Expose Ollama to the network now? (y/N) "
-    local response
-    read -r response || true
-    if [[ ! "$response" =~ ^([yY][eE][sS]|[yY])$ ]]; then
+    if ! prompt_yes_no "Expose Ollama to the network now?" "n"; then
         printMsg "${T_INFO_ICON} Skipping network exposure. Ollama will only be accessible from localhost."
         return
     fi
@@ -132,47 +108,32 @@ test_manage_network_exposure() {
     printMsg "\n${T_ULINE}Testing manage_network_exposure function:${T_RESET}"
 
     # --- Mock dependencies ---
-    _is_systemd_system() { [[ "$MOCK_IS_SYSTEMD" == "true" ]]; }
-    _is_ollama_service_known() { [[ "$MOCK_SERVICE_KNOWN" == "true" ]]; }
+    # Mock all external functions called by manage_network_exposure to isolate its logic.
+    wait_for_ollama_service() { :; } # Succeeds without doing anything.
     check_network_exposure() { [[ "$MOCK_IS_EXPOSED" == "true" ]]; }
-
-    # Mock the function that performs the action, and track if it was called.
+    # The prompt_yes_no mock must read from stdin to simulate user input.
+    prompt_yes_no() { read -r response; [[ "$response" =~ ^([yY][eE][sS]|[yY])$ ]]; }
     expose_to_network() { MOCK_EXPOSE_CALLED=true; }
-    export -f _is_systemd_system _is_ollama_service_known check_network_exposure expose_to_network
+    export -f wait_for_ollama_service2 check_network_exposure prompt_yes_no expose_to_network
 
     # --- Test Cases ---
 
-    # Scenario 1: Not a systemd system. Should exit early.
-    export MOCK_IS_SYSTEMD=false
-    MOCK_EXPOSE_CALLED=false
-    manage_network_exposure &>/dev/null
-    _run_string_test "$MOCK_EXPOSE_CALLED" "false" "Skips on non-systemd system"
-
-    # Scenario 2: Ollama service not found. Should exit early.
-    export MOCK_IS_SYSTEMD=true
-    export MOCK_SERVICE_KNOWN=false
-    MOCK_EXPOSE_CALLED=false
-    manage_network_exposure &>/dev/null
-    _run_string_test "$MOCK_EXPOSE_CALLED" "false" "Skips when service is not found"
-
-    # Scenario 3: Network already exposed. Should exit early.
-    export MOCK_IS_SYSTEMD=true
-    export MOCK_SERVICE_KNOWN=true
+    # Scenario 1: Network already exposed. Should exit early without prompting.
     export MOCK_IS_EXPOSED=true
     MOCK_EXPOSE_CALLED=false
     manage_network_exposure &>/dev/null
     _run_string_test "$MOCK_EXPOSE_CALLED" "false" "Skips when already exposed"
 
-    # Scenario 4: Not exposed, user says 'y'. Should call expose_to_network.
+    # Scenario 2: Not exposed, user says 'y'. Should call expose_to_network.
     export MOCK_IS_EXPOSED=false
     MOCK_EXPOSE_CALLED=false
-    # Use a "here string" instead of a pipe to avoid a subshell.
+    # Provide 'y' as input to the mocked prompt_yes_no function using a "here string".
     manage_network_exposure &>/dev/null <<< 'y'
     _run_string_test "$MOCK_EXPOSE_CALLED" "true" "Calls expose_to_network when user confirms"
 
-    # Scenario 5: Not exposed, user says 'n'. Should NOT call expose_to_network.
+    # Scenario 3: Not exposed, user says 'n'. Should NOT call expose_to_network.
+    export MOCK_IS_EXPOSED=false
     MOCK_EXPOSE_CALLED=false
-    # Use a "here string" here as well.
     manage_network_exposure &>/dev/null <<< 'n'
     _run_string_test "$MOCK_EXPOSE_CALLED" "false" "Skips when user denies"
 }
@@ -254,8 +215,7 @@ run_tests() {
 
     # --- Cleanup Mocks ---
     # Unset the mock functions to restore original behavior
-    unset -f ollama command curl
-    unset -f _is_systemd_system _is_ollama_service_known check_network_exposure expose_to_network
+    unset -f ollama command curl wait_for_ollama_service check_network_exposure expose_to_network prompt_yes_no
 
     # --- Test Summary ---
     printMsg "\n${T_ULINE}Test Summary:${T_RESET}"
