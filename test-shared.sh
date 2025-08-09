@@ -100,6 +100,29 @@ test_prereq_checks() {
     unset -f command
 }
 
+test_prompt_yes_no() {
+    printMsg "\n${T_ULINE}Testing prompt_yes_no function:${T_RESET}"
+
+    # This function's result is its exit code, which is what _run_test checks.
+    # We pipe input to the function and redirect its stdout/stderr to /dev/null
+    # to avoid cluttering the test output with its interactive prompts.
+
+    _run_test 'echo "y" | prompt_yes_no "Question?" &>/dev/null' 0 "User enters 'y'"
+    _run_test 'echo "YeS" | prompt_yes_no "Question?" &>/dev/null' 0 "User enters 'YeS'"
+    _run_test 'echo "n" | prompt_yes_no "Question?" &>/dev/null' 1 "User enters 'n'"
+    _run_test 'echo "nO" | prompt_yes_no "Question?" &>/dev/null' 1 "User enters 'nO'"
+
+    printMsg "  --- Testing defaults ---"
+    _run_test 'echo "" | prompt_yes_no "Question?" "y" &>/dev/null' 0 "User presses Enter for default 'y'"
+    _run_test 'echo "" | prompt_yes_no "Question?" "n" &>/dev/null' 1 "User presses Enter for default 'n'"
+    # No default, Enter is invalid, then 'y'
+    _run_test 'printf "\ny\n" | prompt_yes_no "Question?" "" &>/dev/null' 0 "Handles Enter then 'y' with no default"
+
+    printMsg "  --- Testing invalid input ---"
+    _run_test 'printf "invalid\ny\n" | prompt_yes_no "Question?" &>/dev/null' 0 "Handles invalid input before 'y'"
+    _run_test 'printf "invalid\nn\n" | prompt_yes_no "Question?" &>/dev/null' 1 "Handles invalid input before 'n'"
+}
+
 # --- Main Test Runner ---
 
 main() {
@@ -117,6 +140,7 @@ main() {
     test_parse_models_to_tsv
     test_get_docker_compose_cmd
     test_prereq_checks
+    test_prompt_yes_no
 
     # --- Test Summary ---
     printMsg "\n${T_ULINE}Test Summary:${T_RESET}"
