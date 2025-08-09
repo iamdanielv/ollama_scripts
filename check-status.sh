@@ -77,9 +77,9 @@ _format_ps_output() {
 watch_ollama_ps() {
     # 1. Prerequisites
     check_ollama_installed
-    clear_lines_up 1 # from check_ollama_installed
+    check_ollama_installed --silent
     verify_ollama_api_responsive
-    check_jq_installed
+    check_jq_installed --silent
 
     # 2. Setup UI
     printBanner "Watching Ollama Processes (Ctrl+C to exit)"
