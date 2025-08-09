@@ -265,28 +265,35 @@ delete_model() {
 show_pull_menu() {
     local models_json="$1"
 
-    # The main menu was already cleared. Now we show our sub-menu.
-    printMsg "${T_ULINE}Pull / Update Models:${T_RESET}"
-    printMsg " ${T_BOLD}1)${T_RESET} ${C_L_GREEN}Add a new model${T_RESET}"
-    printMsg " ${T_BOLD}2)${T_RESET} ${C_L_YELLOW}Update existing models${T_RESET}"
-    printMsg " ${T_BOLD}q)${T_RESET} Back to main menu\n"
-    printMsgNoNewline " ${T_QST_ICON} Your choice: "
-    local choice
-    read -r choice || true
+    # The main menu was already cleared. Now we show our sub-menu bar.
+    local menu_str
+    menu_str="  ${C_L_GREEN}(A)dd${T_RESET} Model  ${C_L_GRAY}|${T_RESET}"
+    menu_str+="  ${C_L_YELLOW}(U)pdate${T_RESET} Model  ${C_L_GRAY}|${T_RESET}"
+    menu_str+="  ${C_L_GRAY}(C)ancel${T_RESET}"
 
-    # Clear the sub-menu (6 lines) before executing the action
-    clear_lines_up 6
+    printMsg "${C_BLUE}${DIV}${T_RESET}"
+    printMsg "${menu_str}"
+    printMsg "${C_BLUE}${DIV}${T_RESET}"
+
+    local choice
+    # Read a single character, silently, without needing Enter.
+    read -rsn1 choice
+
+    # The menu takes up 3 lines, but we want to leave the first row
+    # so that the list of models is seperate
+    # We clear it before executing an action for a cleaner interface.
+    clear_lines_up 2
 
     case "$choice" in
-        1)
+        a|A)
             pull_model
             ;;
-        2)
+        u|U)
             update_models_interactive "$models_json"
             ;;
-        *)
-            # Any other key goes back to the main menu.
-            # The main loop will redraw everything.
+        c|C|$'\e')
+            # Cancel and return to main menu. The main loop will redraw.
+            return 0
             ;;
     esac
 }
@@ -483,12 +490,12 @@ run_tests() {
 }
 
 # --- Main Menu ---
-show_menu() {
+show_main_menu() {
     local menu_str
-    menu_str="  ${C_L_BLUE}(R)efresh${T_RESET} List  ${C_GRAY}|${T_RESET}"
-    menu_str+="  ${C_L_YELLOW}(P)ull${T_RESET} Model    ${C_GRAY}|${T_RESET}"
-    menu_str+="  ${C_L_RED}(D)elete${T_RESET} Model  ${C_GRAY}|${T_RESET}"
-    menu_str+="  ${C_GRAY}(Q)uit"
+    menu_str="  ${C_L_BLUE}(R)efresh${T_RESET} List  ${C_L_GRAY}|${T_RESET}"
+    menu_str+="  ${C_L_YELLOW}(P)ull${T_RESET} Model    ${C_L_GRAY}|${T_RESET}"
+    menu_str+="  ${C_L_RED}(D)elete${T_RESET} Model  ${C_L_GRAY}|${T_RESET}"
+    menu_str+="  ${C_L_GRAY}(Q)uit"
 
     printMsg "${C_BLUE}${DIV}${T_RESET}"
     printMsg "${menu_str}"
@@ -583,7 +590,7 @@ main() {
         printBanner "Ollama Model Manager"
         list_models "$cached_models_json"
         clear_lines_up 1
-        show_menu
+        show_main_menu
 
         local choice
         # Read a single character, silently, without needing Enter.
@@ -614,6 +621,7 @@ main() {
                 continue
                 ;;
             p|P)
+                clear_lines_up 1 # Clear the first div since the pull menu adds it back in
                 show_pull_menu "$cached_models_json"
                 if run_with_spinner "Refreshing model list..." get_ollama_models_json; then
                     cached_models_json="$SPINNER_OUTPUT"
