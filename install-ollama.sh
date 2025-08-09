@@ -274,15 +274,7 @@ main() {
 
     printBanner "Ollama Installer/Updater"
 
-    printMsg "${T_INFO_ICON} Checking prerequisites..."
-    if ! command -v curl &>/dev/null; then
-        printErrMsg "curl is not installed. Please install it to continue."
-        exit 1
-    fi
-    #printOkMsg "curl is installed."
-
-    # Remove the "Checking for prerequisites..." line
-    clear_lines_up 1
+    prereq_checks "curl"
     
     local installed_version
     installed_version=$(get_ollama_version)
