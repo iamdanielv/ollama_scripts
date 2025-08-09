@@ -232,7 +232,14 @@ prompt_yes_no() {
 _OLLAMA_IS_INSTALLED=""
 
 # Checks if the Ollama CLI is installed and exits if it's not.
+# Usage: check_ollama_installed [--silent]
+#   --silent: If provided, the success message will be cleared instead of printed.
 check_ollama_installed() {
+    local silent=false
+    if [[ "$1" == "--silent" ]]; then
+        silent=true
+    fi
+
     # 1. Perform the check only if the status is not already cached.
     if [[ -z "${_OLLAMA_IS_INSTALLED:-}" ]]; then
         if command -v ollama &> /dev/null; then
@@ -245,8 +252,12 @@ check_ollama_installed() {
     # 2. Print messages and act based on the cached status.
     printMsgNoNewline "${T_INFO_ICON} Checking for Ollama installation... " >&2
     if [[ "${_OLLAMA_IS_INSTALLED}" == "true" ]]; then
-        printOkMsg "Ollama is installed." >&2
-        return 0
+        if $silent; then
+            clear_current_line >&2
+        else
+            printOkMsg "Ollama is installed." >&2
+        fi
+        return 0 # Success
     else
         echo >&2 # Newline before error message
         printErrMsg "Ollama is not installed." >&2
@@ -256,14 +267,25 @@ check_ollama_installed() {
 }
 
 # Checks for Docker and Docker Compose. Exits if not found.
+# Usage: check_docker_prerequisites [--silent]
+#   --silent: If provided, success messages will be cleared instead of printed.
 check_docker_prerequisites() {
+    local silent=false
+    if [[ "$1" == "--silent" ]]; then
+        silent=true
+    fi
+
     printMsgNoNewline "${T_INFO_ICON} Checking for Docker... " >&2
     if ! command -v docker &>/dev/null; then
         echo >&2 # Newline before error message
         printErrMsg "Docker is not installed. Please install Docker to continue." >&2
         exit 1
     fi
-    printOkMsg "Docker is installed." >&2
+    if $silent; then
+        clear_current_line >&2
+    else
+        printOkMsg "Docker is installed." >&2
+    fi
 
     printMsgNoNewline "${T_INFO_ICON} Checking for Docker Compose... " >&2
     # Check for either v2 (plugin) or v1 (standalone)
@@ -272,11 +294,22 @@ check_docker_prerequisites() {
         printErrMsg "Docker Compose is not installed." >&2
         exit 1
     fi
-    printOkMsg "Docker Compose is available." >&2
+    if $silent; then
+        clear_current_line >&2
+    else
+        printOkMsg "Docker Compose is available." >&2
+    fi
 }
 
 # Checks if jq is installed. Exits if not found.
+# Usage: check_jq_installed [--silent]
+#   --silent: If provided, the success message will be cleared instead of printed.
 check_jq_installed() {
+    local silent=false
+    if [[ "$1" == "--silent" ]]; then
+        silent=true
+    fi
+
     printMsgNoNewline "${T_INFO_ICON} Checking for jq... " >&2
     if ! command -v jq &>/dev/null; then
         echo >&2 # Newline before error message
@@ -284,9 +317,13 @@ check_jq_installed() {
         printMsg "    ${T_INFO_ICON} On Debian/Ubuntu: ${C_L_BLUE}sudo apt-get install jq${T_RESET}" >&2
         exit 1
     fi
-    
-    # Overwrite the checking message, this reduces visual clutter 
-    clear_current_line
+
+    if $silent; then
+        # Overwrite the checking message, this reduces visual clutter
+        clear_current_line >&2
+    else
+        printOkMsg "jq is installed." >&2
+    fi
 }
 
 # Gets the correct Docker Compose command ('docker compose' or 'docker-compose').
