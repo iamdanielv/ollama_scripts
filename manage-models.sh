@@ -500,8 +500,8 @@ main() {
 
     # --- Pre-flight checks for the whole script ---
     check_ollama_installed
-    clear_lines_up 1
-    check_jq_installed
+    check_ollama_installed --silent
+    check_jq_installed --silent
     verify_ollama_api_responsive
 
     # Non-interactive mode
