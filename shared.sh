@@ -656,6 +656,7 @@ check_ollama_installed() {
         if $silent; then
             clear_current_line >&2
         else
+            clear_current_line >&2
             printOkMsg "Ollama is ${T_BOLD}${C_GREEN}installed${T_RESET}" >&2
         fi
         return 0 # Success
@@ -782,7 +783,7 @@ verify_ollama_service() {
             show_logs_and_exit "Ollama service failed to activate according to systemd."
         fi
         clear_lines_up 1
-        printMsg "${T_OK_ICON} Systemd reports service is active."
+        printMsg "${T_OK_ICON} Systemd service is ${C_L_GREEN}active${T_RESET}"
     fi
 
     # Regardless of systemd status, we check if the API is responsive.
