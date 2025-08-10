@@ -132,7 +132,7 @@ main() {
 
     # --- Run Suites ---
     # We need jq for this test script itself.
-    if ! command -v jq &>/dev/null; then
+    if ! _check_command_exists "jq"; then
         printErrMsg "jq is required to run the test suite. Please install it."
         exit 1
     fi

@@ -177,7 +177,7 @@ check_ollama_status() {
 # --- GPU Status ---
 check_gpu_status() {
     # Only run if nvidia-smi is available
-    if ! command -v nvidia-smi &>/dev/null; then
+    if ! _check_command_exists "nvidia-smi"; then
         return
     fi
 
@@ -224,7 +224,7 @@ check_openwebui_status() {
     printMsg "\n${T_BOLD}--- OpenWebUI Status ---${T_RESET}"
 
     # Check for docker first
-    if ! command -v docker &>/dev/null; then
+    if ! _check_command_exists "docker"; then
         printMsg "  ${T_INFO_ICON} Docker not found. Skipping OpenWebUI check."
         return
     fi

@@ -56,7 +56,7 @@ main() {
     # --- GPU Detection ---
     local IS_NVIDIA=false
     printMsgNoNewline "${T_INFO_ICON} Checking for NVIDIA GPU..."
-    if nvidia-smi &> /dev/null; then
+    if _check_command_exists "nvidia-smi"; then
         IS_NVIDIA=true
         printMsg "${T_OK_ICON} NVIDIA GPU detected."
     else

@@ -35,7 +35,7 @@ show_help() {
 # Function to get the current Ollama version.
 # Returns the version string or an empty string if not installed.
 get_ollama_version() {
-    if command -v ollama &>/dev/null; then
+    if _check_command_exists "ollama"; then
         # ollama --version can sometimes include warning lines (often on stderr).
         # We need to reliably find the line containing the version string.
         # The output can be "ollama version is 0.9.6" or include warnings like
