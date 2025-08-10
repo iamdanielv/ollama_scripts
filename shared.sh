@@ -138,6 +138,12 @@ trap 'script_interrupt_handler' INT
 
 # --- Prerequisite & Sanity Checks ---
 
+# Internal helper to check for a command's existence without output.
+# Returns 0 if found, 1 otherwise.
+_check_command_exists() {
+    command -v "$1" &>/dev/null
+}
+
 # Checks for command-line tools
 # Exits with an error if any of the specified commands are not found.
 # Usage: prereq_checks "command1" "command2" "..."
@@ -145,8 +151,8 @@ prereq_checks() {
     local missing_commands=()
     printMsgNoNewline "${T_INFO_ICON} Running prereq checks"
     for cmd in "$@"; do
-        echo -n "${C_L_BLUE}.${T_RESET}"
-        if ! command -v "$cmd" &>/dev/null; then
+        printMsgNoNewline "${C_L_BLUE}.${T_RESET}"
+        if ! _check_command_exists "$cmd"; then
             missing_commands+=("$cmd")
         fi
     done
@@ -174,7 +180,7 @@ check_jq_installed() {
     fi
 
     printMsgNoNewline "${T_INFO_ICON} Checking for jq... " >&2
-    if ! command -v jq &>/dev/null; then
+    if ! _check_command_exists "jq"; then
         echo >&2 # Newline before error message
         printErrMsg "jq is not installed. Please install it to parse model data." >&2
         printMsg "    ${T_INFO_ICON} On Debian/Ubuntu: ${C_L_BLUE}sudo apt-get install jq${T_RESET}" >&2
@@ -196,9 +202,9 @@ check_jq_installed() {
 #   compose_cmd=$(get_docker_compose_cmd)
 #   $compose_cmd up -d
 get_docker_compose_cmd() {
-    if command -v docker &>/dev/null && docker compose version &>/dev/null; then
+    if _check_command_exists "docker" && docker compose version &>/dev/null; then
         echo "docker compose"
-    elif command -v docker-compose &>/dev/null; then
+    elif _check_command_exists "docker-compose"; then
         echo "docker-compose"
     else
         # This case should not be reached if check_docker_prerequisites was called.
@@ -320,8 +326,8 @@ ensure_root() {
 show_logs_and_exit() {
     local message="$1"
     printErrMsg "$message"
-    # Check if journalctl is available before trying to use it
-    if command -v journalctl &> /dev/null; then
+    # Check if journalctl is available before trying to use it.
+    if _check_command_exists "journalctl"; then
         printMsg "    ${T_INFO_ICON} Preview of system log:"
         # Indent the journalctl output for readability
         journalctl -u ollama.service -n 10 --no-pager | sed 's/^/    /'
@@ -392,7 +398,7 @@ _is_systemd_system() {
     # Check for the presence of systemctl and that systemd is the init process.
     # `is-system-running` can fail on a "degraded" system, which is still usable.
     # Checking for the /run/systemd/system directory is a more reliable way to detect systemd.
-    if command -v systemctl &>/dev/null && [ -d /run/systemd/system ]; then
+    if _check_command_exists "systemctl" && [ -d /run/systemd/system ]; then
         _IS_SYSTEMD=0 # true
     else
         _IS_SYSTEMD=1 # false
@@ -612,7 +618,7 @@ check_ollama_installed() {
 
     # 1. Perform the check only if the status is not already cached.
     if [[ -z "${_OLLAMA_IS_INSTALLED:-}" ]]; then
-        if command -v ollama &> /dev/null; then
+        if _check_command_exists "ollama"; then
             _OLLAMA_IS_INSTALLED="true"
         else
             _OLLAMA_IS_INSTALLED="false"
@@ -646,7 +652,7 @@ check_docker_prerequisites() {
     fi
 
     printMsgNoNewline "${T_INFO_ICON} Checking for Docker... " >&2
-    if ! command -v docker &>/dev/null; then
+    if ! _check_command_exists "docker"; then
         echo >&2 # Newline before error message
         printErrMsg "Docker is not installed. Please install Docker to continue." >&2
         exit 1
@@ -659,7 +665,7 @@ check_docker_prerequisites() {
 
     printMsgNoNewline "${T_INFO_ICON} Checking for Docker Compose... " >&2
     # Check for either v2 (plugin) or v1 (standalone)
-    if ! (command -v docker &>/dev/null && docker compose version &>/dev/null) && ! command -v docker-compose &>/dev/null; then
+    if ! (_check_command_exists "docker" && docker compose version &>/dev/null) && ! _check_command_exists "docker-compose"; then
         echo >&2 # Newline before error message
         printErrMsg "Docker Compose is not installed." >&2
         exit 1
@@ -926,5 +932,3 @@ restrict_to_localhost() {
     printOkMsg "Ollama has been restricted to localhost and was restarted."
     return 0
 }
-
-
