@@ -38,6 +38,29 @@ export T_QST_ICON="[${T_BOLD}${C_L_CYAN}?${T_RESET}]"
 
 export DIV="-------------------------------------------------------------------------------"
 
+# --- Banner Control ---
+# This logic helps determine if a script is being called by another script in this project.
+# The first script to source this file will set the entry-level shell level ($SHLVL).
+# Any script *executed* by that first script will run in a new shell, which will have a
+# higher SHLVL. This allows us to print a simpler banner for nested script calls.
+if [[ -z "$SCRIPT_EXEC_ENTRY_SHLVL" ]]; then
+    export SCRIPT_EXEC_ENTRY_SHLVL=$SHLVL
+fi
+
+function printBanner() {
+  # If the current shell level is greater than the one from the entry script,
+  # it means this script was called from another. In that case, print a simpler banner.
+  if [[ "$SHLVL" -gt "$SCRIPT_EXEC_ENTRY_SHLVL" ]]; then
+    # Simple banner for nested script calls, acting as a sub-header.
+    printMsg "${C_BLUE}${T_BOLD}--- ${1} ---${T_RESET}"
+  else
+    # Full banner for top-level script calls
+    printMsg "${C_BLUE}${DIV}"
+    printMsg " ${1}"
+    printMsg "${DIV}${T_RESET}"
+  fi
+}
+
 function printMsg() {
   echo -e "${1}"
 }
@@ -72,12 +95,6 @@ function getFormattedDate() {
 
 function getPrettyDate() {
   echo "${C_BLUE}$(getFormattedDate)${T_RESET}"
-}
-
-function printBanner() {
-  printMsg "${C_BLUE}${DIV}"
-  printMsg " ${1}"
-  printMsg "${DIV}${T_RESET}"
 }
 
 # Clears the current line and returns the cursor to the start.
@@ -631,7 +648,7 @@ check_ollama_installed() {
         if $silent; then
             clear_current_line >&2
         else
-            printOkMsg "Ollama is installed." >&2
+            printOkMsg "Ollama is ${T_BOLD}${C_GREEN}installed${T_RESET}" >&2
         fi
         return 0 # Success
     else
