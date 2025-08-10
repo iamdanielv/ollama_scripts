@@ -47,17 +47,25 @@ if [[ -z "$SCRIPT_EXEC_ENTRY_SHLVL" ]]; then
     export SCRIPT_EXEC_ENTRY_SHLVL=$SHLVL
 fi
 
+function print_h1() {
+  # Full banner for top-level script calls
+  printMsg "${C_BLUE}${DIV}"
+  printMsg " ${1}"
+  printMsg "${DIV}${T_RESET}"
+}
+
+function print_h2() {
+  # Simple banner for nested script calls, acting as a sub-header.
+  printMsg "${C_BLUE}${T_BOLD}--- ${1} ---${T_RESET}"
+}
+
 function printBanner() {
   # If the current shell level is greater than the one from the entry script,
   # it means this script was called from another. In that case, print a simpler banner.
   if [[ "$SHLVL" -gt "$SCRIPT_EXEC_ENTRY_SHLVL" ]]; then
-    # Simple banner for nested script calls, acting as a sub-header.
-    printMsg "${C_BLUE}${T_BOLD}--- ${1} ---${T_RESET}"
+    print_h2 "$1"
   else
-    # Full banner for top-level script calls
-    printMsg "${C_BLUE}${DIV}"
-    printMsg " ${1}"
-    printMsg "${DIV}${T_RESET}"
+    print_h1 "$1"
   fi
 }
 
