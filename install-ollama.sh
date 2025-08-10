@@ -115,7 +115,7 @@ test_manage_network_exposure() {
     # The prompt_yes_no mock must read from stdin to simulate user input.
     prompt_yes_no() { read -r response; [[ "$response" =~ ^([yY][eE][sS]|[yY])$ ]]; }
     expose_to_network() { MOCK_EXPOSE_CALLED=true; }
-    export -f wait_for_ollama_service2 check_network_exposure prompt_yes_no expose_to_network
+    export -f wait_for_ollama_service check_network_exposure prompt_yes_no expose_to_network
 
     # --- Test Cases ---
 

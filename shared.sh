@@ -717,48 +717,6 @@ wait_for_ollama_service() {
     fi
 }
 
-wait_for_ollama_service2() {
-    if ! _is_systemd_system; then
-        printMsg "${T_INFO_ICON} Not a systemd system. Skipping service discovery."
-        return
-    fi
-
-    local desc="${T_INFO_ICON} Looking for Ollama service"
-
-    if run_with_spinner "${desc}" bash -c '
-        for i in {1..5}; do
-            # _is_ollama_service_known is not available in the subshell,
-            # so we use its implementation directly to check if the service exists.
-            if systemctl cat ollama.service &>/dev/null; then
-                exit 0 # Success
-            fi
-            sleep 1
-        done
-        exit 1 # Failure: loop completed without finding the service.
-    '; then
-        clear_lines_up 1
-        # printOkMsg "Ollama service found"
-    else
-        printErrMsg "Ollama service not found. Please install it with ./install-ollama.sh"
-        exit 1
-    fi
-
-    # After finding the service, ensure it's running.
-    if ! systemctl is-active --quiet ollama.service; then
-        local current_state
-        # Get the state (e.g., "inactive", "failed"). This command has a non-zero
-        # exit code when not active, so `|| true` is needed to prevent `set -e` from exiting.
-        current_state=$(systemctl is-active ollama.service || true)
-        printMsg "    ${T_INFO_ICON} Service is not active (currently ${C_L_YELLOW}${current_state}${T_RESET}). Attempting to start it..."
-        # This requires sudo. The calling script should either be run with sudo
-        # or the user will be prompted for a password.
-        if ! sudo systemctl start ollama.service; then
-            show_logs_and_exit "Failed to start Ollama service."
-        fi
-        printMsg "    ${T_OK_ICON} Service started successfully."
-    fi
-}
-
 # Verifies that the Ollama API is responsive, with a spinner. Exits on failure.
 # This is useful as a precondition check in scripts that need to talk to the API.
 verify_ollama_api_responsive() {
