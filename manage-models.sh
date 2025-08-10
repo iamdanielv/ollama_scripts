@@ -506,7 +506,6 @@ main() {
     load_project_env
 
     # --- Pre-flight checks for the whole script ---
-    check_ollama_installed
     check_ollama_installed --silent
     check_jq_installed --silent
     verify_ollama_api_responsive
