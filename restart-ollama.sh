@@ -55,10 +55,10 @@ main() {
 
     # --- GPU Detection ---
     local IS_NVIDIA=false
-    printMsgNoNewline "${T_INFO_ICON} Checking for NVIDIA GPU..."
+    printMsgNoNewline "${T_INFO_ICON} Checking for NVIDIA GPU...  \t"
     if _check_command_exists "nvidia-smi"; then
         IS_NVIDIA=true
-        printMsg "${T_OK_ICON} NVIDIA GPU detected."
+        printMsg "${T_OK_ICON} NVIDIA ${T_BOLD}${C_GREEN}GPU detected${T_RESET}"
     else
         printMsg "${T_INFO_ICON} No NVIDIA GPU found. Assuming CPU-only operation."
     fi
@@ -76,7 +76,7 @@ main() {
         rmmod nvidia_uvm &>/dev/null || true
         # Reload the module.
         if modprobe nvidia_uvm; then
-            printMsg "${T_OK_ICON} Module reloaded."
+            printMsg "${T_OK_ICON} Module ${T_BOLD}${C_GREEN}reloaded${T_RESET}"
         else
             printErrMsg "Failed to reset NVIDIA UVM."
             printMsg "    ${T_INFO_ICON} Check your NVIDIA driver installation."
@@ -90,12 +90,12 @@ main() {
     if ! systemctl start ollama.service; then
         show_logs_and_exit "Failed to start Ollama via systemctl."
     else
-        printMsg "${T_OK_ICON} Service started."
+        printMsg "${T_OK_ICON} Service ${T_BOLD}${C_GREEN}started${T_RESET}"
     fi
 
     # --- Final Verification ---
     verify_ollama_service
-    printOkMsg "Ollama has been successfully restarted!"
+    printOkMsg "Ollama has been ${T_BOLD}${C_GREEN}successfully restarted${T_RESET}"
 }
 
 main "$@"
