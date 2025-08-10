@@ -69,7 +69,7 @@ main() {
         printMsgNoNewline "${C_L_BLUE}.${T_RESET}"
         if ! systemctl is-active --quiet "$SERVICE_NAME"; then
             clear_lines_up 2
-            printOkMsg "Ollama service has been successfully stopped."
+            printOkMsg "Ollama service has been ${T_BOLD}${C_YELLOW}successfully stopped${T_RESET}"
             return 0 # Use return instead of exit to be reusable in other scripts
         fi
         sleep 1
