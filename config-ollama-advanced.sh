@@ -78,6 +78,15 @@ remove_kv_cache_conf() {
 
 # --- Main Logic ---
 main() {
+    # Handle self-test
+    if [[ "$1" == "-t" || "$1" == "--test" ]]; then
+        # The "test" for this script is to ensure it can be called and that it
+        # finds the shared libraries. The prereq checks are sufficient.
+        prereq_checks "sudo" "systemctl" "grep" "sed"
+        printOkMsg "Self-test passed."
+        exit 0
+    fi
+
     prereq_checks "sudo" "systemctl"
 
     printBanner "Ollama Advanced Configuration: KV Cache"
