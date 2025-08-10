@@ -4,6 +4,11 @@
 # IMPORTANT: This test script is designed to be run from the script's directory.
 # It sources shared.sh from its own location.
 
+# Check for --test flag to enable test-all.sh to detect this script as testable
+if [[ "$1" == "-t" || "$1" == "--test" ]]; then
+    main
+fi
+
 # Source the shared library
 # shellcheck disable=SC1091
 if ! source "$(dirname "$0")/shared.sh"; then
