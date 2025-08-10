@@ -164,6 +164,49 @@ prereq_checks() {
     clear_lines_up 1
 }
 
+# Checks if jq is installed. Exits if not found.
+# Usage: check_jq_installed [--silent]
+#   --silent: If provided, the success message will be cleared instead of printed.
+check_jq_installed() {
+    local silent=false
+    if [[ "$1" == "--silent" ]]; then
+        silent=true
+    fi
+
+    printMsgNoNewline "${T_INFO_ICON} Checking for jq... " >&2
+    if ! command -v jq &>/dev/null; then
+        echo >&2 # Newline before error message
+        printErrMsg "jq is not installed. Please install it to parse model data." >&2
+        printMsg "    ${T_INFO_ICON} On Debian/Ubuntu: ${C_L_BLUE}sudo apt-get install jq${T_RESET}" >&2
+        exit 1
+    fi
+
+    if $silent; then
+        # Overwrite the checking message, this reduces visual clutter
+        clear_current_line >&2
+    else
+        printOkMsg "jq is installed." >&2
+    fi
+}
+
+# Gets the correct Docker Compose command ('docker compose' or 'docker-compose').
+# Assumes prerequisites have been checked by check_docker_prerequisites.
+# Usage:
+#   local compose_cmd
+#   compose_cmd=$(get_docker_compose_cmd)
+#   $compose_cmd up -d
+get_docker_compose_cmd() {
+    if command -v docker &>/dev/null && docker compose version &>/dev/null; then
+        echo "docker compose"
+    elif command -v docker-compose &>/dev/null; then
+        echo "docker-compose"
+    else
+        # This case should not be reached if check_docker_prerequisites was called.
+        printErrMsg "Could not determine Docker Compose command." >&2
+        exit 1
+    fi
+}
+
 # Prompts the user with a Yes/No question and returns an exit code.
 # Usage:
 #   if prompt_yes_no "Do you want to proceed?"; then
@@ -225,123 +268,6 @@ prompt_yes_no() {
                 ;;
         esac
     done
-}
-
-# A variable to cache the result of the check.
-# Unset by default. Can be "true" or "false" after the first run.
-_OLLAMA_IS_INSTALLED=""
-
-# Checks if the Ollama CLI is installed and exits if it's not.
-# Usage: check_ollama_installed [--silent]
-#   --silent: If provided, the success message will be cleared instead of printed.
-check_ollama_installed() {
-    local silent=false
-    if [[ "$1" == "--silent" ]]; then
-        silent=true
-    fi
-
-    # 1. Perform the check only if the status is not already cached.
-    if [[ -z "${_OLLAMA_IS_INSTALLED:-}" ]]; then
-        if command -v ollama &> /dev/null; then
-            _OLLAMA_IS_INSTALLED="true"
-        else
-            _OLLAMA_IS_INSTALLED="false"
-        fi
-    fi
-
-    # 2. Print messages and act based on the cached status.
-    printMsgNoNewline "${T_INFO_ICON} Checking for Ollama installation... " >&2
-    if [[ "${_OLLAMA_IS_INSTALLED}" == "true" ]]; then
-        if $silent; then
-            clear_current_line >&2
-        else
-            printOkMsg "Ollama is installed." >&2
-        fi
-        return 0 # Success
-    else
-        echo >&2 # Newline before error message
-        printErrMsg "Ollama is not installed." >&2
-        printMsg "    ${T_INFO_ICON} Please run ${C_L_BLUE}./install-ollama.sh${T_RESET} to install it." >&2
-        exit 1
-    fi
-}
-
-# Checks for Docker and Docker Compose. Exits if not found.
-# Usage: check_docker_prerequisites [--silent]
-#   --silent: If provided, success messages will be cleared instead of printed.
-check_docker_prerequisites() {
-    local silent=false
-    if [[ "$1" == "--silent" ]]; then
-        silent=true
-    fi
-
-    printMsgNoNewline "${T_INFO_ICON} Checking for Docker... " >&2
-    if ! command -v docker &>/dev/null; then
-        echo >&2 # Newline before error message
-        printErrMsg "Docker is not installed. Please install Docker to continue." >&2
-        exit 1
-    fi
-    if $silent; then
-        clear_current_line >&2
-    else
-        printOkMsg "Docker is installed." >&2
-    fi
-
-    printMsgNoNewline "${T_INFO_ICON} Checking for Docker Compose... " >&2
-    # Check for either v2 (plugin) or v1 (standalone)
-    if ! (command -v docker &>/dev/null && docker compose version &>/dev/null) && ! command -v docker-compose &>/dev/null; then
-        echo >&2 # Newline before error message
-        printErrMsg "Docker Compose is not installed." >&2
-        exit 1
-    fi
-    if $silent; then
-        clear_current_line >&2
-    else
-        printOkMsg "Docker Compose is available." >&2
-    fi
-}
-
-# Checks if jq is installed. Exits if not found.
-# Usage: check_jq_installed [--silent]
-#   --silent: If provided, the success message will be cleared instead of printed.
-check_jq_installed() {
-    local silent=false
-    if [[ "$1" == "--silent" ]]; then
-        silent=true
-    fi
-
-    printMsgNoNewline "${T_INFO_ICON} Checking for jq... " >&2
-    if ! command -v jq &>/dev/null; then
-        echo >&2 # Newline before error message
-        printErrMsg "jq is not installed. Please install it to parse model data." >&2
-        printMsg "    ${T_INFO_ICON} On Debian/Ubuntu: ${C_L_BLUE}sudo apt-get install jq${T_RESET}" >&2
-        exit 1
-    fi
-
-    if $silent; then
-        # Overwrite the checking message, this reduces visual clutter
-        clear_current_line >&2
-    else
-        printOkMsg "jq is installed." >&2
-    fi
-}
-
-# Gets the correct Docker Compose command ('docker compose' or 'docker-compose').
-# Assumes prerequisites have been checked by check_docker_prerequisites.
-# Usage:
-#   local compose_cmd
-#   compose_cmd=$(get_docker_compose_cmd)
-#   $compose_cmd up -d
-get_docker_compose_cmd() {
-    if command -v docker &>/dev/null && docker compose version &>/dev/null; then
-        echo "docker compose"
-    elif command -v docker-compose &>/dev/null; then
-        echo "docker-compose"
-    else
-        # This case should not be reached if check_docker_prerequisites was called.
-        printErrMsg "Could not determine Docker Compose command." >&2
-        exit 1
-    fi
 }
 
 # Ensures the script is running from its own directory.
@@ -454,8 +380,6 @@ check_endpoint_status() {
     fi
 }
 
-# --- Ollama Service Helpers ---
-
 # Cached check to see if this is a systemd-based system.
 # The result is stored in a global variable to avoid repeated checks.
 # Returns 0 if systemd, 1 otherwise.
@@ -476,9 +400,190 @@ _is_systemd_system() {
     return "$_IS_SYSTEMD"
 }
 
-# Checks if the ollama.service is known to systemd.
+# Checks if a given service is known to systemd.
 # Assumes _is_systemd_system() has been checked.
+# Usage: _is_systemd_service_known <service_name>
 # Returns 0 if found, 1 otherwise.
+_is_systemd_service_known() {
+    local service_name="$1"
+    # 'systemctl cat' is a direct way to check if a service exists
+    # It will return a non-zero exit code if the service doesn't exist.
+    # We redirect stdout and stderr to /dev/null to suppress all output.
+    if systemctl cat "${service_name}" &>/dev/null; then
+        return 0 # Found
+    else
+        return 1 # Not found
+    fi
+}
+
+# Public-facing check if a given systemd service exists.
+# Usage: check_systemd_service_exists <service_name>
+# Returns 0 if it exists, 1 otherwise.
+check_systemd_service_exists() {
+    local service_name="$1"
+    if ! _is_systemd_system || ! _is_systemd_service_known "${service_name}"; then
+        return 1
+    fi
+    return 0
+}
+
+# A function to display a spinner while a command runs in the background.
+# It detects if it's running in an interactive terminal and disables the
+# spinner animation if it's not, falling back to simpler output.
+# Usage: run_with_spinner "Description of task..." "command_to_run" "arg1" "arg2" ...
+# The command's stdout and stderr will be captured.
+# The function returns the exit code of the command.
+# The captured stdout is stored in the global variable SPINNER_OUTPUT.
+export SPINNER_OUTPUT=""
+run_with_spinner() {
+    local desc="$1"
+    shift
+    local cmd=("$@")
+    local temp_output_file
+    temp_output_file=$(mktemp)
+
+    # --- Non-Interactive Mode ---
+    # If not in an interactive terminal (e.g., in a script or CI/CD),
+    # run the command without the spinner animation for cleaner logs.
+    if [[ ! -t 1 ]]; then
+        printMsgNoNewline "    ${T_INFO_ICON} ${desc}... "
+        # Run the command in the foreground, capturing its output.
+        if SPINNER_OUTPUT=$("${cmd[@]}" 2>&1); then
+            # Using echo -e to process potential backspaces from the previous line
+            echo -e "${C_L_GREEN}Done.${T_RESET}"
+            rm "$temp_output_file"
+            return 0
+        else
+            local exit_code=$?
+            echo -e "${C_RED}Failed.${T_RESET}"
+            rm "$temp_output_file"
+            # The error message will be printed by the calling context if needed
+            # based on the non-zero exit code.
+            return $exit_code
+        fi
+    fi
+
+    # --- Interactive Mode ---
+    local spinner_chars="⣾⣷⣯⣟⡿⢿⣻⣽"
+    local i=0
+
+    # Run the command in the background, redirecting its output to the temp file.
+    "${cmd[@]}" &> "$temp_output_file" &
+    local pid=$!
+
+    # Hide cursor and set a trap to restore it on exit or interrupt.
+tput civis
+trap 'tput cnorm; rm -f "$temp_output_file"; exit 130' INT TERM
+
+    # Initial spinner print
+    printMsgNoNewline "    ${C_L_BLUE}${spinner_chars:0:1}${T_RESET} ${desc}"
+
+    while ps -p $pid > /dev/null; do
+        # Move cursor to the beginning of the line, print spinner, and stay on the same line
+        echo -ne "\r    ${C_L_BLUE}${spinner_chars:$i:1}${T_RESET} ${desc}"
+        i=$(((i + 1) % ${#spinner_chars}))
+        sleep 0.1
+    done
+
+    # Wait for the command to finish and get its exit code
+    wait $pid
+    local exit_code=$?
+
+    # Read the output from the temp file into the global variable
+    SPINNER_OUTPUT=$(<"$temp_output_file")
+    rm "$temp_output_file"
+
+    # Show cursor again and clear the trap
+    tput cnorm
+    trap - INT TERM
+
+    # Overwrite the spinner line with the final status message
+    clear_current_line
+    if [[ $exit_code -eq 0 ]]; then
+        printOkMsg "${desc}"
+    else
+        # In case of failure, the spinner line is already cleared.
+        # We print the error message on a new line for clarity.
+        printErrMsg "Task failed: ${desc}"
+        # Indent the captured output for readability
+        echo -e "${SPINNER_OUTPUT}" | sed 's/^/    /'
+    fi
+
+    return $exit_code
+}
+
+# --- Test Framework ---
+# These are not 'local' so the helper functions can access them.
+test_count=0
+failures=0
+
+# Helper to run a single string comparison test case.
+# Usage: _run_string_test "actual_output" "expected_output" "description"
+_run_string_test() {
+    local actual="$1"
+    local expected="$2"
+    local description="$3"
+    ((test_count++))
+
+    printMsgNoNewline "  Test: ${description}... "
+    if [[ "$actual" == "$expected" ]]; then
+        printMsg "${C_L_GREEN}PASSED${T_RESET}"
+    else
+        printMsg "${C_RED}FAILED${T_RESET}"
+        echo "    Expected: '$expected'"
+        echo "    Got:      '$actual'"
+        ((failures++))
+    fi
+}
+
+# Helper to run a single return code test case.
+# Usage: _run_test "command_to_run" <expected_code> "description"
+_run_test() {
+    local cmd_string="$1"
+    local expected_code="$2"
+    local description="$3"
+    ((test_count++))
+
+    printMsgNoNewline "  Test: ${description}... "
+    # Run command in a subshell to not affect the test script's state
+    (eval "$cmd_string")
+    local actual_code=$?
+    if [[ $actual_code -eq $expected_code ]]; then
+        printMsg "${C_L_GREEN}PASSED${T_RESET}"
+    else
+        printMsg "${C_RED}FAILED${T_RESET} (Expected: $expected_code, Got: $actual_code)"
+        ((failures++))
+    fi
+}
+
+# Helper to run a single test case for the run_tests function.
+# It is defined at the script level to ensure it's available when called.
+# It accesses the `test_count` and `failures` variables from its caller's scope.
+# Usage: _run_compare_versions_test "v1" "v2" <expected_code> "description"
+_run_compare_versions_test() {
+    local v1="$1"
+    local v2="$2"
+    local expected_code="$3"
+    local description="$4"
+    ((test_count++))
+
+    printMsgNoNewline "  Test: ${description}... "
+    compare_versions "$v1" "$v2"
+    local actual_code=$?
+    if [[ $actual_code -eq $expected_code ]]; then
+        printMsg "${C_L_GREEN}PASSED${T_RESET}"
+    else
+        printMsg "${C_RED}FAILED${T_RESET} (Expected: $expected_code, Got: $actual_code)"
+        ((failures++))
+    fi
+}
+
+# --- Ollama Service Helpers ---
+# A variable to cache the result of the check.
+# Unset by default. Can be "true" or "false" after the first run.
+_OLLAMA_IS_INSTALLED=""
+
+# Checks if the ollama.service is known to systemd.
 _is_ollama_service_known() {
     # 'systemctl cat' is a direct way to check if a service exists
     # It will return a non-zero exit code if the service doesn't exist.
@@ -490,13 +595,80 @@ _is_ollama_service_known() {
     fi
 }
 
-# Public-facing check if the Ollama systemd service exists.
+# Public-facing check if the 'ollama.service' systemd service exists.
 # Returns 0 if it exists, 1 otherwise.
 check_ollama_systemd_service_exists() {
-    if ! _is_systemd_system || ! _is_ollama_service_known; then
-        return 1
+    check_systemd_service_exists "ollama.service"
+}
+
+# Checks if the Ollama CLI is installed and exits if it's not.
+# Usage: check_ollama_installed [--silent]
+#   --silent: If provided, the success message will be cleared instead of printed.
+check_ollama_installed() {
+    local silent=false
+    if [[ "$1" == "--silent" ]]; then
+        silent=true
     fi
-    return 0
+
+    # 1. Perform the check only if the status is not already cached.
+    if [[ -z "${_OLLAMA_IS_INSTALLED:-}" ]]; then
+        if command -v ollama &> /dev/null; then
+            _OLLAMA_IS_INSTALLED="true"
+        else
+            _OLLAMA_IS_INSTALLED="false"
+        fi
+    fi
+
+    # 2. Print messages and act based on the cached status.
+    printMsgNoNewline "${T_INFO_ICON} Checking for Ollama installation... " >&2
+    if [[ "${_OLLAMA_IS_INSTALLED}" == "true" ]]; then
+        if $silent; then
+            clear_current_line >&2
+        else
+            printOkMsg "Ollama is installed." >&2
+        fi
+        return 0 # Success
+    else
+        echo >&2 # Newline before error message
+        printErrMsg "Ollama is not installed." >&2
+        printMsg "    ${T_INFO_ICON} Please run ${C_L_BLUE}./install-ollama.sh${T_RESET} to install it." >&2
+        exit 1
+    fi
+}
+
+# Checks for Docker and Docker Compose. Exits if not found.
+# Usage: check_docker_prerequisites [--silent]
+#   --silent: If provided, success messages will be cleared instead of printed.
+check_docker_prerequisites() {
+    local silent=false
+    if [[ "$1" == "--silent" ]]; then
+        silent=true
+    fi
+
+    printMsgNoNewline "${T_INFO_ICON} Checking for Docker... " >&2
+    if ! command -v docker &>/dev/null; then
+        echo >&2 # Newline before error message
+        printErrMsg "Docker is not installed. Please install Docker to continue." >&2
+        exit 1
+    fi
+    if $silent; then
+        clear_current_line >&2
+    else
+        printOkMsg "Docker is installed." >&2
+    fi
+
+    printMsgNoNewline "${T_INFO_ICON} Checking for Docker Compose... " >&2
+    # Check for either v2 (plugin) or v1 (standalone)
+    if ! (command -v docker &>/dev/null && docker compose version &>/dev/null) && ! command -v docker-compose &>/dev/null; then
+        echo >&2 # Newline before error message
+        printErrMsg "Docker Compose is not installed." >&2
+        exit 1
+    fi
+    if $silent; then
+        clear_current_line >&2
+    else
+        printOkMsg "Docker Compose is available." >&2
+    fi
 }
 
 # Waits for the Ollama systemd service to become known, with retries.
@@ -585,91 +757,6 @@ wait_for_ollama_service2() {
         fi
         printMsg "    ${T_OK_ICON} Service started successfully."
     fi
-}
-
-# A function to display a spinner while a command runs in the background.
-# It detects if it's running in an interactive terminal and disables the
-# spinner animation if it's not, falling back to simpler output.
-# Usage: run_with_spinner "Description of task..." "command_to_run" "arg1" "arg2" ...
-# The command's stdout and stderr will be captured.
-# The function returns the exit code of the command.
-# The captured stdout is stored in the global variable SPINNER_OUTPUT.
-export SPINNER_OUTPUT=""
-run_with_spinner() {
-    local desc="$1"
-    shift
-    local cmd=("$@")
-    local temp_output_file
-    temp_output_file=$(mktemp)
-
-    # --- Non-Interactive Mode ---
-    # If not in an interactive terminal (e.g., in a script or CI/CD),
-    # run the command without the spinner animation for cleaner logs.
-    if [[ ! -t 1 ]]; then
-        printMsgNoNewline "    ${T_INFO_ICON} ${desc}... "
-        # Run the command in the foreground, capturing its output.
-        if SPINNER_OUTPUT=$("${cmd[@]}" 2>&1); then
-            # Using echo -e to process potential backspaces from the previous line
-            echo -e "${C_L_GREEN}Done.${T_RESET}"
-            rm "$temp_output_file"
-            return 0
-        else
-            local exit_code=$?
-            echo -e "${C_RED}Failed.${T_RESET}"
-            rm "$temp_output_file"
-            # The error message will be printed by the calling context if needed
-            # based on the non-zero exit code.
-            return $exit_code
-        fi
-    fi
-
-    # --- Interactive Mode ---
-    local spinner_chars="⣾⣷⣯⣟⡿⢿⣻⣽"
-    local i=0
-
-    # Run the command in the background, redirecting its output to the temp file.
-    "${cmd[@]}" &> "$temp_output_file" &
-    local pid=$!
-
-    # Hide cursor and set a trap to restore it on exit or interrupt.
-tput civis
-trap 'tput cnorm; rm -f "$temp_output_file"; exit 130' INT TERM
-
-    # Initial spinner print
-    printMsgNoNewline "    ${C_L_BLUE}${spinner_chars:0:1}${T_RESET} ${desc}"
-
-    while ps -p $pid > /dev/null; do
-        # Move cursor to the beginning of the line, print spinner, and stay on the same line
-        echo -ne "\r    ${C_L_BLUE}${spinner_chars:$i:1}${T_RESET} ${desc}"
-        i=$(((i + 1) % ${#spinner_chars}))
-        sleep 0.1
-    done
-
-    # Wait for the command to finish and get its exit code
-    wait $pid
-    local exit_code=$?
-
-    # Read the output from the temp file into the global variable
-    SPINNER_OUTPUT=$(<"$temp_output_file")
-    rm "$temp_output_file"
-
-    # Show cursor again and clear the trap
-    tput cnorm
-    trap - INT TERM
-
-    # Overwrite the spinner line with the final status message
-    clear_current_line
-    if [[ $exit_code -eq 0 ]]; then
-        printOkMsg "${desc}"
-    else
-        # In case of failure, the spinner line is already cleared.
-        # We print the error message on a new line for clarity.
-        printErrMsg "Task failed: ${desc}"
-        # Indent the captured output for readability
-        echo -e "${SPINNER_OUTPUT}" | sed 's/^/    /'
-    fi
-
-    return $exit_code
 }
 
 # Verifies that the Ollama API is responsive, with a spinner. Exits on failure.
@@ -881,68 +968,4 @@ restrict_to_localhost() {
     return 0
 }
 
-# --- Test Framework ---
-# These are not 'local' so the helper functions can access them.
-test_count=0
-failures=0
 
-# Helper to run a single string comparison test case.
-# Usage: _run_string_test "actual_output" "expected_output" "description"
-_run_string_test() {
-    local actual="$1"
-    local expected="$2"
-    local description="$3"
-    ((test_count++))
-
-    printMsgNoNewline "  Test: ${description}... "
-    if [[ "$actual" == "$expected" ]]; then
-        printMsg "${C_L_GREEN}PASSED${T_RESET}"
-    else
-        printMsg "${C_RED}FAILED${T_RESET}"
-        echo "    Expected: '$expected'"
-        echo "    Got:      '$actual'"
-        ((failures++))
-    fi
-}
-
-# Helper to run a single return code test case.
-# Usage: _run_test "command_to_run" <expected_code> "description"
-_run_test() {
-    local cmd_string="$1"
-    local expected_code="$2"
-    local description="$3"
-    ((test_count++))
-
-    printMsgNoNewline "  Test: ${description}... "
-    # Run command in a subshell to not affect the test script's state
-    (eval "$cmd_string")
-    local actual_code=$?
-    if [[ $actual_code -eq $expected_code ]]; then
-        printMsg "${C_L_GREEN}PASSED${T_RESET}"
-    else
-        printMsg "${C_RED}FAILED${T_RESET} (Expected: $expected_code, Got: $actual_code)"
-        ((failures++))
-    fi
-}
-
-# Helper to run a single test case for the run_tests function.
-# It is defined at the script level to ensure it's available when called.
-# It accesses the `test_count` and `failures` variables from its caller's scope.
-# Usage: _run_compare_versions_test "v1" "v2" <expected_code> "description"
-_run_compare_versions_test() {
-    local v1="$1"
-    local v2="$2"
-    local expected_code="$3"
-    local description="$4"
-    ((test_count++))
-
-    printMsgNoNewline "  Test: ${description}... "
-    compare_versions "$v1" "$v2"
-    local actual_code=$?
-    if [[ $actual_code -eq $expected_code ]]; then
-        printMsg "${C_L_GREEN}PASSED${T_RESET}"
-    else
-        printMsg "${C_RED}FAILED${T_RESET} (Expected: $expected_code, Got: $actual_code)"
-        ((failures++))
-    fi
-}
