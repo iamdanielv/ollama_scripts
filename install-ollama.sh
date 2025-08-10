@@ -86,6 +86,7 @@ manage_network_exposure() {
     wait_for_ollama_service
 
     if check_network_exposure; then
+        clear_lines_up 1
         printOkMsg "Ollama is already exposed to the network."
         return
     fi
@@ -280,7 +281,7 @@ main() {
     installed_version=$(get_ollama_version)
 
     if [[ -n "$installed_version" ]]; then
-        printOkMsg "🤖 Ollama is already installed (version: ${installed_version})."
+        printOkMsg "🤖 Ollama is installed (version: ${installed_version})."
         printMsgNoNewline "${T_INFO_ICON} Checking for latest version from GitHub... "
         local latest_version
         latest_version=$(get_latest_ollama_version)

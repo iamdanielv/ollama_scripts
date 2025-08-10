@@ -792,7 +792,8 @@ verify_ollama_service() {
         if ! systemctl is-active --quiet ollama.service; then
             show_logs_and_exit "Ollama service failed to activate according to systemd."
         fi
-        printMsg "    ${T_OK_ICON} Systemd reports service is active."
+        clear_lines_up 1
+        printMsg "${T_OK_ICON} Systemd reports service is active."
     fi
 
     # Regardless of systemd status, we check if the API is responsive.
