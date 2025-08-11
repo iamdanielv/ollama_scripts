@@ -34,7 +34,13 @@ main() {
   # --- Discover testable scripts ---
   for script in $all_scripts; do
     script_name=$(basename "$script")
-    if grep -q -E '(\-t|\-\-test)' "$script"; then
+    # Check for test flags in shell script logic (case or if statements)
+    # This is more robust than a simple grep for the flag.
+    # It looks for patterns like:
+    #   -t|--test) in a case statement
+    #   if ... [[ "$1" == "-t" || ... ]]
+    # It ignores lines starting with #.
+    if grep -q -E '^\s*[^#]*(-t|--test)\s*.*[)]|^\s*[^#]*if.*(-t|--test)' "$script"; then
       testable_scripts+=("$script_name")
     else
       not_testable_scripts+=("$script_name")
