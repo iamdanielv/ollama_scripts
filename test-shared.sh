@@ -4,10 +4,7 @@
 # IMPORTANT: This test script is designed to be run from the script's directory.
 # It sources shared.sh from its own location.
 
-# Check for --test flag to enable test-all.sh to detect this script as testable
-if [[ "$1" == "-t" || "$1" == "--test" ]]; then
-    main
-fi
+
 
 # Source the shared library
 # shellcheck disable=SC1091
@@ -158,5 +155,9 @@ main() {
     fi
 }
 
-# Execute main
-main
+# --- Entrypoint ---
+# Run tests if the script is called directly (no args) or with the test flag.
+# This ensures it's runnable on its own and detectable by test-all.sh.
+if [[ "$1" == "-t" || "$1" == "--test" || -z "$1" ]]; then
+    main
+fi
