@@ -56,7 +56,7 @@ set_kv_cache_type() {
 
     printInfoMsg "Ensuring override directory exists..."
     sudo mkdir -p "${OLLAMA_OVERRIDE_DIR}"
-
+    clear_lines_up 1
     printInfoMsg "Setting ${KV_CACHE_VAR} to '${var_value}'..."
     printf "[Service]\nEnvironment=\"OLLAMA_FLASH_ATTENTION=1\"\nEnvironment=\"%s=%s\"\n" "${KV_CACHE_VAR}" "${var_value}" | sudo tee "${OLLAMA_KV_CACHE_CONF}" > /dev/null
 
@@ -90,8 +90,7 @@ main() {
     prereq_checks "sudo" "systemctl"
 
     printBanner "Ollama Advanced Configuration: KV Cache"
-    printWarnMsg "Requires Ollama service restart to take effect."
-
+    
     # --- Detect Current State ---
     local current_kv_type
     current_kv_type=$(get_current_kv_type)
@@ -109,11 +108,28 @@ main() {
     printMsg " ${T_BOLD}1)${T_RESET} ${KV_CACHE_DISPLAY[q8_0]} (recommended for most GPUs)"
     printMsg " ${T_BOLD}2)${T_RESET} ${KV_CACHE_DISPLAY[f16]} (for high-end GPUs with ample VRAM)"
     printMsg " ${T_BOLD}3)${T_RESET} ${KV_CACHE_DISPLAY[q4_0]} (for GPUs with limited VRAM)"
-    printMsg " ${T_BOLD}4)${T_RESET} ${C_GRAY}Disable custom KV_CACHE_TYPE (use Ollama default)${T_RESET}"
-    printMsg " ${T_BOLD}q)${T_RESET} Quit without changing\n"
+    printMsg " ${T_BOLD}r)${T_RESET} Remove custom KV_CACHE_TYPE (use Ollama default)${T_RESET}"
+    printMsg " ${T_BOLD}q)${T_RESET} ${C_L_YELLOW}Quit${T_RESET} without changing (or press ${C_L_YELLOW}ESC${T_RESET})\n"
     printMsgNoNewline " ${T_QST_ICON} Your choice: "
+
     local choice
-    read -r choice || true
+    # Read a single character, silently, without needing Enter.
+    read -rsn1 choice || true
+
+    # Handle ESC key for quitting, distinguishing from arrow key sequences
+    if [[ "$choice" == $'\e' ]]; then
+        local seq
+        # Read with a very short timeout to see if other characters follow.
+        # The `|| true` prevents the script from exiting if `read` times out.
+        read -rsn2 -t 0.01 seq || true
+        if [[ -n "$seq" ]]; then
+            # It was part of an escape sequence (e.g., arrow key), so ignore it.
+            choice="" # Treat it as an invalid keypress
+        fi
+    fi
+
+    # Clear the prompt line for cleaner output before printing status messages.
+    clear_current_line
 
     case $choice in
         1)
@@ -125,28 +141,30 @@ main() {
         3)
             set_kv_cache_type "q4_0"
             ;;
-        4)
+        r|R)
             remove_kv_cache_conf
             ;;
-        *)
-            clear_lines_up 2 # Move cursor up and clear line
+        q|Q|$'\e')
             printOkMsg "Goodbye! No changes made."
+            exit 0
+            ;;
+        *)
+            printWarnMsg "Invalid choice. No changes made."
             exit 0
             ;;
     esac
 
     # --- Final Instructions ---
-    echo
     run_with_spinner "Reloading systemd daemon..." sudo systemctl daemon-reload
-    printWarnMsg "Configuration changed"
     printInfoMsg "You must restart the Ollama service for the new settings to apply."
     if prompt_yes_no "Do you want to restart the Ollama service now?" "y"; then
+        clear_lines_up 1
         run_with_spinner "Restarting Ollama service..." sudo systemctl restart "${OLLAMA_SERVICE_NAME}"
         verify_ollama_service
     else
         printInfoMsg "Please run './restart-ollama.sh' later to apply the changes."
     fi
-
+    
     printOkMsg "Advanced configuration complete."
 }
 
