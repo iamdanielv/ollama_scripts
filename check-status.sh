@@ -294,9 +294,16 @@ test_format_ps_output() {
     _run_string_test "$(_format_ps_output "$no_models_json")" "$expected_no_models_output" "Handles empty model list"
 
     # Scenario 3: Invalid JSON input
+    printMsg "  --- Corner Cases ---"
     local invalid_json='this is not json'
     # The function should still produce the "no models" message because jq will fail and produce empty output.
     _run_string_test "$(_format_ps_output "$invalid_json")" "$expected_no_models_output" "Handles invalid JSON input gracefully"
+
+    local no_models_key_json='{"data": []}'
+    _run_string_test "$(_format_ps_output "$no_models_key_json")" "$expected_no_models_output" "Handles JSON without 'models' key"
+
+    local not_an_array_json='{"models": "not an array"}'
+    _run_string_test "$(_format_ps_output "$not_an_array_json")" "$expected_no_models_output" "Handles when .models is not an array"
 }
 
 test_check_ollama_status() {
