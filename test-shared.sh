@@ -170,6 +170,65 @@ test_read_single_char() {
     _run_string_test "$output" "$KEY_LEFT" "Handles an arrow key sequence (Left)"
 }
 
+test_check_network_exposure() {
+    printMsg "\n${T_ULINE}Testing check_network_exposure function:${T_RESET}"
+
+    # Mock systemctl
+    # shellcheck disable=SC2329
+    systemctl() {
+        # We only care about the 'show' subcommand for this test
+        if [[ "$1" == "show" ]]; then
+            echo "$MOCK_SYSTEMCTL_SHOW_OUTPUT"
+            return 0
+        fi
+        # Fallback for other calls if needed, though none are expected
+        /usr/bin/systemctl "$@"
+    }
+    export -f systemctl
+
+    # Scenario 1: Network is exposed
+    export MOCK_SYSTEMCTL_SHOW_OUTPUT='Environment=OLLAMA_HOST=0.0.0.0'
+    # This function returns 0 for exposed, 1 for not. _run_test checks the exit code.
+    _run_test 'check_network_exposure' 0 "Network is exposed"
+
+    # Scenario 2: Network is restricted (env var not set)
+    export MOCK_SYSTEMCTL_SHOW_OUTPUT='Environment='
+    _run_test 'check_network_exposure' 1 "Network is restricted (env var not set)"
+
+    # Scenario 3: systemd property is not set at all (systemctl returns empty)
+    export MOCK_SYSTEMCTL_SHOW_OUTPUT=''
+    _run_test 'check_network_exposure' 1 "Network is restricted (property not set)"
+
+    unset -f systemctl
+}
+
+test_check_ollama_installed() {
+    printMsg "\n${T_ULINE}Testing check_ollama_installed function:${T_RESET}"
+
+    # Mock the internal helper function it relies on
+    _check_command_exists() {
+        if [[ "$1" == "ollama" ]]; then
+            [[ "$MOCK_OLLAMA_CMD_EXISTS" == "true" ]] && return 0 || return 1
+        else
+            # Allow other commands to be checked normally if needed
+            command -v "$1" &>/dev/null
+        fi
+    }
+    export -f _check_command_exists
+
+    # Scenario 1: Ollama is installed. Should return 0.
+    export MOCK_OLLAMA_CMD_EXISTS=true
+    _OLLAMA_IS_INSTALLED="" # Reset cache
+    _run_test 'check_ollama_installed --silent' 0 "Ollama is installed"
+
+    # Scenario 2: Ollama is not installed. Should exit with 1.
+    export MOCK_OLLAMA_CMD_EXISTS=false
+    _OLLAMA_IS_INSTALLED="" # Reset cache
+    _run_test 'check_ollama_installed --silent' 1 "Ollama is not installed"
+
+    unset -f _check_command_exists
+}
+
 # --- Main Test Runner ---
 
 main() {
@@ -189,6 +248,8 @@ main() {
     test_prereq_checks
     test_prompt_yes_no
     test_read_single_char
+    test_check_network_exposure
+    test_check_ollama_installed
 
     # --- Test Summary ---
     printMsg "\n${T_ULINE}Test Summary:${T_RESET}"

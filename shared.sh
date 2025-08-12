@@ -615,13 +615,20 @@ _run_test() {
     ((test_count++))
 
     printMsgNoNewline "  Test: ${description}... "
-    # Run command in a subshell to not affect the test script's state
-    (eval "$cmd_string")
+    # Run command in a subshell to not affect the test script's state,
+    # and capture its stdout and stderr.
+    local output
+    output=$(eval "$cmd_string" 2>&1)
     local actual_code=$?
+
     if [[ $actual_code -eq $expected_code ]]; then
         printMsg "${C_L_GREEN}PASSED${T_RESET}"
     else
         printMsg "${C_RED}FAILED${T_RESET} (Expected: $expected_code, Got: $actual_code)"
+        # Print the captured output on failure for debugging
+        if [[ -n "$output" ]]; then
+            echo -e "${output}" | sed 's/^/    /'
+        fi
         ((failures++))
     fi
 }
