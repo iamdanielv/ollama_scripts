@@ -44,6 +44,7 @@ export KEY_UP=$'\e[A'
 export KEY_DOWN=$'\e[B'
 export KEY_RIGHT=$'\e[C'
 export KEY_LEFT=$'\e[D'
+export KEY_ENTER="ENTER"
 
 # --- Banner Control ---
 # This logic helps determine if a script is being called by another script in this project.
@@ -133,17 +134,24 @@ clear_lines_up() {
 
 # Reads a single character from stdin without needing Enter.
 # It correctly handles the ESC key, distinguishing it from arrow key escape sequences.
-# If a lone ESC is pressed, it's returned. If an arrow key (or other sequence)
-# is pressed, an empty string is returned.
-# The read character is echoed to stdout.
+# It also explicitly identifies the Enter key.
+# Returns the character read, or the value of KEY_ENTER for the enter key.
 # Usage:
 #   local choice
 #   choice=$(read_single_char)
+#   if [[ "$choice" == "$KEY_ENTER" ]]; then
+#     # Handle enter
+#   fi
 read_single_char() {
     local choice
     local seq
     # -s: silent, -n 1: one char, -r: raw
     read -rsn1 choice
+    # Check for Enter key, which read consumes but returns as an empty string.
+    if [[ -z "$choice" ]]; then
+        echo "$KEY_ENTER"
+        return
+    fi
     # If the character is ESC, check for a following sequence.
     if [[ "$choice" == "$KEY_ESC" ]]; then
         # Read with a very short timeout to see if other characters follow.
@@ -307,30 +315,27 @@ prompt_yes_no() {
     fi
 
     while true; do
-        # The -r option to read prevents backslash interpretation.
-        read -p "$(echo -e "${T_QST_ICON} ${question} ${prompt_suffix} ")" -r answer
-
-        # If the answer is empty, use the default
-        if [[ -z "$answer" ]]; then
+        printMsgNoNewline "${T_QST_ICON} ${question} ${prompt_suffix} "
+        answer=$(read_single_char)
+        
+        # If the answer is the ENTER key, use the default.
+        if [[ "$answer" == "$KEY_ENTER" ]]; then
             answer="$default_answer"
         fi
 
         case "$answer" in
-            [Yy] | [Yy][Ee][Ss])
-                #echo # Add a newline for cleaner output after the prompt.
-                clear_lines_up 1
-                return 0
+            [Yy])
+                clear_current_line
+                return 0 # Success (Yes)
                 ;;
-            [Nn] | [Nn][Oo])
-                #echo # Add a newline for cleaner output after the prompt.
-                clear_lines_up 1
-                return 1
+            [Nn])
+                clear_current_line
+                return 1 # Failure (No)
                 ;;
             *)
-                # We need to move the cursor up one line to overwrite the invalid prompt.
-                #echo -e "\e[1A\e[2K\r"
-                clear_lines_up 1
+                clear_current_line
                 printErrMsg "Invalid input. Please enter 'y' or 'n'."
+                # Loop will continue.
                 ;;
         esac
     done

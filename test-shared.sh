@@ -124,8 +124,8 @@ test_prompt_yes_no() {
     _run_test 'printf "\ny\n" | prompt_yes_no "Question?" "" &>/dev/null' 0 "Handles Enter then 'y' with no default"
 
     printMsg "  --- Testing invalid input ---"
-    _run_test 'printf "invalid\ny\n" | prompt_yes_no "Question?" &>/dev/null' 0 "Handles invalid input before 'y'"
-    _run_test 'printf "invalid\nn\n" | prompt_yes_no "Question?" &>/dev/null' 1 "Handles invalid input before 'n'"
+    _run_test 'printf "x\ny\n" | prompt_yes_no "Question?" &>/dev/null' 0 "Handles invalid input before 'y'"
+    _run_test 'printf "x\nn\n" | prompt_yes_no "Question?" &>/dev/null' 1 "Handles invalid input before 'n'"
 }
 
 test_read_single_char() {
