@@ -38,6 +38,13 @@ export T_QST_ICON="[${T_BOLD}${C_L_CYAN}?${T_RESET}]"
 
 export DIV="-------------------------------------------------------------------------------"
 
+# Key Codes
+export KEY_ESC=$'\e'
+export KEY_UP=$'\e[A'
+export KEY_DOWN=$'\e[B'
+export KEY_RIGHT=$'\e[C'
+export KEY_LEFT=$'\e[D'
+
 # --- Banner Control ---
 # This logic helps determine if a script is being called by another script in this project.
 # The first script to source this file will set the entry-level shell level ($SHLVL).
@@ -122,6 +129,34 @@ clear_lines_up() {
         echo -ne "\e[1A\e[2K"
     done
     echo -ne "\r" # Move cursor to the beginning of the line
+}
+
+# Reads a single character from stdin without needing Enter.
+# It correctly handles the ESC key, distinguishing it from arrow key escape sequences.
+# If a lone ESC is pressed, it's returned. If an arrow key (or other sequence)
+# is pressed, an empty string is returned.
+# The read character is echoed to stdout.
+# Usage:
+#   local choice
+#   choice=$(read_single_char)
+read_single_char() {
+    local choice
+    local seq
+    # -s: silent, -n 1: one char, -r: raw
+    read -rsn1 choice
+    # If the character is ESC, check for a following sequence.
+    if [[ "$choice" == "$KEY_ESC" ]]; then
+        # Read with a very short timeout to see if other characters follow.
+        # If read succeeds, it's an escape sequence (like an arrow key).
+        if read -rsn2 -t 0.01 seq; then
+            echo "${choice}${seq}"
+        else
+            # If read times out, it was a lone ESC key.
+            echo "$choice"
+        fi
+    else
+        echo "$choice"
+    fi
 }
 
 # --- Error Handling & Traps ---
