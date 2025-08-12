@@ -930,6 +930,30 @@ fetch_models_with_spinner() {
     fi
 }
 
+# Fetches and displays a formatted table of all installed Ollama models.
+# Handles all prerequisite checks and user feedback.
+# This is intended for non-interactive use where the full process is needed at once.
+# Usage: display_installed_models
+display_installed_models() {
+    printBanner "Installed Ollama Models"
+
+    # 1. Check prerequisites. These will exit on failure.
+    check_jq_installed --silent
+    verify_ollama_api_responsive
+
+    # 2. Fetch model data with a spinner
+    local models_json
+    if ! models_json=$(fetch_models_with_spinner "Fetching model list..."); then
+        printInfoMsg "Could not retrieve model list from the Ollama API."
+        return 1
+    fi
+
+    clear_lines_up 1 # remove "Fetching model..." from output
+
+    # 3. Display the table.
+    # The print_ollama_models_table function handles the "no models found" case.
+    print_ollama_models_table "$models_json"
+}
 
 # --- Ollama Network Configuration Helpers ---
 
