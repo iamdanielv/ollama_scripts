@@ -114,21 +114,8 @@ main() {
     printMsg " ${T_BOLD}q)${T_RESET} ${C_L_YELLOW}Quit${T_RESET} without changing (or press ${C_L_YELLOW}ESC${T_RESET})\n"
     printMsgNoNewline " ${T_QST_ICON} Your choice: "
 
-    local choice
-    # Read a single character, silently, without needing Enter.
-    read -rsn1 choice || true
-
-    # Handle ESC key for quitting, distinguishing from arrow key sequences
-    if [[ "$choice" == $'\e' ]]; then
-        local seq
-        # Read with a very short timeout to see if other characters follow.
-        # The `|| true` prevents the script from exiting if `read` times out.
-        read -rsn2 -t 0.01 seq || true
-        if [[ -n "$seq" ]]; then
-            # It was part of an escape sequence (e.g., arrow key), so ignore it.
-            choice="" # Treat it as an invalid keypress
-        fi
-    fi
+    # Read a single character, handling ESC and arrow keys.
+    local choice=$(read_single_char)
 
     # Clear the prompt line for cleaner output before printing status messages.
     clear_current_line
@@ -146,7 +133,7 @@ main() {
         r|R)
             remove_kv_cache_conf
             ;;
-        q|Q|$'\e')
+        q|Q|"$KEY_ESC")
             printOkMsg "Goodbye! No changes made."
             exit 0
             ;;
