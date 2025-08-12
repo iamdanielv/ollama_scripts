@@ -27,11 +27,13 @@ OLLAMA_KV_CACHE_CONF="${OLLAMA_OVERRIDE_DIR}/20-kv-cache.conf"
 KV_CACHE_VAR="KV_CACHE_TYPE"
 
 # Associative array to hold the colorized display strings for each option.
-readonly -A KV_CACHE_DISPLAY=(
+declare -A KV_CACHE_DISPLAY
+KV_CACHE_DISPLAY=(
     [q8_0]="${C_L_GREEN}q8_0${T_RESET}"
-    [f16]="${C_L_YELLOW}f16${T_RESET}"
+    [f16]="${C_L_MAGENTA}f16${T_RESET}"
     [q4_0]="${C_L_BLUE}q4_0${T_RESET}"
 )
+readonly -A KV_CACHE_DISPLAY # Make the array read-only after assignment
 
 # --- Function Definitions ---
 
