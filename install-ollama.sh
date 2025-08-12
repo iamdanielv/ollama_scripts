@@ -330,11 +330,9 @@ main() {
     # From this point, we need root privileges to install/update files in system directories.
     ensure_root "Root privileges are required to install or update Ollama." "$@"
 
-    printMsg "${T_QST_ICON} The script will now download and execute the official installer from ${C_L_BLUE}https://ollama.com/install.sh${T_RESET}"
+    printMsg "${T_INFO_ICON} The script will now download and execute the official installer from ${C_L_BLUE}https://ollama.com/install.sh${T_RESET}"
     printMsg "    This is a standard installation method, but it involves running a script from the internet."
-    printMsgNoNewline "    ${T_QST_ICON} Do you want to proceed? (y/N) "
-    read -r response || true
-    if [[ ! "$response" =~ ^([yY][eE][sS]|[yY])$ ]]; then
+    if ! prompt_yes_no "Do you want to proceed?" "n"; then
         printMsg "${T_INFO_ICON} Installation cancelled by user."
         exit 0
     fi
