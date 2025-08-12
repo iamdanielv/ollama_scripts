@@ -57,8 +57,7 @@ fi
 
 function print_h1() {
   # Full banner for top-level script calls
-  printMsg "${C_BLUE}${DIV}"
-  printMsg " ${1}"
+  printMsg "${C_L_BLUE}| ${1}"
   printMsg "${DIV}${T_RESET}"
 }
 
