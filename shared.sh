@@ -912,6 +912,25 @@ print_ollama_models_table() {
     printMsg "${C_BLUE}${DIV}${T_RESET}"
 }
 
+# Fetches the model list from the Ollama API with a user-facing spinner and returns the JSON.
+# Usage:
+#   if models_json=$(fetch_models_with_spinner "Fetching list..."); then
+#       # use models_json
+#   fi
+# Arguments:
+#   $1 - The description to show in the spinner.
+# Returns:
+#   The JSON string on success. Returns with exit code 1 on failure.
+fetch_models_with_spinner() {
+    local desc="$1"
+    if run_with_spinner "$desc" get_ollama_models_json; then
+        echo "$SPINNER_OUTPUT"
+    else
+        return 1 # Spinner prints a generic error.
+    fi
+}
+
+
 # --- Ollama Network Configuration Helpers ---
 
 # Checks if Ollama is configured to be exposed to the network.
