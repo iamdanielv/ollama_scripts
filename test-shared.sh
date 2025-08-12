@@ -24,10 +24,10 @@ test_parse_models_to_tsv() {
             { "name": "gemma:2b", "size": 2900000000, "modified_at": "2024-03-15T12:00:00.0Z" }
         ]
     }'
-    # Note: jq sorts by name. gemma comes before llama3.
+    # Note: jq sorts by name. gemma comes before llama3. The jq query rounds to 2 decimal places.
     # Use $'...' to interpret escape sequences like \t and \n.
     local expected_tsv=$'gemma:2b\t2.9\t2024-03-15\nllama3:latest\t4.7\t2024-04-24'
-    
+
     local actual_tsv
     # Quote the command substitution to preserve newlines.
     actual_tsv="$(_parse_models_to_tsv "$test_json")"
@@ -36,6 +36,16 @@ test_parse_models_to_tsv() {
 
     local empty_json='{"models": []}'
     _run_string_test "$(_parse_models_to_tsv "$empty_json")" "" "Parsing empty model list"
+
+    printMsg "  --- Corner Cases ---"
+    local malformed_json='{"models": [ "name": "bad" }'
+    _run_string_test "$(_parse_models_to_tsv "$malformed_json")" "" "Handles malformed JSON"
+
+    local no_models_key_json='{"data": []}'
+    _run_string_test "$(_parse_models_to_tsv "$no_models_key_json")" "" "Handles JSON without 'models' key"
+
+    local not_an_array_json='{"models": "not an array"}'
+    _run_string_test "$(_parse_models_to_tsv "$not_an_array_json")" "" "Handles when .models is not an array"
 }
 
 test_get_docker_compose_cmd() {
