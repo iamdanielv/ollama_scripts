@@ -276,8 +276,7 @@ show_pull_menu() {
     printMsg "${C_BLUE}${DIV}${T_RESET}"
 
     local choice
-    # Read a single character, silently, without needing Enter.
-    read -rsn1 choice
+    choice=$(read_single_char)
 
     # The menu takes up 3 lines, but we want to leave the first row
     # so that the list of models is seperate
@@ -291,7 +290,7 @@ show_pull_menu() {
         u|U)
             update_models_interactive "$models_json"
             ;;
-        c|C|$'\e')
+        c|C|"$KEY_ESC")
             # Cancel and return to main menu. The main loop will redraw.
             return 0
             ;;
@@ -591,21 +590,8 @@ main() {
         clear_lines_up 1
         show_main_menu
 
-        local choice
-        # Read a single character, silently, without needing Enter.
-        read -rsn1 choice
-
-        # Handle ESC key for quitting, distinguishing from arrow key sequences
-        if [[ "$choice" == $'\e' ]]; then
-            local seq
-            # Read with a very short timeout to see if other characters follow.
-            # The `|| true` prevents the script from exiting if `read` times out.
-            read -rsn2 -t 0.01 seq || true
-            if [[ -n "$seq" ]]; then
-                # It was part of an escape sequence (e.g., arrow key), so ignore it.
-                choice="" # Treat it as an invalid keypress
-            fi
-        fi
+        # Read a single character, handling ESC and arrow keys.
+        local choice=$(read_single_char)
 
         # The menu takes up 2 lines (menu, div).
         # We clear it before executing an action for a cleaner interface.
@@ -633,7 +619,7 @@ main() {
                     cached_models_json="$SPINNER_OUTPUT"
                 fi
                 ;;
-            q|Q|$'\e') # Quit
+            q|Q|"$KEY_ESC") # Quit
                 printOkMsg "Goodbye!"
                 break
                 ;;
