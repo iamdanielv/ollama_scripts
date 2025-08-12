@@ -40,6 +40,14 @@ show_help() {
 _format_ps_output() {
     local raw_output="$1"
 
+    # 1. First, validate that the input is valid JSON and has the .models array.
+    # This prevents jq from erroring out on malformed data.
+    if ! echo "$raw_output" | jq -e '.models | (type == "array")' > /dev/null 2>&1; then
+        # If the JSON is invalid, we treat it as if no models are loaded.
+        echo "   ${C_L_YELLOW}No models are currently loaded.${T_RESET}"
+        return
+    fi
+
     # Use jq to parse the JSON response from the /api/ps endpoint.
     # This is far more robust than parsing the CLI's text output.
     # The jq query creates a header and then TSV rows for each model.
@@ -58,7 +66,7 @@ _format_ps_output() {
         ])
         # Format the result as Tab-Separated Values (TSV)
         | @tsv
-    ' 2>/dev/null)
+    ')
 
     # If jq produces no output or only a header, no models are loaded.
     if [[ -z "$tsv_output" || $(echo "$tsv_output" | wc -l) -lt 2 ]]; then
