@@ -42,18 +42,11 @@ show_help() {
 
 # --- Model Listing ---
 
-# Lists all locally installed Ollama models in a formatted table.
-# Can optionally be passed the JSON model data to avoid fetching it again.
+# Renders a model table from pre-fetched JSON.
+# This is used by the interactive loop to avoid re-fetching data on every redraw.
 # Usage: list_models [models_json]
 list_models() {
     local models_json="$1"
-    if [[ -z "$models_json" ]]; then
-        if ! models_json=$(get_ollama_models_json); then
-            printErrMsg "Failed to get model list from Ollama API."
-            return 1
-        fi
-    fi
-
     print_ollama_models_table "$models_json"
 }
 
@@ -297,6 +290,18 @@ show_pull_menu() {
     esac
 }
 
+# Refreshes the cached model list used in the interactive menu.
+# It calls the shared fetcher function and updates the `cached_models_json`
+# variable in the main interactive loop's scope.
+# This function is defined here to avoid passing the variable name as an argument.
+# Usage: refresh_model_cache
+refresh_model_cache() {
+    local new_json
+    if new_json=$(fetch_models_with_spinner "Refreshing model list..."); then
+        cached_models_json="$new_json"
+    fi
+}
+
 # --- Test Suites ---
 
 test_pull_model() {
@@ -513,7 +518,7 @@ main() {
     if [[ -n "$1" ]]; then
         case "$1" in
             -l | --list)
-                list_models
+                display_installed_models
                 exit 0
                 ;;
             -p | --pull)
@@ -569,12 +574,11 @@ main() {
 
     # Fetch the initial model list to cache it for the interactive session.
     local cached_models_json
-    if ! run_with_spinner "Fetching model list..." get_ollama_models_json; then
+    if ! cached_models_json=$(fetch_models_with_spinner "Fetching model list..."); then
         # Spinner prints error, but we add context.
         printInfoMsg "Could not connect to Ollama API to start model manager."
         exit 1
     fi
-    cached_models_json="$SPINNER_OUTPUT"
 
     # Hide cursor for the interactive menu and set a trap to restore it on exit.
     tput civis
@@ -599,25 +603,20 @@ main() {
 
         case "$choice" in
             r|R)
-                # The loop will automatically refresh by clearing and re-listing.
-                if run_with_spinner "Refreshing model list..." get_ollama_models_json; then
-                    cached_models_json="$SPINNER_OUTPUT"
-                fi
+                refresh_model_cache
                 continue
                 ;;
             p|P)
                 clear_lines_up 1 # Clear the first div since the pull menu adds it back in
                 show_pull_menu "$cached_models_json"
-                if run_with_spinner "Refreshing model list..." get_ollama_models_json; then
-                    cached_models_json="$SPINNER_OUTPUT"
-                    clear_lines_up 1
-                fi
+                refresh_model_cache
+                # The spinner from the refresh prints a success line, which we want to clear
+                # to keep the UI clean before the next loop iteration.
+                clear_lines_up 1
                 ;;
             d|D)
                 delete_model "" "$cached_models_json"
-                if run_with_spinner "Refreshing model list..." get_ollama_models_json; then
-                    cached_models_json="$SPINNER_OUTPUT"
-                fi
+                refresh_model_cache
                 ;;
             q|Q|"$KEY_ESC") # Quit
                 printOkMsg "Goodbye!"
