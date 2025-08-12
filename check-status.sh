@@ -261,28 +261,6 @@ check_openwebui_status() {
     fi
 }
 
-# Prints a list of all installed Ollama models.
-print_ollama_models() {
-    printBanner "Installed Ollama Models"
-
-    # 1. Check prerequisites
-    check_jq_installed
-    verify_ollama_api_responsive # This handles the API check and exits on failure
-
-    # 2. Fetch and display models
-    printMsg "${T_INFO_ICON} Querying for installed models..." >&2
-    local models_json
-    if ! models_json=$(get_ollama_models_json); then
-        printErrMsg "Failed to fetch model list from Ollama API. The service may be down or the response was invalid."
-        exit 1
-    fi
-
-    # Overwrite the querying message, this reduces visual clutter 
-    clear_lines_up 1
-
-    print_ollama_models_table "$models_json"
-}
-
 # --- Test Suites ---
 
 test_format_ps_output() {
@@ -518,7 +496,7 @@ main() {
 
     if [[ -n "$1" ]]; then
         case "$1" in
-            -m|--models) print_ollama_models; exit 0;;
+            -m|--models) display_installed_models; exit 0;;
             -w|--watch)  watch_ollama_ps; exit 0;;
             -h|--help)   show_help; exit 0;;
             -t|--test)   run_tests; exit 0;;
