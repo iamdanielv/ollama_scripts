@@ -517,16 +517,16 @@ run_with_spinner() {
     # If not in an interactive terminal (e.g., in a script or CI/CD),
     # run the command without the spinner animation for cleaner logs.
     if [[ ! -t 1 ]]; then
-        printMsgNoNewline "    ${T_INFO_ICON} ${desc}... "
+        printMsgNoNewline "    ${T_INFO_ICON} ${desc}... " >&2
         # Run the command in the foreground, capturing its output.
         if SPINNER_OUTPUT=$("${cmd[@]}" 2>&1); then
             # Using echo -e to process potential backspaces from the previous line
-            echo -e "${C_L_GREEN}Done.${T_RESET}"
+            echo -e "${C_L_GREEN}Done.${T_RESET}" >&2
             rm "$temp_output_file"
             return 0
         else
             local exit_code=$?
-            echo -e "${C_RED}Failed.${T_RESET}"
+            echo -e "${C_RED}Failed.${T_RESET}" >&2
             rm "$temp_output_file"
             # The error message will be printed by the calling context if needed
             # based on the non-zero exit code.
@@ -547,11 +547,11 @@ tput civis
 trap 'tput cnorm; rm -f "$temp_output_file"; exit 130' INT TERM
 
     # Initial spinner print
-    printMsgNoNewline "    ${C_L_BLUE}${spinner_chars:0:1}${T_RESET} ${desc}"
+    printMsgNoNewline "    ${C_L_BLUE}${spinner_chars:0:1}${T_RESET} ${desc}" >&2
 
     while ps -p $pid > /dev/null; do
         # Move cursor to the beginning of the line, print spinner, and stay on the same line
-        echo -ne "\r    ${C_L_BLUE}${spinner_chars:$i:1}${T_RESET} ${desc}"
+        echo -ne "\r    ${C_L_BLUE}${spinner_chars:$i:1}${T_RESET} ${desc}" >&2
         i=$(((i + 1) % ${#spinner_chars}))
         sleep 0.1
     done
@@ -569,15 +569,15 @@ trap 'tput cnorm; rm -f "$temp_output_file"; exit 130' INT TERM
     trap - INT TERM
 
     # Overwrite the spinner line with the final status message
-    clear_current_line
+    clear_current_line >&2
     if [[ $exit_code -eq 0 ]]; then
-        printOkMsg "${desc}"
+        printOkMsg "${desc}" >&2
     else
         # In case of failure, the spinner line is already cleared.
         # We print the error message on a new line for clarity.
-        printErrMsg "Task failed: ${desc}"
+        printErrMsg "Task failed: ${desc}" >&2
         # Indent the captured output for readability
-        echo -e "${SPINNER_OUTPUT}" | sed 's/^/    /'
+        echo -e "${SPINNER_OUTPUT}" | sed 's/^/    /' >&2
     fi
 
     return $exit_code
