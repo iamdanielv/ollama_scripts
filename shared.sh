@@ -862,10 +862,20 @@ get_ollama_models_json() {
 # Parses model JSON from the Ollama API and returns a tab-separated list of
 # model details, sorted by name.
 # Expects the full JSON string as the first argument.
+# Returns an empty string if the JSON is invalid or contains no models.
 # Output format: name\tsize_gb\tmodified_date
 _parse_models_to_tsv() {
     local models_json="$1"
-    # This jq filter sorts models by name, then extracts the name, size (converted to GB
+
+    # 1. Validate that the input is valid JSON and has the .models array.
+    # The -e flag makes jq exit with a non-zero status if the filter produces `false` or `null`.
+    if ! echo "$models_json" | jq -e '.models | (type == "array")' > /dev/null 2>&1; then
+        # Invalid JSON or .models is not an array. Return empty.
+        echo ""
+        return
+    fi
+
+    # 2. This jq filter sorts models by name, then extracts the name, size (converted to GB
     # and rounded to 2 decimal places), and the date part of the modified timestamp.
     # The output is tab-separated to handle model names that might contain spaces.
     echo "$models_json" | jq -r '.models | sort_by(.name)[] | "\(.name)\t\(.size / 1e9 | (. * 100 | floor) / 100)\t\(.modified_at | .[:10])"'
@@ -873,12 +883,25 @@ _parse_models_to_tsv() {
 
 # Prints a formatted table of models with details from the API JSON.
 # Expects the full JSON string as the first argument.
+# Handles invalid/malformed JSON and empty model lists gracefully.
 # Usage: print_ollama_models_table "$models_json"
 print_ollama_models_table() {
     local models_json="$1"
 
-    # Check if any models are installed
-    if [[ -z "$(echo "$models_json" | jq '.models | .[]')" ]]; then
+    # 1. First, check if the input is valid JSON with a .models array.
+    # This prevents misleading "no models" messages for malformed data.
+    if ! echo "$models_json" | jq -e '.models | (type == "array")' > /dev/null 2>&1; then
+        printErrMsg "Received invalid or malformed model data."
+        printInfoMsg "This can happen if the Ollama API response is corrupted."
+        return 1 # Return an error code
+    fi
+
+    # 2. Parse the JSON into a processable format (TSV).
+    local models_tsv
+    models_tsv=$(_parse_models_to_tsv "$models_json")
+
+    # 3. Check if there are any models in the parsed output.
+    if [[ -z "$models_tsv" ]]; then
         printWarnMsg "No local models found."
         printInfoMsg "You can pull a model with the command: ${C_L_BLUE}ollama pull <model_name>${T_RESET}"
         return 0
@@ -890,7 +913,7 @@ print_ollama_models_table() {
 
     # --- Table Body ---
     local i=1
-
+    # The `while read` loop now reads from the TSV variable.
     while IFS=$'\t' read -r name size_gb modified; do
         # Determine background color for size based on GB.
         # < 3GB: Green (Small), 3-6GB: Blue (Medium), 6-9GB: Yellow (Large), >= 9GB: Red (Extra Large)
@@ -907,7 +930,7 @@ print_ollama_models_table() {
 
         printf "  %-5s ${C_L_CYAN}%-40s${T_RESET} ${size_bg_color}${C_BLACK}%10s${T_RESET}  ${C_MAGENTA}%-15s${T_RESET}\n" "$i" "$name" "${size_gb} GB" "$modified"
         ((i++))
-    done < <(_parse_models_to_tsv "$models_json")
+    done <<< "$models_tsv" # Use a "here string" for cleaner input to the loop.
 
     printMsg "${C_BLUE}${DIV}${T_RESET}"
 }
