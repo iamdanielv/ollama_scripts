@@ -115,28 +115,36 @@ main() {
     print_current_status
 
     printMsg "\n${T_ULINE}Choose an option:${T_RESET}"
-    printMsg "  ${T_BOLD}1)${T_RESET} ${C_L_YELLOW}Expose to Network${T_RESET} (allow connections from Docker, etc.)"
-    printMsg "  ${T_BOLD}2)${T_RESET} ${C_L_BLUE}Restrict to Localhost${T_RESET} (default, more secure)"
-    printMsg "  ${T_BOLD}q)${T_RESET} Quit without changing\n"
+    printMsg "  ${T_BOLD}1, e)${T_RESET} ${C_L_YELLOW}(E)xpose to Network${T_RESET} (allow connections from Docker, etc.)"
+    printMsg "  ${T_BOLD}2, r)${T_RESET} ${C_L_BLUE}(R)estrict to Localhost${T_RESET} (default, more secure)"
+    printMsg "     ${T_BOLD}q)${T_RESET} (Q)uit without changing\n"
     printMsgNoNewline " ${T_QST_ICON} Your choice: "
     local choice
-    read -r choice || true
+    choice=$(read_single_char)
+    clear_current_line # Clear the "Your choice: " prompt line
 
-    case $choice in
-        1)
+    case "$choice" in
+        1|e|E)
+            printMsg "${C_L_YELLOW}Option 1 selected: Expose to Network${T_RESET}"
             ensure_root "Root privileges are required to modify systemd configuration." "--expose"
             expose_to_network
             _after_change_verification
             ;;
-        2)
+        2|r|R)
+            printMsg "${C_L_BLUE}Option 2 selected: Restrict to Localhost${T_RESET}"
             ensure_root "Root privileges are required to modify systemd configuration." "--restrict"
             restrict_to_localhost
             _after_change_verification
             ;;
-        *)
-            clear_lines_up 2 # Move cursor up and clear line
+        q|Q|"$KEY_ESC")
+            clear_current_line
             printOkMsg "Goodbye! No changes made."
             exit 0
+            ;;
+        *)
+            clear_current_line
+            printErrMsg "Invalid option. Please press 1, 2, e, r, or q."
+            exit 1
             ;;
     esac
 }
