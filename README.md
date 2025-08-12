@@ -17,15 +17,16 @@ These scripts provide a user-friendly way to:
 
 ```shell
 .
-├── shared.sh            # 🛠️ Common utility functions, colors, and error handling  
-├── install-ollama.sh    # 📦 Installs or updates Ollama with version checking  
-├── config-ollama-net.sh # 🌐 Configures network access (localhost vs public)  
-├── restart-ollama.sh    # 🔄 Restarts Ollama service after system wake/sleep issues  
-├── manage-models.sh     # ⚙️ Interactively pull, delete, and manage models
-├── stop-ollama.sh       # 🛑 Stops the Ollama service cleanly  
-├── logs-ollama.sh       # 📜 View Ollama service logs via journalctl  
-├── check-status.sh      # 🔄 Checks status of services and lists installed models  
-└── openwebui/           # 🌐 OpenWebUI management scripts and configuration files  
+├── shared.sh                 # 🛠️ Common utility functions, colors, and error handling  
+├── install-ollama.sh         # 📦 Installs or updates Ollama with version checking  
+├── config-ollama-advanced.sh # ⚙️ Configures advanced Ollama settings (e.g., KV cache)
+├── config-ollama-net.sh      # 🌐 Configures network access (localhost vs public)  
+├── restart-ollama.sh         # 🔄 Restarts Ollama service after system wake/sleep issues  
+├── manage-models.sh          # ⚙️ Interactively pull, delete, and manage models
+├── stop-ollama.sh            # 🛑 Stops the Ollama service cleanly  
+├── logs-ollama.sh            # 📜 View Ollama service logs via journalctl  
+├── check-status.sh           # 🔄 Checks status of services and lists installed models  
+└── openwebui/                # 🌐 OpenWebUI management scripts and configuration files  
     ├── start-openwebui.sh  # ⚡ Starts the OpenWebUI service  
     ├── stop-openwebui.sh   # 🛑 Stops the OpenWebUI service  
     ├── update-openwebui.sh # ⬆️ Updates OpenWebUI container images  
@@ -83,7 +84,7 @@ After it starts, open the link provided (usually `http://localhost:3000`) and fo
 
 | Script | Description |
 |---|---|
-| `./check-status.sh` | 🔄 Checks the status of Ollama and OpenWebUI. Can also list installed models (`--models`) or watch loaded models in real-time (`--watch`). |
+| `./check-status.sh` | 🔄 Checks the status of Ollama and OpenWebUI. Can also list models (`--models`), watch loaded models (`--watch`), or run self-tests (`--test`). |
 
 ### 🤖 Ollama Management Scripts
 
@@ -95,6 +96,7 @@ After it starts, open the link provided (usually `http://localhost:3000`) and fo
 | `./restart-ollama.sh` | 🔄 Sometimes on wake from sleep, the `ollama` service will go into an inconsistent state. This script stops, resets GPU state (if applicable), and restarts the Ollama service using `systemd`. |
 | `./stop-ollama.sh` | 🛑 Stops the Ollama service. |
 | `./config-ollama-net.sh` | 🌐 Configures Ollama network access. Can be run interactively or with flags (`--expose`, `--restrict`, `--view`). |
+| `./config-ollama-advanced.sh` | ⚙️ An interactive script to configure advanced Ollama settings, such as the KV cache type, to fine-tune performance. |
 
 ### 🌐 OpenWebUI Management Scripts
 
@@ -171,6 +173,7 @@ The script can also be used non-interactively with flags, making it suitable for
 | `--update-all` | `-ua` | Updates all existing local models. |
 | `--delete <model>` | `-d <model>` | Deletes a local model. |
 | `--help` | `-h` | Shows the help message. |
+| `--test` | `-t` | Runs internal self-tests for script functions. |
 
 **Examples:**
 
@@ -218,6 +221,26 @@ It can also be run non-interactively with the following flags:
 | `--help` | `-h` | Shows the help message. |
 
 This script requires `sudo` for modifications and will prompt for it if necessary.
+
+### ⚙️ Advanced Ollama Configuration
+
+For users who want to fine-tune Ollama's performance, the `config-ollama-advanced.sh` script provides an interactive way to manage advanced settings.
+
+#### `./config-ollama-advanced.sh` Interactive Menu
+
+Run the script to open a menu where you can configure settings like the KV cache type.
+
+```bash
+./config-ollama-advanced.sh
+```
+
+The script will detect your current configuration and allow you to change it.
+
+#### `./config-ollama-advanced.sh` Available Flags
+
+| Flag | Alias | Description |
+|---|---|---|
+| `--test` | `-t` | Runs internal self-tests for script functions. |
 
 ## 🔄 Restarting Ollama
 
@@ -404,4 +427,3 @@ This project is licensed under the MIT License. See the `LICENSE` file for detai
 ## 📧 Contact
 
 Let me know if you have any questions. I can be reached at [@IAmDanielV](https://twitter.com/IAmDanielV) or [@iamdanielv.bsky.social](https://bsky.app/profile/iamdanielv.bsky.social).
-
