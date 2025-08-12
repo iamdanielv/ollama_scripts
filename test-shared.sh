@@ -42,6 +42,7 @@ test_get_docker_compose_cmd() {
     printMsg "\n${T_ULINE}Testing get_docker_compose_cmd function:${T_RESET}"
 
     # Mock 'command' and 'docker'
+    # shellcheck disable=SC2329
     command() {
         case "$*" in
             "-v docker") [[ "$MOCK_DOCKER_EXISTS" == "true" ]] && return 0 || return 1 ;;
@@ -49,6 +50,7 @@ test_get_docker_compose_cmd() {
             *) /usr/bin/command "$@" ;;
         esac
     }
+    # shellcheck disable=SC2329
     docker() {
         case "$*" in
             "compose version") [[ "$MOCK_DOCKER_COMPOSE_V2_EXISTS" == "true" ]] && return 0 || return 1 ;;
@@ -77,6 +79,7 @@ test_prereq_checks() {
     printMsg "\n${T_ULINE}Testing prereq_checks function:${T_RESET}"
 
     # Mock 'command'
+    # shellcheck disable=SC2329
     command() {
         if [[ "$1" == "-v" ]]; then
             # Fail if the command to check is in our MOCK_MISSING variable
@@ -125,6 +128,38 @@ test_prompt_yes_no() {
     _run_test 'printf "invalid\nn\n" | prompt_yes_no "Question?" &>/dev/null' 1 "Handles invalid input before 'n'"
 }
 
+test_read_single_char() {
+    printMsg "\n${T_ULINE}Testing read_single_char function:${T_RESET}"
+
+    # We need to run these in a subshell to properly handle the piped input
+    # and capture the output. We use printf for reliable escape sequence handling.
+
+    # Scenario 1: Simple character
+    local output
+    output=$(printf "a" | read_single_char)
+    _run_string_test "$output" "a" "Handles a simple character"
+
+    # Scenario 2: Lone ESC key
+    output=$(printf "%s" "$KEY_ESC" | read_single_char)
+    _run_string_test "$output" "$KEY_ESC" "Handles a lone ESC key"
+
+    # Scenario 3: Arrow key sequence (Up Arrow)
+    output=$(printf "%s" "$KEY_UP" | read_single_char)
+    _run_string_test "$output" "$KEY_UP" "Handles an arrow key sequence (Up)"
+
+    # Scenario 4: Arrow key sequence (Down Arrow)
+    output=$(printf "%s" "$KEY_DOWN" | read_single_char)
+    _run_string_test "$output" "$KEY_DOWN" "Handles an arrow key sequence (Down)"
+
+    # Scenario 5: Arrow key sequence (Right Arrow)
+    output=$(printf "%s" "$KEY_RIGHT" | read_single_char)
+    _run_string_test "$output" "$KEY_RIGHT" "Handles an arrow key sequence (Right)"
+
+    # Scenario 6: Arrow key sequence (Left Arrow)
+    output=$(printf "%s" "$KEY_LEFT" | read_single_char)
+    _run_string_test "$output" "$KEY_LEFT" "Handles an arrow key sequence (Left)"
+}
+
 # --- Main Test Runner ---
 
 main() {
@@ -143,6 +178,7 @@ main() {
     test_get_docker_compose_cmd
     test_prereq_checks
     test_prompt_yes_no
+    test_read_single_char
 
     # --- Test Summary ---
     printMsg "\n${T_ULINE}Test Summary:${T_RESET}"
