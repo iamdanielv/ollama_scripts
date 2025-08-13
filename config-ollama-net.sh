@@ -17,7 +17,7 @@ readonly STATUS_LOCALHOST="localhost"
 
 # --- Helper Functions ---
 _after_change_verification() {
-    printMsg "\n${T_INFO_ICON} Verifying service after configuration change..."
+    printInfoMsg "\nVerifying service after configuration change..."
     verify_ollama_service
     print_current_status
 }
@@ -74,10 +74,10 @@ main() {
         case "$command" in
             -h|--help)
                 show_help "verbose"
-                ;;
+                ;; 
             -v|--view)
                 if check_network_exposure; then echo "$STATUS_NETWORK"; else echo "$STATUS_LOCALHOST"; fi
-                ;;
+                ;; 
             -e|--expose)
                 ensure_root "Root privileges are required to modify systemd configuration." "$command"
                 expose_to_network
@@ -88,7 +88,7 @@ main() {
                 fi
                 verify_ollama_service &>/dev/null
                 if check_network_exposure; then echo "$STATUS_NETWORK"; else echo "$STATUS_LOCALHOST"; fi
-                ;;
+                ;; 
             -r|--restrict)
                 ensure_root "Root privileges are required to modify systemd configuration." "$command"
                 restrict_to_localhost
@@ -99,12 +99,12 @@ main() {
                 fi
                 verify_ollama_service &>/dev/null
                 if check_network_exposure; then echo "$STATUS_NETWORK"; else echo "$STATUS_LOCALHOST"; fi
-                ;;
+                ;; 
             *)
                 show_help
-                printMsg "\n${T_ERR}Invalid option: $command${T_RESET}"
+                printErrMsg "\nInvalid option: $command"
                 exit 1
-                ;;
+                ;; 
         esac
         exit 0
     fi
@@ -125,27 +125,27 @@ main() {
 
     case "$choice" in
         1|e|E)
-            printMsg "${C_L_YELLOW}Option 1 selected: Expose to Network${T_RESET}"
+            printInfoMsg "${C_L_YELLOW}Option 1 selected: Expose to Network${T_RESET}"
             ensure_root "Root privileges are required to modify systemd configuration." "--expose"
             expose_to_network
             _after_change_verification
-            ;;
+            ;; 
         2|r|R)
-            printMsg "${C_L_BLUE}Option 2 selected: Restrict to Localhost${T_RESET}"
+            printInfoMsg "${C_L_BLUE}Option 2 selected: Restrict to Localhost${T_RESET}"
             ensure_root "Root privileges are required to modify systemd configuration." "--restrict"
             restrict_to_localhost
             _after_change_verification
-            ;;
+            ;; 
         q|Q|"$KEY_ESC")
             clear_current_line
             printOkMsg "Goodbye! No changes made."
             exit 0
-            ;;
+            ;; 
         *)
             clear_current_line
             printErrMsg "Invalid option. Please press 1, 2, e, r, or q."
             exit 1
-            ;;
+            ;; 
     esac
 }
 
