@@ -80,7 +80,7 @@ compare_versions() {
 # Manages the network exposure configuration for Ollama.
 # It checks if the configuration is needed and prompts the user before applying it.
 manage_network_exposure() {
-    printMsg "${T_INFO_ICON} Checking network exposure for Ollama..."
+    printInfoMsg "Checking network exposure for Ollama..."
     
     # Use the service checker from shared.sh. This will also start the service if needed.
     wait_for_ollama_service
@@ -91,14 +91,13 @@ manage_network_exposure() {
         return
     fi
 
-    # Use the prompt from shared.sh
     local override_file="/etc/systemd/system/ollama.service.d/10-expose-network.conf"
-    printMsg "${T_INFO_ICON} To allow network access (e.g., from Docker),"
-    printMsg "${T_INFO_ICON} Ollama can be configured to listen on all network interfaces."
-    printMsg "${T_INFO_ICON} This creates a systemd override file at:\n    ${C_L_BLUE}${override_file}${T_RESET}"
-    printMsg "${T_INFO_ICON} You can change this setting later by running: ${C_L_BLUE}./config-ollama-net.sh${T_RESET}"
+    printInfoMsg "To allow network access (e.g., from Docker),"
+    printInfoMsg "Ollama can be configured to listen on all network interfaces."
+    printInfoMsg "This creates a systemd override file at:\n    ${C_L_BLUE}${override_file}${T_RESET}"
+    printInfoMsg "You can change this setting later by running: ${C_L_BLUE}./config-ollama-net.sh${T_RESET}"
     if ! prompt_yes_no "Expose Ollama to the network now?" "n"; then
-        printMsg "${T_INFO_ICON} Skipping network exposure. Ollama will only be accessible from localhost."
+        printInfoMsg "Skipping network exposure. Ollama will only be accessible from localhost."
         return
     fi
 
@@ -240,15 +239,15 @@ main() {
             -h|--help)
                 show_help
                 exit 0
-                ;;
+                ;; 
             -v|--version)
                 printBanner "Ollama Version"
                 local installed_version
                 installed_version=$(get_ollama_version)
                 if [[ -n "$installed_version" ]]; then
-                    printMsg "  ${T_INFO_ICON} Installed: ${C_L_BLUE}${installed_version}${T_RESET}"
+                    printInfoMsg "Installed: ${C_L_BLUE}${installed_version}${T_RESET}"
                 else
-                    printMsg "  ${T_INFO_ICON} Installed: ${C_L_YELLOW}Not installed${T_RESET}"
+                    printInfoMsg "Installed: ${C_L_YELLOW}Not installed${T_RESET}"
                 fi
 
                 printMsgNoNewline "  ${T_INFO_ICON} Latest:    "
@@ -257,19 +256,19 @@ main() {
                 if [[ -n "$latest_version" ]]; then
                     printMsg "${C_L_GREEN}${latest_version}${T_RESET}"
                 else
-                    printMsg "${C_RED}Could not fetch from GitHub${T_RESET}"
+                    printErrMsg "Could not fetch version from GitHub"
                 fi
                 exit 0
-                ;;
+                ;; 
             -t|--test)
                 run_tests
                 exit 0
-                ;;
+                ;; 
             *)
                 show_help
-                printMsg "\n${T_ERR}Invalid option: $1${T_RESET}"
+                printErrMsg "Invalid option: $1"
                 exit 1
-                ;;
+                ;; 
         esac
     fi
 
@@ -287,20 +286,20 @@ main() {
         latest_version=$(get_latest_ollama_version)
 
         if [[ -z "$latest_version" ]]; then
-            printMsg "${T_WARN_ICON} Could not fetch latest version. Will verify current installation."
+            printWarnMsg "Could not fetch latest version. Will verify current installation."
         else
-            printMsg "${C_L_BLUE}${latest_version}${T_RESET}"
+            printInfoMsg "${C_L_BLUE}${latest_version}${T_RESET}"
             compare_versions "$installed_version" "$latest_version"
             local comparison_result=$?
             if [[ $comparison_result -eq 2 ]]; then
-                printMsg "${T_OK_ICON} New version available: ${C_L_BLUE}${latest_version}${T_RESET}"
+                printOkMsg "New version available: ${C_L_BLUE}${latest_version}${T_RESET}"
                 # Fall through to the installation block
             else
                 # This block handles when the installed version is the same or newer.
                 if [[ $comparison_result -eq 0 ]]; then
-                    printMsg "${T_OK_ICON} You are on the latest version."
+                    printOkMsg "You are on the latest version."
                 else # $comparison_result -eq 1
-                    printMsg "${T_INFO_ICON} Your installed version (${installed_version}) is newer than the latest release (${latest_version})."
+                    printInfoMsg "Your installed version (${installed_version}) is newer than the latest release (${latest_version})."
                 fi
 
                 wait_for_ollama_service
@@ -324,16 +323,16 @@ main() {
             fi
         fi
     else
-        printMsg "${T_INFO_ICON} 🤖 Ollama not found, proceeding with installation..."
+        printInfoMsg "🤖 Ollama not found, proceeding with installation..."
     fi
 
     # From this point, we need root privileges to install/update files in system directories.
     ensure_root "Root privileges are required to install or update Ollama." "$@"
 
-    printMsg "${T_INFO_ICON} The script will now download and execute the official installer from ${C_L_BLUE}https://ollama.com/install.sh${T_RESET}"
-    printMsg "    This is a standard installation method, but it involves running a script from the internet."
+    printInfoMsg "The script will now download and execute the official installer from ${C_L_BLUE}https://ollama.com/install.sh${T_RESET}"
+    printInfoMsg "    This is a standard installation method, but it involves running a script from the internet."
     if ! prompt_yes_no "Do you want to proceed?" "n"; then
-        printMsg "${T_INFO_ICON} Installation cancelled by user."
+        printInfoMsg "Installation cancelled by user."
         exit 0
     fi
 
@@ -348,7 +347,7 @@ main() {
         exit 1
     fi
 
-    printMsg "${T_INFO_ICON} Running the downloaded installer..."
+    printInfoMsg "Running the downloaded installer..."
     # The installer output should be shown to the user.
     if ! sh "$installer_script"; then
         rm -f "$installer_script"
@@ -367,16 +366,16 @@ main() {
         show_logs_and_exit "Ollama installation failed. The 'ollama' command is not available after installation."
     fi
 
-    printMsg "${T_INFO_ICON} Verifying installation version..."
+    printInfoMsg "Verifying installation version..."
     if [[ "$installed_version" == "$post_install_version" ]]; then
         printOkMsg "Ollama installation script ran, but the version did not change."
         printMsg "    Current version: $post_install_version"
     elif [[ -n "$installed_version" ]]; then
         printOkMsg "Ollama updated successfully."
-        printMsg "    ${C_GRAY}Old: ${installed_version}${T_RESET} -> ${C_GREEN}New: ${post_install_version}${T_RESET}"
+        printInfoMsg "    ${C_L_GRAY}Old: ${installed_version}${T_RESET} -> ${C_GREEN}New: ${post_install_version}${T_RESET}"
     else
         printOkMsg "Ollama installed successfully."
-        printMsg "    Version: $post_install_version"
+        printInfoMsg "    Version: $post_install_version"
     fi
 
     # Final verification that the service is up and running
@@ -387,8 +386,8 @@ main() {
 
     # Final message after install/update
     printOkMsg "Ollama installation/update process complete."
-    printMsg "    You can manage network settings at any time by running:"
-    printMsg "    ${C_L_BLUE}./config-ollama-net.sh${T_RESET}"
+    printInfoMsg "    You can manage network settings at any time by running:"
+    printInfoMsg "    ${C_L_BLUE}./config-ollama-net.sh${T_RESET}"
 }
 
 # Run the main script logic
