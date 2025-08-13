@@ -147,17 +147,17 @@ check_ollama_status() {
 
     # 1. Check systemd service status
     if ! $is_systemd; then
-        printMsg "  ${T_INFO_ICON} Service:  Not a systemd system. Skipping service check."
+        printInfoMsg "Service:  Not a systemd system. Skipping service check."
     elif ! $service_known; then
-        printMsg "  ${T_INFO_ICON} Service:  Ollama systemd service not found."
+        printInfoMsg "Service:  Ollama systemd service not found."
     else
         # It is a systemd system and the service is known
         if systemctl is-active --quiet ollama.service; then
-            printMsg "  ${T_OK_ICON} Service:  ${C_GREEN}Active${T_RESET} (via systemd)"
+            printOkMsg "Service:  ${C_GREEN}Active${T_RESET} (via systemd)"
         else
             local state
             state=$(systemctl is-active ollama.service || true)
-            printMsg "  ${T_ERR_ICON} Service:  ${C_RED}Inactive (${state})${T_RESET} (via systemd)"
+            printErrMsg "Service:  ${C_RED}Inactive (${state})${T_RESET} (via systemd)"
         fi
     fi
 
@@ -165,20 +165,20 @@ check_ollama_status() {
     local ollama_port=${OLLAMA_PORT:-11434}
     local ollama_url="http://localhost:${ollama_port}"
     if check_endpoint_status "$ollama_url" 3; then # 3-second timeout
-        printMsg "  ${T_OK_ICON} API:      ${C_GREEN}Responsive${T_RESET} at ${C_L_BLUE}${ollama_url}${T_RESET}"
+        printOkMsg "API:      ${C_GREEN}Responsive${T_RESET} at ${C_L_BLUE}${ollama_url}${T_RESET}"
     else
-        printMsg "  ${T_ERR_ICON} API:      ${C_RED}Not Responding${T_RESET} at ${C_L_BLUE}${ollama_url}${T_RESET}"
+        printErrMsg "API:      ${C_RED}Not Responding${T_RESET} at ${C_L_BLUE}${ollama_url}${T_RESET}"
     fi
 
     # 3. Check network exposure
     if ! $is_systemd; then
-        printMsg "  ${T_INFO_ICON} Network:  Cannot determine exposure (not a systemd system)."
+        printInfoMsg "Network:  Cannot determine exposure (not a systemd system)."
     elif ! $service_known; then
-        printMsg "  ${T_INFO_ICON} Network:  Cannot determine exposure (Ollama service not found)."
+        printInfoMsg "Network:  Cannot determine exposure (Ollama service not found)."
     elif check_network_exposure; then
-        printMsg "  ${T_OK_ICON} Network:  ${C_L_YELLOW}Exposed (0.0.0.0)${T_RESET}"
+        printOkMsg "Network:  ${C_L_YELLOW}Exposed (0.0.0.0)${T_RESET}"
     else
-        printMsg "  ${T_OK_ICON} Network:  ${C_L_BLUE}Localhost Only${T_RESET}"
+        printOkMsg "Network:  ${C_L_BLUE}Localhost Only${T_RESET}"
     fi
 }
 
@@ -199,14 +199,14 @@ check_gpu_status() {
     driver_version=$(nvidia-smi --query-gpu=driver_version --format=csv,noheader,nounits | head -n 1)
     cuda_version=$(nvidia-smi | grep -oP 'CUDA Version: \K[^ ]+' | head -n 1)
     
-    printMsg "  ${T_INFO_ICON} Driver:   ${C_L_BLUE}${driver_version:-N/A}${T_RESET} (CUDA: ${C_L_BLUE}${cuda_version:-N/A}${T_RESET})"
+    printInfoMsg "Driver:   ${C_L_BLUE}${driver_version:-N/A}${T_RESET} (CUDA: ${C_L_BLUE}${cuda_version:-N/A}${T_RESET})"
 
     # Use a timeout to prevent the script from hanging if nvidia-smi is slow
     local smi_output
     smi_output=$(timeout 5 nvidia-smi --query-gpu=name,memory.used,memory.total,utilization.gpu,temperature.gpu --format=csv,noheader,nounits)
 
     if [[ -z "$smi_output" ]]; then
-        printMsg "  ${T_ERR_ICON} Could not retrieve GPU information from nvidia-smi."
+        printErrMsg "Could not retrieve GPU information from nvidia-smi."
         return
     fi
 
@@ -220,7 +220,7 @@ check_gpu_status() {
         gpu_util=$(echo "$gpu_util" | xargs)
         temp_gpu=$(echo "$temp_gpu" | xargs)
 
-        printMsg "  ${T_OK_ICON} GPU ${gpu_index}:    ${C_L_CYAN}${gpu_name}${T_RESET}"
+        printOkMsg "GPU ${gpu_index}:    ${C_L_CYAN}${gpu_name}${T_RESET}"
         printMsg "      - Memory: ${C_L_YELLOW}${mem_used} MiB / ${mem_total} MiB${T_RESET}"
         printMsg "      - Usage:  ${C_L_YELLOW}${gpu_util}%${T_RESET} (Temp: ${C_L_YELLOW}${temp_gpu}°C${T_RESET})"
         ((gpu_index++))
@@ -233,39 +233,39 @@ check_openwebui_status() {
 
     # Check for docker first
     if ! _check_command_exists "docker"; then
-        printMsg "  ${T_INFO_ICON} Docker not found. Skipping OpenWebUI check."
+        printInfoMsg "Docker not found. Skipping OpenWebUI check."
         return
     fi
 
     local compose_cmd
     compose_cmd=$(get_docker_compose_cmd)
     if [[ -z "$compose_cmd" ]]; then
-        printMsg "  ${T_INFO_ICON} Docker Compose not found. Skipping OpenWebUI check."
+        printInfoMsg "Docker Compose not found. Skipping OpenWebUI check."
         return
     fi
 
     local webui_dir
     webui_dir="$(dirname "$0")/openwebui"
     if [[ ! -d "$webui_dir" ]]; then
-        printMsg "  ${T_ERR_ICON} Directory 'openwebui' not found. Cannot check status."
+        printErrMsg "Directory 'openwebui' not found. Cannot check status."
         return
     fi
 
     # 1. Check container status
     # Use --project-directory to avoid cd'ing
     if $compose_cmd --project-directory "$webui_dir" ps --filter "status=running" --services | grep -q "open-webui"; then
-        printMsg "  ${T_OK_ICON} Container: ${C_GREEN}Running${T_RESET}"
+        printOkMsg "Container: ${C_GREEN}Running${T_RESET}"
     else
-        printMsg "  ${T_ERR_ICON} Container: ${C_RED}Not Running${T_RESET}"
+        printErrMsg "Container: ${C_RED}Not Running${T_RESET}"
     fi
 
     # 2. Check UI responsiveness
     local webui_port=${OPEN_WEBUI_PORT:-3000}
     local webui_url="http://localhost:${webui_port}"
     if check_endpoint_status "$webui_url" 5; then
-        printMsg "  ${T_OK_ICON} UI:        ${C_GREEN}Responsive${T_RESET} at ${C_L_BLUE}${webui_url}${T_RESET}"
+        printOkMsg "UI:        ${C_GREEN}Responsive${T_RESET} at ${C_L_BLUE}${webui_url}${T_RESET}"
     else
-        printMsg "  ${T_ERR_ICON} UI:        ${C_RED}Not Responding${T_RESET} at ${C_L_BLUE}${webui_url}${T_RESET}"
+        printErrMsg "UI:        ${C_RED}Not Responding${T_RESET} at ${C_L_BLUE}${webui_url}${T_RESET}"
     fi
 }
 
@@ -379,10 +379,10 @@ test_check_gpu_status() {
     }
     nvidia-smi() {
         case "$*" in
-            *"--query-gpu=driver_version"*)
+            *"--query-gpu=driver_version"*) 
                 echo "$MOCK_DRIVER_VERSION"
                 ;;
-            *"--query-gpu=name,memory.used"*)
+            *"--query-gpu=name,memory.used"*) 
                 echo "$MOCK_GPU_DATA"
                 ;;
             *) # This is the plain `nvidia-smi` call for CUDA version
@@ -511,13 +511,13 @@ main() {
 
     if [[ -n "$1" ]]; then
         case "$1" in
-            -m|--models) display_installed_models; exit 0;;
-            -w|--watch)  watch_ollama_ps; exit 0;;
-            -h|--help)   show_help; exit 0;;
-            -t|--test)   run_tests; exit 0;;
+            -m|--models) display_installed_models; exit 0;; 
+            -w|--watch)  watch_ollama_ps; exit 0;; 
+            -h|--help)   show_help; exit 0;; 
+            -t|--test)   run_tests; exit 0;; 
             *)
                 show_help
-                printMsg "\n${T_ERR}Invalid option: $1${T_RESET}"
+                printErrMsg "Invalid option: $1"
                 exit 1
                 ;; 
         esac
