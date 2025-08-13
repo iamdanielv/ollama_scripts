@@ -38,7 +38,7 @@ main() {
                 ;; 
             *)
                 show_help
-                printMsg "\n${T_ERR}Invalid option: $1${T_RESET}"
+                printErrMsg "\nInvalid option: $1"
                 exit 1
                 ;; 
         esac
@@ -60,8 +60,8 @@ main() {
         return 0 # It's already in the desired state, success.
     fi
 
-    printMsg "${T_INFO_ICON} Attempting to stop Ollama service..."
-    run_with_spinner "Stopping Ollama service via systemctl..." sudo systemctl stop "$SERVICE_NAME"
+    printInfoMsg "Attempting to stop Ollama service..."
+run_with_spinner "Stopping Ollama service via systemctl..." sudo systemctl stop "$SERVICE_NAME"
     
     # Verification step: Check if the service is still active after the stop command.
     printMsgNoNewline "${T_INFO_ICON} Verifying service shutdown"
@@ -78,7 +78,7 @@ main() {
     # If the loop finishes and the service is still active, it's a hard failure.
     clear_lines_up 1
     printErrMsg "Failed to stop the Ollama service."
-    printMsg "    ${T_INFO_ICON} The service '${SERVICE_NAME}' is still reported as active by systemd."
+    printInfoMsg "    The service '${SERVICE_NAME}' is still reported as active by systemd."
     exit 1
 }
 
