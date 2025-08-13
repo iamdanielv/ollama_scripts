@@ -56,13 +56,13 @@ main() {
 
     if ! _is_ollama_service_known; then
         printErrMsg "Ollama systemd service ('ollama.service') not found."
-        printMsg "    ${T_INFO_ICON} Please run ${C_L_BLUE}./install-ollama.sh${T_RESET} to install it."
+        printInfoMsg "    Please run ${C_L_BLUE}./install-ollama.sh${T_RESET} to install it."
         exit 1
     fi
 
-    printMsg "${T_INFO_ICON} Showing logs for ${C_L_BLUE}ollama.service${T_RESET}..."
+    printInfoMsg "Showing logs for ${C_L_BLUE}ollama.service${T_RESET}..."
     # Use "$*" to show the user-provided args exactly as they typed them.
-    printMsg "${T_INFO_ICON} Command: ${C_GRAY}journalctl -u ollama.service $*${T_RESET}"
+    printInfoMsg "Command: ${C_GRAY}journalctl -u ollama.service $*${T_RESET}"
     printMsg "${C_BLUE}${DIV}${T_RESET}"
 
     exec journalctl -u ollama.service "$@"
