@@ -38,7 +38,7 @@ main() {
                 ;; 
             *)
                 show_help
-                printMsg "\n${T_ERR}Invalid option: $1${T_RESET}"
+                printErrMsg "\nInvalid option: $1"
                 exit 1
                 ;; 
         esac
@@ -59,10 +59,10 @@ main() {
     if _check_command_exists "nvidia-smi"; then
         clear_current_line
         IS_NVIDIA=true
-        printMsg "${T_OK_ICON} NVIDIA ${T_BOLD}${C_GREEN}GPU detected${T_RESET}"
+        printOkMsg "NVIDIA ${T_BOLD}${C_GREEN}GPU detected${T_RESET}"
     else
         clear_current_line
-        printMsg "${T_INFO_ICON} No NVIDIA GPU found. Assuming CPU-only operation."
+        printInfoMsg "No NVIDIA GPU found. Assuming CPU-only operation."
     fi
 
     # --- Stop Ollama Service ---
@@ -77,10 +77,10 @@ main() {
         # Reload the module.
         if modprobe nvidia_uvm; then
             clear_current_line
-            printMsg "${T_OK_ICON} Module ${T_BOLD}${C_GREEN}reloaded${T_RESET}"
+            printOkMsg "Module ${T_BOLD}${C_GREEN}reloaded${T_RESET}"
         else
             printErrMsg "Failed to reset NVIDIA UVM."
-            printMsg "    ${T_INFO_ICON} Check your NVIDIA driver installation."
+            printInfoMsg "    Check your NVIDIA driver installation."
             exit 1
         fi
     fi
@@ -91,7 +91,7 @@ main() {
         show_logs_and_exit "Failed to start Ollama via systemctl."
     else
         clear_current_line
-        printMsg "${T_OK_ICON} Service ${T_BOLD}${C_GREEN}started${T_RESET}"
+        printOkMsg "Service ${T_BOLD}${C_GREEN}started${T_RESET}"
     fi
 
     # --- Final Verification ---
