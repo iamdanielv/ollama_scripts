@@ -150,7 +150,7 @@ update_models_interactive() {
         for num in "${model_inputs[@]}"; do
             if [[ "$num" =~ ^[1-9][0-9]*$ && "$num" -le "$total_models" ]]; then
                 local model_name
-                model_name=$(echo "$models_json" | jq -r "(.models | sort_by(.name))[$((num - 1))].name")
+                model_name=$(echo "$models_json" | jq -r ".models | sort_by(.name)[$((num - 1))].name")
                 if [[ -n "$model_name" && "$model_name" != "null" ]]; then
                     # Avoid duplicates
                     if ! [[ " ${models_to_update[*]} " =~ " ${model_name} " ]]; then
@@ -221,7 +221,7 @@ delete_model() {
         # It's a number, so find the corresponding model name
         # We sort the models by name first to match the displayed list.
         # Then we select by index (jq arrays are 0-indexed, so we subtract 1).
-        model_name=$(echo "$models_json" | jq -r "(.models | sort_by(.name))[$((model_input - 1))].name")
+        model_name=$(echo "$models_json" | jq -r ".models | sort_by(.name)[$((model_input - 1))].name")
         if [[ -z "$model_name" || "$model_name" == "null" ]]; then
             printErrMsg "Invalid model number: ${C_L_YELLOW}${model_input}${T_RESET}"
             return 1
@@ -283,7 +283,7 @@ show_pull_menu() {
         u|U)
             update_models_interactive "$models_json"
             ;;
-        c|C|"$KEY_ESC")
+        c|C|"${KEY_ESC}")
             # Cancel and return to main menu. The main loop will redraw.
             return 0
             ;;
@@ -520,11 +520,11 @@ main() {
             -l | --list)
                 display_installed_models
                 exit 0
-                ;;
+                ;; 
             -p | --pull)
                 pull_model "$2"
                 exit $?
-                ;;
+                ;; 
             -u | --update)
                 local model_name="$2"
                 if [[ -z "$model_name" || "$model_name" =~ ^- ]]; then
@@ -533,7 +533,7 @@ main() {
                 fi
                 _perform_model_updates "$model_name"
                 exit $?
-                ;;
+                ;; 
             -ua | --update-all)
                 printInfoMsg "Fetching list of all local models to update..."
                 local models_json
@@ -549,24 +549,24 @@ main() {
                 fi
                 _perform_model_updates "${all_models[@]}"
                 exit $?
-                ;;
+                ;; 
             -d | --delete)
                 delete_model "$2"
                 exit $?
-                ;;
+                ;; 
             -h | --help)
                 show_help
                 exit 0
-                ;;
+                ;; 
             -t | --test)
                 run_tests
                 exit 0
-                ;;
+                ;; 
             *)
                 show_help
                 printMsg "\n${T_ERR}Invalid option: $1${T_RESET}"
                 exit 1
-                ;;
+                ;; 
         esac
     fi
 
@@ -605,7 +605,7 @@ main() {
             r|R)
                 refresh_model_cache
                 continue
-                ;;
+                ;; 
             p|P)
                 clear_lines_up 1 # Clear the first div since the pull menu adds it back in
                 show_pull_menu "$cached_models_json"
@@ -613,19 +613,19 @@ main() {
                 # The spinner from the refresh prints a success line, which we want to clear
                 # to keep the UI clean before the next loop iteration.
                 clear_lines_up 1
-                ;;
+                ;; 
             d|D)
                 delete_model "" "$cached_models_json"
                 refresh_model_cache
-                ;;
-            q|Q|"$KEY_ESC") # Quit
+                ;; 
+            q|Q|"${KEY_ESC}") # Quit
                 printOkMsg "Goodbye!"
                 break
-                ;;
+                ;; 
             *)
                 # Silently ignore invalid keypresses, the loop will redraw.
                 continue
-                ;;
+                ;; 
         esac
         # Pause for user to see the output of pull/delete before clearing.
         echo
