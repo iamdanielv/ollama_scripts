@@ -1,5 +1,5 @@
 # Ignore OpenWebUI data directory created by Docker volume mount.
 /openwebui/open-webui/
 
-# Ignore local environment configuration for OpenWebUI.
-/openwebui/.env
+# ignore .env files - and .env.local, .env.prod, etc
+.env*
