@@ -357,9 +357,9 @@ If you want to start the containers again manually, you can re-run the start scr
 
 ### 🛠️ Configuration
 
-To customize ports, create a `.env` file in the `openwebui/` directory. The start script will automatically load it.
+To customize ports, create a `.env` file in the root of the project directory. The scripts will automatically load it.
 
-**Example `openwebui/.env` file:**
+**Example `.env` file:**
 
 ```env
 # Sets the host port for the OpenWebUI interface.

@@ -231,7 +231,7 @@ run_tests() {
 # --- Main Execution ---
 
 main() {
-    load_project_env # Source openwebui/.env for custom ports
+    load_project_env "$(dirname "$0")/.env"
 
     # --- Non-Interactive Argument Handling ---
     if [[ -n "$1" ]]; then

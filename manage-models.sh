@@ -507,7 +507,7 @@ show_main_menu() {
 }
 
 main() {
-    load_project_env
+    load_project_env "$(dirname "$0")/.env"
 
     # --- Pre-flight checks for the whole script ---
     check_ollama_installed --silent

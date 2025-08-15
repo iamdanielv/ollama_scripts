@@ -44,7 +44,7 @@ main() {
         esac
     fi
 
-    load_project_env # Source openwebui/.env for custom ports
+    load_project_env "$(dirname "$0")/.env"
 
     ensure_root "This script requires root privileges for systemd and kernel modules." "$@"
     printBanner "Ollama Service Restarter"

@@ -63,12 +63,8 @@ main() {
     ensure_script_dir
 
     # Source .env file for configuration if it exists
-    if [[ -f ".env" ]]; then
-        printMsg "${T_INFO_ICON} Sourcing configuration from .env file."
-        set -a
-        source .env
-        set +a
-    fi
+    load_project_env "../.env" # source parent .env
+    load_project_env ".env" # source this folder .env
 
     local ollama_port=${OLLAMA_PORT:-11434}
     local ollama_url="http://localhost:${ollama_port}"

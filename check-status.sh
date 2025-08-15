@@ -507,7 +507,7 @@ run_tests() {
 }
 
 main() {
-    load_project_env # Source openwebui/.env for custom ports
+    load_project_env "$(dirname "$0")/.env"
 
     if [[ -n "$1" ]]; then
         case "$1" in

@@ -64,8 +64,7 @@ print_current_status() {
 # --- Main Logic ---
 main() {
     prereq_checks "sudo" "systemctl"
-    
-    load_project_env # Source openwebui/.env for custom ports
+    load_project_env "$(dirname "$0")/.env"
 
     local command="$1"
 
