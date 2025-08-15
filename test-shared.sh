@@ -229,6 +229,48 @@ test_check_ollama_installed() {
     unset -f _check_command_exists
 }
 
+test_validate_env_file() {
+    printMsg "\n${T_ULINE}Testing _validate_env_file function:${T_RESET}"
+
+    # Helper to create a temp file with content
+    create_temp_env_file() {
+        local content="$1"
+        local tmp_file
+        tmp_file=$(mktemp)
+        # Use printf to handle backslashes in content correctly
+        printf "%s" "$content" > "$tmp_file"
+        echo "$tmp_file"
+    }
+
+    # --- Test Cases ---
+    local test_file
+
+    # Scenario 1: Valid file
+    test_file=$(create_temp_env_file "VAR1=value1\nVAR_2=value2\n# A comment\n")
+    _run_test "_validate_env_file '$test_file' &>/dev/null" 0 "Valid .env file"
+    rm "$test_file"
+
+    # Scenario 2: Invalid - space after =
+    test_file=$(create_temp_env_file "VAR1= value1")
+    _run_test "_validate_env_file '$test_file' &>/dev/null" 1 "Invalid: space after ="
+    rm "$test_file"
+
+    # Scenario 3: Invalid - space before =
+    test_file=$(create_temp_env_file "VAR1 =value1")
+    _run_test "_validate_env_file '$test_file' &>/dev/null" 1 "Invalid: space before ="
+    rm "$test_file"
+
+    # Scenario 4: Invalid - no =
+    test_file=$(create_temp_env_file "VAR1")
+    _run_test "_validate_env_file '$test_file' &>/dev/null" 1 "Invalid: missing ="
+    rm "$test_file"
+
+    # Scenario 5: Invalid - bad variable name
+    test_file=$(create_temp_env_file "1VAR=value")
+    _run_test "_validate_env_file '$test_file' &>/dev/null" 1 "Invalid: bad variable name"
+    rm "$test_file"
+}
+
 # --- Main Test Runner ---
 
 main() {
@@ -250,6 +292,7 @@ main() {
     test_read_single_char
     test_check_network_exposure
     test_check_ollama_installed
+	test_validate_env_file
 
     # --- Test Summary ---
     printMsg "\n${T_ULINE}Test Summary:${T_RESET}"

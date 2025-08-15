@@ -354,23 +354,85 @@ ensure_script_dir() {
     fi
 }
 
-# Sources the project's .env file if it exists.
-# This is intended for scripts in the project root that need to access
-# configuration defined for OpenWebUI (e.g., custom ports).
-# It looks for an .env file in the 'openwebui' subdirectory.
-load_project_env() {
-    # BASH_SOURCE[1] is the path to the script that called this function.
-    local SCRIPT_DIR
-    SCRIPT_DIR=$(dirname -- "${BASH_SOURCE[1]}")
-    local ENV_FILE="${SCRIPT_DIR}/openwebui/.env"
+# (Private) Validates the format of a .env file.
+# It prints a detailed error and returns 1 on the first invalid line found.
+# Returns 0 if the entire file is valid.
+# Usage:
+#   if ! _validate_env_file "/path/to/.env"; then
+#       # Handle validation failure
+#   fi
+_validate_env_file() {
+    local env_file_path="$1"
+    local line_num=0
 
-    if [[ -f "$ENV_FILE" ]]; then
-        printMsg "${T_INFO_ICON} Sourcing configuration from ${C_L_BLUE}openwebui/.env${T_RESET}"
-        set -a
-        # shellcheck source=/dev/null
-        source "$ENV_FILE"
-        set +a
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        ((line_num++))
+        local trimmed_line
+        trimmed_line=$(echo "$line" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+
+        if [[ -z "$trimmed_line" || "$trimmed_line" =~ ^# ]]; then
+            continue
+        fi
+
+		local error_reason=""
+		# Rule 1: Must contain an equals sign.
+		if ! [[ "$trimmed_line" =~ = ]]; then
+			error_reason="Missing '=' in '${trimmed_line}'"
+		# Rule 2: Must not have spaces immediately surrounding the equals sign.
+		elif [[ "$trimmed_line" =~ [[:space:]]=|=[[:space:]] ]]; then
+			error_reason="Found spaces around '=' in '${trimmed_line}'"
+		# Rule 3: The key must be a valid shell variable name.
+		elif ! [[ "$trimmed_line" =~ ^[a-zA-Z_][a-zA-Z0-9_]*= ]]; then
+			error_reason="Invalid variable name in '${trimmed_line}'"
+		fi
+
+		if [[ -n "$error_reason" ]]; then
+            printErrMsg "Found an error in ${C_L_BLUE}${env_file_path}${T_RESET} on line ${line_num}."
+            printMsg "    ${T_ERR_ICON} ${error_reason}"
+            printInfoMsg "Expecting 'VARIABLE=VALUE' (no spaces around equals sign)."
+            return 1
+        fi
+    done <"$env_file_path"
+    return 0
+}
+
+# Sources a specified .env file if it exists and exports its variables.
+# It also prints the variables that were found and sourced.
+# Usage: load_project_env "/path/to/your/.env"
+load_project_env() {
+	local env_file_path="$1"
+	if [[ ! -f "$env_file_path" ]]; then
+		return 0 # Not an error if the file doesn't exist
+	fi
+
+    # Validate the file first. The helper function will print detailed errors.
+    if ! _validate_env_file "$env_file_path"; then
+        return 1
     fi
+
+    # File is valid, now get the variable names for the success message.
+    local valid_vars=()
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        local trimmed_line
+        trimmed_line=$(echo "$line" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+        if [[ -z "$trimmed_line" || "$trimmed_line" =~ ^# ]]; then
+            continue
+        fi
+        valid_vars+=("${trimmed_line%%=*}")
+    done <"$env_file_path"
+
+	# If there are variables to source, print the message and source them.
+	if [[ ${#valid_vars[@]} -gt 0 ]]; then
+		printInfoMsg "Sourcing environment variables from ${C_L_BLUE}${env_file_path}${T_RESET}"
+		local pretty_vars
+		pretty_vars=$(printf ", %s" "${valid_vars[@]}")
+		printMsg "    Found: ${C_L_CYAN}${pretty_vars:2}${T_RESET}"
+
+		set -a
+		# shellcheck source=/dev/null
+		source "$env_file_path"
+		set +a
+	fi
 }
 
 # Checks if the script is run as root. If not, it prints a message
