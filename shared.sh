@@ -566,13 +566,19 @@ check_systemd_service_exists() {
 # The command's stdout and stderr will be captured.
 # The function returns the exit code of the command.
 # The captured stdout is stored in the global variable SPINNER_OUTPUT.
-export SPINNER_OUTPUT=""
+SPINNER_OUTPUT=""
 run_with_spinner() {
     local desc="$1"
     shift
     local cmd=("$@")
     local temp_output_file
+    # Create a temporary file and check for failure.
     temp_output_file=$(mktemp)
+    if [[ ! -f "$temp_output_file" ]]; then
+        printErrMsg "Failed to create a temporary file with mktemp." >&2
+        printMsg "    ${T_INFO_ICON} This can be caused by permission issues in /tmp or if 'mktemp' is not installed." >&2
+        return 1 # Return a non-zero exit code
+    fi
 
     # --- Non-Interactive Mode ---
     # If not in an interactive terminal (e.g., in a script or CI/CD),
@@ -611,8 +617,23 @@ trap 'tput cnorm; rm -f "$temp_output_file"; exit 130' INT TERM
     printMsgNoNewline "    ${C_L_BLUE}${spinner_chars:0:1}${T_RESET} ${desc}" >&2
 
     while ps -p $pid > /dev/null; do
-        # Move cursor to the beginning of the line, print spinner, and stay on the same line
-        echo -ne "\r    ${C_L_BLUE}${spinner_chars:$i:1}${T_RESET} ${desc}" >&2
+        # Clear the current line and move cursor to the beginning
+        echo -ne "\r\e[2K" >&2
+
+        # Get the last line of output from the temp file.
+        # `tr -d '\r'` is important to strip carriage returns from docker's progress bars.
+        local current_output_line
+        current_output_line=$(tail -n 1 "$temp_output_file" 2>/dev/null | tr -d '\r' || true)
+
+        # Print the spinner and description
+        echo -ne "    ${C_L_BLUE}${spinner_chars:$i:1}${T_RESET} ${desc}" >&2
+
+        # If there is any output, show a truncated version of the last line.
+        if [[ -n "$current_output_line" ]]; then
+            # Truncate to 70 characters to prevent line wrapping
+            echo -ne " ${C_GRAY}[${current_output_line:0:70}]${T_RESET}" >&2
+        fi
+
         i=$(((i + 1) % ${#spinner_chars}))
         sleep 0.1
     done
@@ -638,7 +659,8 @@ trap 'tput cnorm; rm -f "$temp_output_file"; exit 130' INT TERM
         # We print the error message on a new line for clarity.
         printErrMsg "Task failed: ${desc}" >&2
         # Indent the captured output for readability
-        echo -e "${SPINNER_OUTPUT}" | sed 's/^/    /' >&2
+        # Use printf to avoid "Argument list too long" for very large outputs.
+        printf "%s\n" "${SPINNER_OUTPUT}" | sed 's/^/    /' >&2
     fi
 
     return $exit_code
