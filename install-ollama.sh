@@ -1,10 +1,16 @@
 #!/bin/bash
 # Install or update Ollama.
 
-# Source common utilities for colors and functions
+# --- Source the shared libraries ---
 # shellcheck source=./shared.sh
 if ! source "$(dirname "$0")/shared.sh"; then
     echo "Error: Could not source shared.sh. Make sure it's in the same directory." >&2
+    exit 1
+fi
+
+# shellcheck source=./ollama-helpers.sh
+if ! source "$(dirname "$0")/ollama-helpers.sh"; then
+    echo "Error: Could not source ollama-helpers.sh. Make sure it's in the same directory." >&2
     exit 1
 fi
 
@@ -13,14 +19,14 @@ fi
 show_help() {
     printBanner "Ollama Installer/Updater"
     printMsg "Installs or updates Ollama on the local system."
-    printMsg "If run without flags, it enters an interactive install/update mode. Also includes self-tests."
+    printMsg "If run without flags, enters interactive install/update mode."
 
     printMsg "\n${T_ULINE}Usage:${T_RESET}"
     printMsg "  $(basename "$0") [-v | -t | -h]"
 
     printMsg "\n${T_ULINE}Options:${T_RESET}"
     printMsg "  ${C_L_BLUE}-v, --version${T_RESET}   Displays the installed and latest available versions."
-    printMsg "  ${C_L_BLUE}-t, --test${T_RESET}        Runs internal self-tests for script functions."
+    printMsg "  ${C_L_BLUE}-t, --test${T_RESET}      Runs internal self-tests for script functions."
     printMsg "  ${C_L_BLUE}-h, --help${T_RESET}      Shows this help message."
 
     printMsg "\n${T_ULINE}Examples:${T_RESET}"
@@ -250,7 +256,7 @@ main() {
                     printInfoMsg "Installed: ${C_L_YELLOW}Not installed${T_RESET}"
                 fi
 
-                printMsgNoNewline "  ${T_INFO_ICON} Latest:    "
+                printMsgNoNewline "${T_INFO_ICON} Latest:    "
                 local latest_version
                 latest_version=$(get_latest_ollama_version)
                 if [[ -n "$latest_version" ]]; then
