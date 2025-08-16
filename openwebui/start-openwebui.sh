@@ -7,14 +7,21 @@ set -e
 # The return value of a pipeline is the status of the last command to exit with a non-zero status.
 set -o pipefail
 
-# Source common utilities for colors and functions
+# --- Source the shared libraries ---
 # shellcheck source=../shared.sh
 if ! source "$(dirname "$0")/../shared.sh"; then
     echo "Error: Could not source shared.sh. Make sure it's in the parent directory." >&2
     exit 1
 fi
 
-# --- Helper Functions ---
+# shellcheck source=../ollama-helpers.sh
+if ! source "$(dirname "$0")/../ollama-helpers.sh"; then
+    echo "Error: Could not source ollama-helpers.sh. Make sure it's in the parent directory." >&2
+    exit 1
+fi
+
+# --- Script Functions ---
+
 show_help() {
     printBanner "OpenWebUI Starter"
     printMsg "Starts the OpenWebUI Docker containers in detached mode."
