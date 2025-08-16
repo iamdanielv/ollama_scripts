@@ -11,6 +11,12 @@ if ! source "$(dirname "$0")/shared.sh"; then
     exit 1
 fi
 
+# shellcheck source=./ollama-helpers.sh
+if ! source "$(dirname "$0")/ollama-helpers.sh"; then
+    echo "Error: Could not source ollama-helpers.sh. Make sure it's in the same directory." >&2
+    exit 1
+fi
+
 # --- Script Variables ---
 readonly STATUS_NETWORK="network"
 readonly STATUS_LOCALHOST="localhost"
