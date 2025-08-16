@@ -1,8 +1,17 @@
 #!/bin/bash
 
-# Source the shared library
-# shellcheck disable=SC1091
-source "$(dirname "$0")/shared.sh"
+# --- Source the shared libraries ---
+# shellcheck source=./shared.sh
+if ! source "$(dirname "$0")/shared.sh"; then
+    echo "Error: Could not source shared.sh. Make sure it's in the same directory." >&2
+    exit 1
+fi
+
+# shellcheck source=./ollama-helpers.sh
+if ! source "$(dirname "$0")/ollama-helpers.sh"; then
+    echo "Error: Could not source ollama-helpers.sh. Make sure it's in the same directory." >&2
+    exit 1
+fi
 
 show_help() {
     printBanner "Ollama Model Manager"
