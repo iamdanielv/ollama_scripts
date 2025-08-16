@@ -2,11 +2,6 @@
 
 # Start OpenWebUI using docker compose in detached mode
 
-# Exit immediately if a command exits with a non-zero status.
-set -e
-# The return value of a pipeline is the status of the last command to exit with a non-zero status.
-set -o pipefail
-
 # --- Source the shared libraries ---
 # shellcheck source=../shared.sh
 if ! source "$(dirname "$0")/../shared.sh"; then
@@ -105,13 +100,7 @@ main() {
 
     local docker_compose_cmd_parts=($docker_compose_cmd)
     if ! run_with_spinner "Starting OpenWebUI containers" "${docker_compose_cmd_parts[@]}" up -d; then
-        # The error message is already printed by run_with_spinner.
-        # Print the captured output on failure for debugging.
-        if [[ -n "$SPINNER_OUTPUT" ]]; then
-            echo -e "${C_GRAY}--- Start of Docker Compose Output ---${T_RESET}"
-            echo "$SPINNER_OUTPUT" | sed 's/^/    /'
-            echo -e "${C_GRAY}--- End of Docker Compose Output ---${T_RESET}"
-        fi
+        # The spinner function prints detailed errors, so we just need to exit.
         exit 1
     fi
 
