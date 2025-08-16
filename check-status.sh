@@ -9,6 +9,12 @@ if ! source "$(dirname "$0")/shared.sh"; then
     exit 1
 fi
 
+# shellcheck source=./ollama-helpers.sh
+if ! source "$(dirname "$0")/ollama-helpers.sh"; then
+    echo "Error: Could not source ollama-helpers.sh. Make sure it's in the same directory." >&2
+    exit 1
+fi
+
 show_help() {
     printBanner "Ollama & OpenWebUI Status Checker"
     printMsg "Checks the status of the Ollama service and OpenWebUI containers."
