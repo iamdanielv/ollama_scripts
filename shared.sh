@@ -758,6 +758,33 @@ testFailed() {
     fi
 }
 
+# Prints summary for test suite.
+# Reads global variables 'test_count' and 'failures'.
+# Exits with 0 on success and 1 on failure.
+# Usage:
+#   print_test_summary "mock_function1" "mock_function2" ...
+# Arguments:
+#   $@ - Optional list of mock function names to unset before exiting.
+print_test_summary() {
+    printTestSectionHeader "Test Summary"
+
+    if [[ $failures -eq 0 ]]; then
+        printOkMsg "All ${test_count} tests passed!"
+    else
+        printErrMsg "${failures} of ${test_count} tests failed."
+    fi
+
+    # Unset any mock functions passed as arguments
+    if [[ $# -gt 0 ]]; then
+        # The -f flag is important to unset functions.
+        # Redirecting stderr to /dev/null suppresses "not found" errors if a mock
+        # wasn't defined (e.g., due to a test suite being skipped).
+        unset -f "$@" &>/dev/null
+    fi
+
+    if [[ $failures -eq 0 ]]; then exit 0; else exit 1; fi
+}
+
 # Checks for Docker and Docker Compose. Exits if not found.
 # Usage: check_docker_prerequisites [--silent]
 #   --silent: If provided, success messages will be cleared instead of printed.
