@@ -1,9 +1,6 @@
 #!/bin/bash
 # Configure Ollama network exposure (localhost vs. network).
 
-set -e
-set -o pipefail
-
 # Source common utilities
 # shellcheck source=./shared.sh
 if ! source "$(dirname "$0")/shared.sh"; then
@@ -41,13 +38,14 @@ show_help() {
     fi
 
     printMsg "${T_ULINE}Usage:${T_RESET}"
-    printMsg "  $(basename "$0") [-e | -r | -v | -h]"
+    printMsg "  $(basename "$0") [-e | -r | -v | -h | -t]"
 
     printMsg "\n${T_ULINE}Options:${T_RESET}"
     printMsg "  ${C_L_BLUE}-e, --expose${T_RESET}    Expose Ollama to the network (listens on 0.0.0.0)."
     printMsg "  ${C_L_BLUE}-r, --restrict${T_RESET}  Restrict Ollama to localhost (listens on 127.0.0.1)."
     printMsg "  ${C_L_BLUE}-v, --view${T_RESET}      View the current network configuration and exit."
     printMsg "  ${C_L_BLUE}-h, --help${T_RESET}      Show this help message."
+    printMsg "  ${C_L_BLUE}-t, --test${T_RESET}      Run the internal test suite."
 
     if $is_verbose; then
         printMsg "\n${T_ULINE}Examples:${T_RESET}"
@@ -67,8 +65,96 @@ print_current_status() {
     fi
 }
 
+# --- Test Suite ---
+run_tests() {
+    # Mock all external commands and functions
+    ensure_root() { :; }
+    verify_ollama_service() { :; }
+    load_project_env() { :; }
+    prereq_checks() { :; }
+    
+    # Mock the functions that change state
+    expose_to_network() {
+        # Simulate success (0), no-change (2), or failure (1)
+        # We use a global mock variable to control this.
+        return "$MOCK_CHANGE_EXIT_CODE"
+    }
+    restrict_to_localhost() {
+        return "$MOCK_CHANGE_EXIT_CODE"
+    }
+    # Mock the function that checks state
+    check_network_exposure() {
+        # We use a global mock variable to control this.
+        [[ "$MOCK_IS_EXPOSED" == "true" ]]
+    }
+
+    printMsg "\n${T_ULINE}Running tests for config-ollama-net.sh:${T_RESET}"
+
+    # Test --view flag
+    printMsg "  --- Testing --view flag ---"
+    MOCK_IS_EXPOSED=true
+    _run_string_test "$(_main_logic --view)" "$STATUS_NETWORK" "Shows 'network' when exposed"
+    MOCK_IS_EXPOSED=false
+    _run_string_test "$(_main_logic --view)" "$STATUS_LOCALHOST" "Shows 'localhost' when restricted"
+
+    # Test --expose flag
+    printMsg "  --- Testing --expose flag ---"
+    MOCK_CHANGE_EXIT_CODE=0 # Success
+    MOCK_IS_EXPOSED=true   # State after change
+    _run_string_test "$(_main_logic --expose)" "$STATUS_NETWORK" "Exposes network successfully"
+    
+    MOCK_CHANGE_EXIT_CODE=2 # No change needed
+    MOCK_IS_EXPOSED=true   # State is already correct
+    _run_string_test "$(_main_logic --expose)" "$STATUS_NETWORK" "Handles no-change when already exposed"
+
+    # Test --restrict flag
+    printMsg "  --- Testing --restrict flag ---"
+    MOCK_CHANGE_EXIT_CODE=0 # Success
+    MOCK_IS_EXPOSED=false  # State after change
+    _run_string_test "$(_main_logic --restrict)" "$STATUS_LOCALHOST" "Restricts to localhost successfully"
+
+    MOCK_CHANGE_EXIT_CODE=2 # No change needed
+    MOCK_IS_EXPOSED=false  # State is already correct
+    _run_string_test "$(_main_logic --restrict)" "$STATUS_LOCALHOST" "Handles no-change when already restricted"
+
+    # Test invalid flag
+    printMsg "  --- Testing invalid input ---"
+    # This should exit with 1, so we test the exit code
+    _run_test '_main_logic --invalid-flag &>/dev/null' 1 "Handles an invalid flag"
+
+    # ---
+    # Test Summary
+    # ---
+    printMsg "\n${T_ULINE}Test Summary:${T_RESET}"
+    if [[ $failures -eq 0 ]]; then
+        printOkMsg "All ${test_count} tests passed!"
+        exit 0
+    else
+        printErrMsg "${failures} of ${test_count} tests failed."
+        exit 1
+    fi
+}
+
+
 # --- Main Logic ---
 main() {
+    # First argument is the command, or could be empty for interactive mode.
+    local command="$1"
+
+    # --- Test Runner ---
+    # If the test flag is passed, run the test suite and exit.
+    if [[ "$command" == "-t" || "$command" == "--test" ]]; then
+        run_tests
+        exit 0
+    fi
+
+    # --- Non-interactive and interactive logic ---
+    # We run the main logic inside a sub-function to make it testable.
+    # The test runner above can mock this function's dependencies.
+    _main_logic "$@"
+}
+
+_main_logic() {
     prereq_checks "sudo" "systemctl"
     load_project_env "$(dirname "$0")/.env"
 
@@ -154,4 +240,7 @@ main() {
     esac
 }
 
-main "$@"
+# Wrap the main call in a function to make it mockable for tests.
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    main "$@"
+fi
