@@ -61,10 +61,10 @@ main() {
     # Run the test, redirecting all output to the temporary file.
     # This is more robust than capturing to a variable.
     if bash "$script_name" --test >"$test_output_file" 2>&1; then
-      printOkMsg "${C_L_BLUE}$script_name${T_RESET}... PASSED"
+      printOkMsg "${C_L_GREEN}PASS${T_RESET}: ${C_L_BLUE}$script_name${T_RESET}"
       passed_count=$((passed_count + 1))
     else
-      printErrMsg "${T_BOLD}$script_name${T_RESET}... FAILED"
+      printErrMsg "${C_L_RED}FAIL${T_RESET}: ${T_BOLD}$script_name${T_RESET}"
       failed_count=$((failed_count + 1))
       failed_scripts+=("$script_name")
       # Indent the captured output from the temp file for readability
@@ -73,9 +73,8 @@ main() {
     fi
   done
 
-  # --- Report Summary ---
-  printMsg "" # empty line to add some space
-  printMsg "${T_ULINE}${C_L_WHITE}    Test summary:${T_RESET}"
+  # --- Test Summary ---
+  printTestSectionHeader "Test Summary:"
   printOkMsg "Passed: $passed_count"
   if [ "$failed_count" -gt 0 ]; then
     printErrMsg "Failed: $failed_count"

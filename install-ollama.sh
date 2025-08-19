@@ -111,7 +111,7 @@ manage_network_exposure() {
 }
 
 test_manage_network_exposure() {
-    printMsg "\n${T_ULINE}Testing manage_network_exposure function:${T_RESET}"
+    printTestSectionHeader "Testing manage_network_exposure function"
 
     # --- Mock dependencies ---
     # Mock all external functions called by manage_network_exposure to isolate its logic.
@@ -153,7 +153,7 @@ run_tests() {
     failures=0
 
     # --- compare_versions tests ---
-    printMsg "\n${T_ULINE}Testing compare_versions function:${T_RESET}"
+    printTestSectionHeader "Testing compare_versions function"
     _run_compare_versions_test "0.1.10" "0.1.10" 0 "Equal versions"
     _run_compare_versions_test "0.1.9" "0.1.10" 2 "v1 < v2 (patch)"
     _run_compare_versions_test "0.1.10" "0.1.9" 1 "v1 > v2 (patch)"
@@ -161,14 +161,14 @@ run_tests() {
     _run_compare_versions_test "0.2.0" "0.1.10" 1 "v1 > v2 (minor)"
     _run_compare_versions_test "0.9.0" "1.0.0" 2 "v1 < v2 (major)"
     _run_compare_versions_test "1.0.0" "0.9.0" 1 "v1 > v2 (major)"
-    printMsg "  --- Edge Cases ---"
+    printTestSectionHeader "Edge Cases"
     _run_compare_versions_test "1.0" "1.0.1" 2 "v1 < v2 (different length)"
     _run_compare_versions_test "1.0.1" "1.0" 1 "v1 > v2 (different length)"
     _run_compare_versions_test "1.0.0" "" 1 "v1 > empty v2"
     _run_compare_versions_test "" "1.0.0" 2 "empty v1 < v2"
 
     # --- get_ollama_version tests ---
-    printMsg "\n${T_ULINE}Testing get_ollama_version function:${T_RESET}"
+    printTestSectionHeader "Testing get_ollama_version function"
     # To test get_ollama_version, we mock the `ollama` and `command` commands.
     # We use environment variables to control the mock's behavior for each test case.
     ollama() {
@@ -200,7 +200,7 @@ run_tests() {
     _run_string_test "$(get_ollama_version)" "" "Command not found"
 
     # --- get_latest_ollama_version tests ---
-    printMsg "\n${T_ULINE}Testing get_latest_ollama_version function:${T_RESET}"
+    printTestSectionHeader "Testing get_latest_ollama_version function"
     # To test get_latest_ollama_version, we mock the `curl` command.
     curl() {
         echo -e "$CURL_MOCK_OUTPUT"
@@ -216,7 +216,6 @@ run_tests() {
     export CURL_MOCK_OUTPUT=""
     _run_string_test "$(get_latest_ollama_version)" "" "Handling empty API response"
 
-    # --- manage_network_exposure tests ---
     test_manage_network_exposure
 
     # --- Cleanup Mocks ---
@@ -224,13 +223,14 @@ run_tests() {
     unset -f ollama command curl wait_for_ollama_service check_network_exposure expose_to_network prompt_yes_no
 
     # --- Test Summary ---
-    printMsg "\n${T_ULINE}Test Summary:${T_RESET}"
-    if [[ $failures -eq 0 ]]; then
-        printOkMsg "All ${test_count} tests passed!"
-        exit 0
-    else
-        printErrMsg "${failures} of ${test_count} tests failed."
+    printTestSectionHeader "Test Summary:"
+    printOkMsg "Passed: ${test_count}"
+    if [[ $failures -gt 0 ]]; then
+        printErrMsg "Failed: ${failures}"
         exit 1
+    else
+        printOkMsg "Failed: 0"
+        exit 0
     fi
 }
 

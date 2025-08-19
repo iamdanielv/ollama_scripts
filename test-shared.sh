@@ -22,7 +22,7 @@ fi
 # --- Test Suites ---
 
 test_parse_models_to_tsv() {
-    printMsg "\n${T_ULINE}Testing _parse_models_to_tsv function:${T_RESET}"
+    printTestSectionHeader "Testing _parse_models_to_tsv function"
     
     local test_json='{
         "models": [
@@ -43,7 +43,7 @@ test_parse_models_to_tsv() {
     local empty_json='{"models": []}'
     _run_string_test "$(_parse_models_to_tsv "$empty_json")" "" "Parsing empty model list"
 
-    printMsg "  --- Corner Cases ---"
+    printTestSectionHeader "Corner Cases"
     local malformed_json='{"models": [ "name": "bad" }'
     _run_string_test "$(_parse_models_to_tsv "$malformed_json")" "" "Handles malformed JSON"
 
@@ -55,7 +55,7 @@ test_parse_models_to_tsv() {
 }
 
 test_get_docker_compose_cmd() {
-    printMsg "\n${T_ULINE}Testing get_docker_compose_cmd function:${T_RESET}"
+    printTestSectionHeader "Testing get_docker_compose_cmd function"
 
     # Mock 'command' and 'docker'
     # shellcheck disable=SC2329
@@ -92,7 +92,7 @@ test_get_docker_compose_cmd() {
 }
 
 test_prereq_checks() {
-    printMsg "\n${T_ULINE}Testing prereq_checks function:${T_RESET}"
+    printTestSectionHeader "Testing prereq_checks function"
 
     # Mock 'command'
     # shellcheck disable=SC2329
@@ -122,7 +122,7 @@ test_prereq_checks() {
 }
 
 test_prompt_yes_no() {
-    printMsg "\n${T_ULINE}Testing prompt_yes_no function:${T_RESET}"
+    printTestSectionHeader "Testing prompt_yes_no function"
 
     # This function's result is its exit code, which is what _run_test checks.
     # We pipe input to the function and redirect its stdout/stderr to /dev/null
@@ -133,19 +133,19 @@ test_prompt_yes_no() {
     _run_test 'echo "n" | prompt_yes_no "Question?" &>/dev/null' 1 "User enters 'n'"
     _run_test 'echo "nO" | prompt_yes_no "Question?" &>/dev/null' 1 "User enters 'nO'"
 
-    printMsg "  --- Testing defaults ---"
+    printTestSectionHeader "Testing defaults"
     _run_test 'echo "" | prompt_yes_no "Question?" "y" &>/dev/null' 0 "User presses Enter for default 'y'"
     _run_test 'echo "" | prompt_yes_no "Question?" "n" &>/dev/null' 1 "User presses Enter for default 'n'"
     # No default, Enter is invalid, then 'y'
     _run_test 'printf "\ny\n" | prompt_yes_no "Question?" "" &>/dev/null' 0 "Handles Enter then 'y' with no default"
 
-    printMsg "  --- Testing invalid input ---"
+    printTestSectionHeader "Testing invalid input"
     _run_test 'printf "x\ny\n" | prompt_yes_no "Question?" &>/dev/null' 0 "Handles invalid input before 'y'"
     _run_test 'printf "x\nn\n" | prompt_yes_no "Question?" &>/dev/null' 1 "Handles invalid input before 'n'"
 }
 
 test_read_single_char() {
-    printMsg "\n${T_ULINE}Testing read_single_char function:${T_RESET}"
+    printTestSectionHeader "Testing read_single_char function"
 
     # We need to run these in a subshell to properly handle the piped input
     # and capture the output. We use printf for reliable escape sequence handling.
@@ -177,7 +177,7 @@ test_read_single_char() {
 }
 
 test_check_network_exposure() {
-    printMsg "\n${T_ULINE}Testing check_network_exposure function:${T_RESET}"
+    printTestSectionHeader "Testing check_network_exposure function"
 
     # Mock systemctl
     # shellcheck disable=SC2329
@@ -209,7 +209,7 @@ test_check_network_exposure() {
 }
 
 test_check_ollama_installed() {
-    printMsg "\n${T_ULINE}Testing check_ollama_installed function:${T_RESET}"
+    printTestSectionHeader "Testing check_ollama_installed function"
 
     # Mock the internal helper function it relies on
     _check_command_exists() {
@@ -236,7 +236,7 @@ test_check_ollama_installed() {
 }
 
 test_validate_env_file() {
-    printMsg "\n${T_ULINE}Testing _validate_env_file function:${T_RESET}"
+    printTestSectionHeader "Testing _validate_env_file function"
 
     # Helper to create a temp file with content
     create_temp_env_file() {
@@ -301,7 +301,7 @@ main() {
 	test_validate_env_file
 
     # --- Test Summary ---
-    printMsg "\n${T_ULINE}Test Summary:${T_RESET}"
+    printTestSectionHeader "Test Summary:"
     if [[ $failures -eq 0 ]]; then
         printOkMsg "All ${test_count} tests passed!"
         exit 0

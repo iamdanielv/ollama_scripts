@@ -313,8 +313,10 @@ refresh_model_cache() {
 
 # --- Test Suites ---
 
+
+
 test_pull_model() {
-    printMsg "\n${T_ULINE}Testing pull_model function:${T_RESET}"
+    printTestSectionHeader "Testing pull_model function"
 
     # --- Mock dependencies ---
     # Mock the `ollama` command to track calls and control its exit code.
@@ -350,8 +352,9 @@ test_pull_model() {
     unset -f ollama
 }
 
+
 test_perform_model_updates() {
-    printMsg "\n${T_ULINE}Testing _perform_model_updates function:${T_RESET}"
+    printTestSectionHeader "Testing _perform_model_updates function"
 
     # --- Mock dependencies ---
     # This mock tracks the number of calls and which models were requested.
@@ -400,7 +403,7 @@ test_perform_model_updates() {
 }
 
 test_delete_model() {
-    printMsg "\n${T_ULINE}Testing delete_model function:${T_RESET}"
+    printTestSectionHeader "Testing delete_model function"
 
     # --- Mock dependencies ---
     # Mock the API call to get a predictable list of models.
@@ -492,13 +495,14 @@ run_tests() {
     unset -f ollama get_ollama_models_json prompt_yes_no run_with_spinner
 
     # --- Test Summary ---
-    printMsg "\n${T_ULINE}Test Summary:${T_RESET}"
-    if [[ $failures -eq 0 ]]; then
-        printOkMsg "All ${test_count} tests passed!"
-        exit 0
-    else
-        printErrMsg "${failures} of ${test_count} tests failed."
+    printTestSectionHeader "Test Summary:"
+    printOkMsg "Passed: ${test_count}"
+    if [[ $failures -gt 0 ]]; then
+        printErrMsg "Failed: ${failures}"
         exit 1
+    else
+        printOkMsg "Failed: 0"
+        exit 0
     fi
 }
 

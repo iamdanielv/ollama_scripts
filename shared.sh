@@ -66,6 +66,10 @@ function print_h2() {
   printMsg "${C_BLUE}${T_BOLD}--- ${1} ---${T_RESET}"
 }
 
+function printTestSectionHeader() {
+  printMsg "\n${T_ULINE}${C_L_WHITE}    ${1}${T_RESET}"
+}
+
 function printBanner() {
   # If the current shell level is greater than the one from the entry script,
   # it means this script was called from another. In that case, print a simpler banner.
@@ -679,13 +683,12 @@ _run_string_test() {
     local description="$3"
     ((test_count++))
 
-    printMsgNoNewline "  Test: ${description}... "
     if [[ "$actual" == "$expected" ]]; then
-        printMsg "${C_L_GREEN}PASSED${T_RESET}"
+        testPassed "${description}"
     else
-        printMsg "${C_RED}FAILED${T_RESET}"
-        echo "    Expected: '$expected'"
-        echo "    Got:      '$actual'"
+        testFailed "${description}"
+        printErrMsg "    Expected: '${expected}'"
+        printErrMsg "    Got:      '${actual}'"
         ((failures++))
     fi
 }
@@ -698,7 +701,6 @@ _run_test() {
     local description="$3"
     ((test_count++))
 
-    printMsgNoNewline "  Test: ${description}... "
     # Run command in a subshell to not affect the test script's state,
     # and capture its stdout and stderr.
     local output
@@ -706,9 +708,9 @@ _run_test() {
     local actual_code=$?
 
     if [[ $actual_code -eq $expected_code ]]; then
-        printMsg "${C_L_GREEN}PASSED${T_RESET}"
+        testPassed "${description}"
     else
-        printMsg "${C_RED}FAILED${T_RESET} (Expected: $expected_code, Got: $actual_code)"
+        testFailed "${description}" "Expected: ${expected_code}, Got: ${actual_code}"
         # Print the captured output on failure for debugging
         if [[ -n "$output" ]]; then
             echo -e "${output}" | sed 's/^/    /'
@@ -728,14 +730,31 @@ _run_compare_versions_test() {
     local description="$4"
     ((test_count++))
 
-    printMsgNoNewline "  Test: ${description}... "
     compare_versions "$v1" "$v2"
     local actual_code=$?
     if [[ $actual_code -eq $expected_code ]]; then
-        printMsg "${C_L_GREEN}PASSED${T_RESET}"
+        testPassed "${description}"
     else
-        printMsg "${C_RED}FAILED${T_RESET} (Expected: $expected_code, Got: $actual_code)"
+        testFailed "${description}" "Expected: ${expected_code}, Got: ${actual_code}"
         ((failures++))
+    fi
+}
+
+# Helper to print a passing test message.
+# Usage: testPassed "description"
+testPassed() {
+    printOkMsg "${C_L_GREEN}PASS${T_RESET}: ${1}"
+}
+
+# Helper to print a failing test message.
+# Usage: testFailed "description" ["additional_info"]
+testFailed() {
+    local description="$1"
+    local additional_info="$2"
+    if [[ -n "$additional_info" ]]; then
+        printErrMsg "${C_L_RED}FAIL${T_RESET}: ${description} (${additional_info})"
+    else
+        printErrMsg "${C_L_RED}FAIL${T_RESET}: ${description}"
     fi
 }
 

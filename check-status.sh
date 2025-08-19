@@ -278,7 +278,7 @@ check_openwebui_status() {
 # --- Test Suites ---
 
 test_format_ps_output() {
-    printMsg "\n${T_ULINE}Testing _format_ps_output function:${T_RESET}"
+    printTestSectionHeader "Testing _format_ps_output function:"
 
     # Scenario 1: Two models are loaded
     local two_models_json='{
@@ -300,7 +300,7 @@ test_format_ps_output() {
     _run_string_test "$(_format_ps_output "$no_models_json")" "$expected_no_models_output" "Handles empty model list"
 
     # Scenario 3: Invalid JSON input
-    printMsg "  --- Corner Cases ---"
+    printTestSectionHeader "--- Corner Cases ---"
     local invalid_json='this is not json'
     # The function should still produce the "no models" message because jq will fail and produce empty output.
     _run_string_test "$(_format_ps_output "$invalid_json")" "$expected_no_models_output" "Handles invalid JSON input gracefully"
@@ -313,7 +313,7 @@ test_format_ps_output() {
 }
 
 test_check_ollama_status() {
-    printMsg "\n${T_ULINE}Testing check_ollama_status function:${T_RESET}"
+    printTestSectionHeader "Testing check_ollama_status function:"
 
     # --- Mock dependencies ---
     # These are all the functions that check_ollama_status depends on.
@@ -372,7 +372,7 @@ test_check_ollama_status() {
 }
 
 test_check_gpu_status() {
-    printMsg "\n${T_ULINE}Testing check_gpu_status function:${T_RESET}"
+    printTestSectionHeader "Testing check_gpu_status function:"
 
     # --- Mock dependencies ---
     command() {
@@ -427,7 +427,7 @@ test_check_gpu_status() {
 }
 
 test_check_openwebui_status() {
-    printMsg "\n${T_ULINE}Testing check_openwebui_status function:${T_RESET}"
+    printTestSectionHeader "Testing check_openwebui_status function:"
 
     # --- Mock dependencies ---
     command() {
@@ -494,7 +494,7 @@ run_tests() {
     test_check_openwebui_status
 
     # --- Test Summary ---
-    printMsg "\n${T_ULINE}Test Summary:${T_RESET}"
+    printTestSectionHeader "Test Summary:"
     if [[ $failures -eq 0 ]]; then
         printOkMsg "All ${test_count} tests passed!"
         # Unset mocks before exiting successfully

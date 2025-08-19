@@ -101,7 +101,7 @@ run_tests() {
     unset -f prompt_yes_no _restart_openwebui
 
     # --- Test Summary ---
-    printMsg "\n${T_ULINE}Test Summary:${T_RESET}"
+    printTestSectionHeader "Test Summary:"
     if [[ $failures -eq 0 ]]; then
         printOkMsg "All ${test_count} tests passed!"
         exit 0

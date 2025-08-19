@@ -66,7 +66,14 @@ print_current_status() {
 }
 
 # --- Test Suite ---
+
+
+
 run_tests() {
+    # These are not 'local' so the helper functions can access them.
+    test_count=0
+    failures=0
+
     # Mock all external commands and functions
     ensure_root() { :; }
     verify_ollama_service() { :; }
@@ -88,17 +95,17 @@ run_tests() {
         [[ "$MOCK_IS_EXPOSED" == "true" ]]
     }
 
-    printMsg "\n${T_ULINE}Running tests for config-ollama-net.sh:${T_RESET}"
+    printBanner "Running tests for config-ollama-net.sh"
 
     # Test --view flag
-    printMsg "  --- Testing --view flag ---"
+    printTestSectionHeader "Testing --view flag"
     MOCK_IS_EXPOSED=true
     _run_string_test "$(_main_logic --view)" "$STATUS_NETWORK" "Shows 'network' when exposed"
     MOCK_IS_EXPOSED=false
     _run_string_test "$(_main_logic --view)" "$STATUS_LOCALHOST" "Shows 'localhost' when restricted"
 
     # Test --expose flag
-    printMsg "  --- Testing --expose flag ---"
+    printTestSectionHeader "Testing --expose flag"
     MOCK_CHANGE_EXIT_CODE=0 # Success
     MOCK_IS_EXPOSED=true   # State after change
     _run_string_test "$(_main_logic --expose)" "$STATUS_NETWORK" "Exposes network successfully"
@@ -108,7 +115,7 @@ run_tests() {
     _run_string_test "$(_main_logic --expose)" "$STATUS_NETWORK" "Handles no-change when already exposed"
 
     # Test --restrict flag
-    printMsg "  --- Testing --restrict flag ---"
+    printTestSectionHeader "Testing --restrict flag"
     MOCK_CHANGE_EXIT_CODE=0 # Success
     MOCK_IS_EXPOSED=false  # State after change
     _run_string_test "$(_main_logic --restrict)" "$STATUS_LOCALHOST" "Restricts to localhost successfully"
@@ -118,22 +125,23 @@ run_tests() {
     _run_string_test "$(_main_logic --restrict)" "$STATUS_LOCALHOST" "Handles no-change when already restricted"
 
     # Test invalid flag
-    printMsg "  --- Testing invalid input ---"
+    printTestSectionHeader "Testing invalid input"
     # This should exit with 1, so we test the exit code
     _run_test '_main_logic --invalid-flag &>/dev/null' 1 "Handles an invalid flag"
 
-    # ---
-    # Test Summary
-    # ---
-    printMsg "\n${T_ULINE}Test Summary:${T_RESET}"
-    if [[ $failures -eq 0 ]]; then
-        printOkMsg "All ${test_count} tests passed!"
-        exit 0
-    else
-        printErrMsg "${failures} of ${test_count} tests failed."
+    # --- Test Summary ---
+    printTestSectionHeader "Test Summary:"
+    printOkMsg "Passed: ${test_count}"
+    if [[ $failures -gt 0 ]]; then
+        printErrMsg "Failed: ${failures}"
         exit 1
+    else
+        printOkMsg "Failed: 0"
+        exit 0
     fi
 }
+
+
 
 
 # --- Main Logic ---
