@@ -493,23 +493,11 @@ run_tests() {
     test_check_gpu_status
     test_check_openwebui_status
 
-    # --- Test Summary ---
-    printTestSectionHeader "Test Summary:"
-    if [[ $failures -eq 0 ]]; then
-        printOkMsg "All ${test_count} tests passed!"
-        # Unset mocks before exiting successfully
-        unset -f _is_systemd_system _is_ollama_service_known systemctl check_endpoint_status check_network_exposure
-        unset -f command nvidia-smi timeout
-        unset -f get_docker_compose_cmd mock_compose_cmd
-        exit 0
-    else
-        printErrMsg "${failures} of ${test_count} tests failed."
-        # Unset mocks before exiting with failure
-        unset -f _is_systemd_system _is_ollama_service_known systemctl check_endpoint_status check_network_exposure
-        unset -f command nvidia-smi timeout
-        unset -f get_docker_compose_cmd mock_compose_cmd
-        exit 1
-    fi
+    print_test_summary \
+        _is_systemd_system _is_ollama_service_known systemctl \
+        check_endpoint_status check_network_exposure \
+        command nvidia-smi timeout \
+        get_docker_compose_cmd mock_compose_cmd
 }
 
 main() {

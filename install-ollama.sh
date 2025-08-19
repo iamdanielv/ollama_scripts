@@ -218,20 +218,10 @@ run_tests() {
 
     test_manage_network_exposure
 
-    # --- Cleanup Mocks ---
-    # Unset the mock functions to restore original behavior
-    unset -f ollama command curl wait_for_ollama_service check_network_exposure expose_to_network prompt_yes_no
-
-    # --- Test Summary ---
-    printTestSectionHeader "Test Summary:"
-    printOkMsg "Passed: ${test_count}"
-    if [[ $failures -gt 0 ]]; then
-        printErrMsg "Failed: ${failures}"
-        exit 1
-    else
-        printOkMsg "Failed: 0"
-        exit 0
-    fi
+    print_test_summary \
+        ollama command curl \
+        wait_for_ollama_service check_network_exposure \
+        expose_to_network prompt_yes_no
 }
 
 # --- Main Execution ---

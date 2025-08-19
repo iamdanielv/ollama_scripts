@@ -490,20 +490,9 @@ run_tests() {
     test_perform_model_updates
     test_delete_model
 
-    # --- Cleanup Mocks ---
-    # Unset all mock functions to restore original behavior
-    unset -f ollama get_ollama_models_json prompt_yes_no run_with_spinner
-
-    # --- Test Summary ---
-    printTestSectionHeader "Test Summary:"
-    printOkMsg "Passed: ${test_count}"
-    if [[ $failures -gt 0 ]]; then
-        printErrMsg "Failed: ${failures}"
-        exit 1
-    else
-        printOkMsg "Failed: 0"
-        exit 0
-    fi
+    print_test_summary \
+        ollama get_ollama_models_json \
+        prompt_yes_no run_with_spinner
 }
 
 # --- Main Menu ---

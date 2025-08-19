@@ -129,16 +129,9 @@ run_tests() {
     # This should exit with 1, so we test the exit code
     _run_test '_main_logic --invalid-flag &>/dev/null' 1 "Handles an invalid flag"
 
-    # --- Test Summary ---
-    printTestSectionHeader "Test Summary:"
-    printOkMsg "Passed: ${test_count}"
-    if [[ $failures -gt 0 ]]; then
-        printErrMsg "Failed: ${failures}"
-        exit 1
-    else
-        printOkMsg "Failed: 0"
-        exit 0
-    fi
+    print_test_summary \
+        ensure_root verify_ollama_service load_project_env prereq_checks \
+        expose_to_network restrict_to_localhost check_network_exposure
 }
 
 
