@@ -672,10 +672,17 @@ trap 'tput cnorm; rm -f "$temp_output_file"; exit 130' INT TERM
 
 # --- Test Framework ---
 # These are not 'local' so the helper functions can access them.
-test_count=0
-failures=0
+test_count=0 # Global test counter
+failures=0   # Global failure counter
 
-# Helper to run a single string comparison test case.
+# Initializes or resets the test suite counters.
+# This should be called at the beginning of any `run_tests` function.
+initialize_test_suite() {
+    test_count=0
+    failures=0
+}
+
+# (Private) Helper to run a single string comparison test case.
 # Usage: _run_string_test "actual_output" "expected_output" "description"
 _run_string_test() {
     local actual="$1"
@@ -684,16 +691,16 @@ _run_string_test() {
     ((test_count++))
 
     if [[ "$actual" == "$expected" ]]; then
-        testPassed "${description}"
+        _test_passed "${description}"
     else
-        testFailed "${description}"
+        _test_failed "${description}"
         printErrMsg "    Expected: '${expected}'"
         printErrMsg "    Got:      '${actual}'"
         ((failures++))
     fi
 }
 
-# Helper to run a single return code test case.
+# (Private) Helper to run a single return code test case.
 # Usage: _run_test "command_to_run" <expected_code> "description"
 _run_test() {
     local cmd_string="$1"
@@ -708,9 +715,9 @@ _run_test() {
     local actual_code=$?
 
     if [[ $actual_code -eq $expected_code ]]; then
-        testPassed "${description}"
+        _test_passed "${description}"
     else
-        testFailed "${description}" "Expected: ${expected_code}, Got: ${actual_code}"
+        _test_failed "${description}" "Expected: ${expected_code}, Got: ${actual_code}"
         # Print the captured output on failure for debugging
         if [[ -n "$output" ]]; then
             echo -e "${output}" | sed 's/^/    /'
@@ -719,7 +726,7 @@ _run_test() {
     fi
 }
 
-# Helper to run a single test case for the run_tests function.
+# (Private) Helper to run a single test case for the compare_versions function.
 # It is defined at the script level to ensure it's available when called.
 # It accesses the `test_count` and `failures` variables from its caller's scope.
 # Usage: _run_compare_versions_test "v1" "v2" <expected_code> "description"
@@ -733,22 +740,22 @@ _run_compare_versions_test() {
     compare_versions "$v1" "$v2"
     local actual_code=$?
     if [[ $actual_code -eq $expected_code ]]; then
-        testPassed "${description}"
+        _test_passed "${description}"
     else
-        testFailed "${description}" "Expected: ${expected_code}, Got: ${actual_code}"
+        _test_failed "${description}" "Expected: ${expected_code}, Got: ${actual_code}"
         ((failures++))
     fi
 }
 
-# Helper to print a passing test message.
+# (Private) Helper to print a passing test message.
 # Usage: testPassed "description"
-testPassed() {
+_test_passed() {
     printOkMsg "${C_L_GREEN}PASS${T_RESET}: ${1}"
 }
 
-# Helper to print a failing test message.
+# (Private) Helper to print a failing test message.
 # Usage: testFailed "description" ["additional_info"]
-testFailed() {
+_test_failed() {
     local description="$1"
     local additional_info="$2"
     if [[ -n "$additional_info" ]]; then

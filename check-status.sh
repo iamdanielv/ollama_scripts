@@ -484,8 +484,7 @@ test_check_openwebui_status() {
 # A function to run internal self-tests for the script's logic.
 run_tests() {
     printBanner "Running Self-Tests for check-status.sh"
-    test_count=0
-    failures=0
+    initialize_test_suite
 
     # --- Run Suites ---
     test_format_ps_output

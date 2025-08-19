@@ -146,12 +146,9 @@ test_manage_network_exposure() {
 
 # A function to run internal self-tests for the script's logic.
 run_tests() {
-    printBanner "Running Self-Tests"
-    # These are not 'local' so the _run_test helper function can access them.
-    # This is a common pattern in shell scripting for test helpers.
-    test_count=0
-    failures=0
-
+    printBanner "Running Self-Tests for install-ollama.sh"
+    initialize_test_suite
+    
     # --- compare_versions tests ---
     printTestSectionHeader "Testing compare_versions function"
     _run_compare_versions_test "0.1.10" "0.1.10" 0 "Equal versions"

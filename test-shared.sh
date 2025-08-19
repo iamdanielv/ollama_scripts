@@ -283,6 +283,8 @@ main() {
     # Disable the error and interrupt traps from shared.sh for the test runner
     trap - ERR
     trap - INT
+    printBanner "Running Self-Tests for shared.sh"
+    initialize_test_suite
 
     # --- Run Suites ---
     # We need jq for this test script itself.

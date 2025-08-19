@@ -67,13 +67,11 @@ print_current_status() {
 
 # --- Test Suite ---
 
-
-
+# A function to run internal self-tests for the script's logic.
 run_tests() {
-    # These are not 'local' so the helper functions can access them.
-    test_count=0
-    failures=0
-
+    printBanner "Running tests for config-ollama-net.sh"
+    initialize_test_suite
+    
     # Mock all external commands and functions
     ensure_root() { :; }
     verify_ollama_service() { :; }
@@ -94,8 +92,6 @@ run_tests() {
         # We use a global mock variable to control this.
         [[ "$MOCK_IS_EXPOSED" == "true" ]]
     }
-
-    printBanner "Running tests for config-ollama-net.sh"
 
     # Test --view flag
     printTestSectionHeader "Testing --view flag"

@@ -482,9 +482,8 @@ test_delete_model() {
 # A function to run internal self-tests for the script's logic.
 run_tests() {
     printBanner "Running Self-Tests for manage-models.sh"
-    test_count=0
-    failures=0
-
+    initialize_test_suite
+    
     # --- Run Suites ---
     test_pull_model
     test_perform_model_updates

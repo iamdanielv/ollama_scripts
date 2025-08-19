@@ -60,9 +60,8 @@ _handle_pull_result() {
 # A function to run internal self-tests for the script's logic.
 run_tests() {
     printBanner "Running Self-Tests for update-openwebui.sh"
-    test_count=0
-    failures=0
-
+    initialize_test_suite
+    
     # --- Mock dependencies ---
     # Mock the functions that _handle_pull_result depends on.
     prompt_yes_no() {
