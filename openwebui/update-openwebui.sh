@@ -78,7 +78,7 @@ run_tests() {
     export -f prompt_yes_no _restart_openwebui
 
     # --- Test Cases for _handle_pull_result ---
-    printMsg "\n${T_ULINE}Testing _handle_pull_result function:${T_RESET}"
+    printTestSectionHeader "Testing _handle_pull_result function:"
 
     # Scenario 1: Update found, user says 'y' to restart.
     export MOCK_PROMPT_RETURN_CODE=0
@@ -98,17 +98,7 @@ run_tests() {
     _run_string_test "$MOCK_START_CALLED" "false" "Does not call start script when no update is found"
 
     # --- Cleanup Mocks ---
-    unset -f prompt_yes_no _restart_openwebui
-
-    # --- Test Summary ---
-    printTestSectionHeader "Test Summary:"
-    if [[ $failures -eq 0 ]]; then
-        printOkMsg "All ${test_count} tests passed!"
-        exit 0
-    else
-        printErrMsg "${failures} of ${test_count} tests failed."
-        exit 1
-    fi
+    print_test_summary prompt_yes_no _restart_openwebui
 }
 
 
