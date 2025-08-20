@@ -23,8 +23,8 @@ main() {
   # Ensure the temporary file is cleaned up on exit (including Ctrl+C)
   trap 'rm -f "$test_output_file"' EXIT
 
-  local all_scripts
-  all_scripts=$(find . -maxdepth 1 -name "*.sh" -type f -not -name "$(basename "$0")" -not -name "shared.sh" | sort)
+  local -a all_scripts
+  mapfile -t all_scripts < <(find . -maxdepth 1 -name "*.sh" -type f -not -name "$(basename "$0")" -not -name "shared.sh" | sort)
   local testable_scripts=()
   local not_testable_scripts=()
   local failed_scripts=()
@@ -32,7 +32,7 @@ main() {
   local failed_count=0
 
   # --- Discover testable scripts ---
-  for script in $all_scripts; do
+  for script in "${all_scripts[@]}"; do
     script_name=$(basename "$script")
     # Check for test flags in shell script logic (case or if statements)
     # This is more robust than a simple grep for the flag.
