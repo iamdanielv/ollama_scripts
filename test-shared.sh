@@ -58,7 +58,7 @@ test_get_docker_compose_cmd() {
     printTestSectionHeader "Testing get_docker_compose_cmd function"
 
     # Mock 'command' and 'docker'
-    # shellcheck disable=SC2329
+    # shellcheck disable=SC2317,SC2329 # Mock function for testing
     command() {
         case "$*" in
             "-v docker") [[ "$MOCK_DOCKER_EXISTS" == "true" ]] && return 0 || return 1 ;;
@@ -66,7 +66,7 @@ test_get_docker_compose_cmd() {
             *) /usr/bin/command "$@" ;;
         esac
     }
-    # shellcheck disable=SC2329
+    # shellcheck disable=SC2317,SC2329 # Mock function for testing
     docker() {
         case "$*" in
             "compose version") [[ "$MOCK_DOCKER_COMPOSE_V2_EXISTS" == "true" ]] && return 0 || return 1 ;;
@@ -95,7 +95,7 @@ test_prereq_checks() {
     printTestSectionHeader "Testing prereq_checks function"
 
     # Mock 'command'
-    # shellcheck disable=SC2329
+    # shellcheck disable=SC2317,SC2329 # Mock function for testing
     command() {
         if [[ "$1" == "-v" ]]; then
             # Fail if the command to check is in our MOCK_MISSING variable
@@ -180,7 +180,7 @@ test_check_network_exposure() {
     printTestSectionHeader "Testing check_network_exposure function"
 
     # Mock systemctl
-    # shellcheck disable=SC2329
+    # shellcheck disable=SC2317 # Mock function for testing
     systemctl() {
         # We only care about the 'show' subcommand for this test
         if [[ "$1" == "show" ]]; then

@@ -151,6 +151,7 @@ update_models_interactive() {
     total_models=$(echo "$models_json" | jq '.models | length')
 
     # Handle 'all' keyword (case-insensitive)
+    # shellcheck disable=SC2206 # Word splitting is not an issue for the first element.
     if [[ "${model_inputs[0],,}" == "all" ]]; then
         # Get all model names, sorted to be predictable
         mapfile -t models_to_update < <(echo "$models_json" | jq -r '.models | sort_by(.name)[] | .name')
@@ -490,8 +491,8 @@ run_tests() {
     test_delete_model
 
     print_test_summary \
-        ollama get_ollama_models_json \
-        prompt_yes_no run_with_spinner
+        "ollama" "get_ollama_models_json" \
+        "prompt_yes_no" "run_with_spinner"
 }
 
 # --- Main Menu ---

@@ -2,15 +2,18 @@
 
 # Checks the status of both the Ollama service and the OpenWebUI containers.
 
+# Determine the absolute path of the directory containing this script.
+SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+
 # Source common utilities for colors and functions
 # shellcheck source=./shared.sh
-if ! source "$(dirname "$0")/shared.sh"; then
+if ! source "${SCRIPT_DIR}/shared.sh"; then
     echo "Error: Could not source shared.sh. Make sure it's in the same directory." >&2
     exit 1
 fi
 
 # shellcheck source=./ollama-helpers.sh
-if ! source "$(dirname "$0")/ollama-helpers.sh"; then
+if ! source "${SCRIPT_DIR}/ollama-helpers.sh"; then
     echo "Error: Could not source ollama-helpers.sh. Make sure it's in the same directory." >&2
     exit 1
 fi
@@ -83,6 +86,7 @@ _format_ps_output() {
         # The BEGIN block sets the field separator to a tab and defines padding.
         # The first block reads all data and finds the max width for each column.
         # The END block prints the formatted data, left-aligned, with padding.
+        # shellcheck disable=SC2094 # The awk script is intended to read from the pipe.
         echo -e "$tsv_output" | awk 'BEGIN { FS="\t"; PADDING=4 } { for(i=1; i<=NF; i++) { if(length($i) > width[i]) { width[i] = length($i) } } data[NR] = $0 } END { for(row=1; row<=NR; row++) { split(data[row], fields, FS); for(col=1; col<=NF; col++) { printf "%-" (width[col] + PADDING) "s", fields[col] } printf "\n" } }'
     fi
 }
@@ -251,7 +255,7 @@ check_openwebui_status() {
     fi
 
     local webui_dir
-    webui_dir="$(dirname "$0")/openwebui"
+    webui_dir="${SCRIPT_DIR}/openwebui"
     if [[ ! -d "$webui_dir" ]]; then
         printErrMsg "Directory 'openwebui' not found. Cannot check status."
         return
@@ -493,14 +497,14 @@ run_tests() {
     test_check_openwebui_status
 
     print_test_summary \
-        _is_systemd_system _is_ollama_service_known systemctl \
-        check_endpoint_status check_network_exposure \
-        command nvidia-smi timeout \
-        get_docker_compose_cmd mock_compose_cmd
+        "_is_systemd_system" "_is_ollama_service_known" "systemctl" \
+        "check_endpoint_status" "check_network_exposure" \
+        "command" "nvidia-smi" "timeout" \
+        "get_docker_compose_cmd" "mock_compose_cmd"
 }
 
 main() {
-    load_project_env "$(dirname "$0")/.env"
+    load_project_env "${SCRIPT_DIR}/.env"
 
     if [[ -n "$1" ]]; then
         case "$1" in

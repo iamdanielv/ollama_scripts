@@ -97,7 +97,7 @@ run_tests() {
     _run_string_test "$MOCK_START_CALLED" "false" "Does not call start script when no update is found"
 
     # --- Cleanup Mocks ---
-    print_test_summary prompt_yes_no _restart_openwebui
+    print_test_summary "prompt_yes_no" "_restart_openwebui"
 }
 
 

@@ -69,7 +69,8 @@ main() {
     fi
 
     printInfoMsg "Attempting to stop Ollama service..."
-run_with_spinner "Stopping Ollama service via systemctl..." sudo systemctl stop "$SERVICE_NAME"
+    # shellcheck disable=SC2086 # We are passing multiple arguments to the spinner function.
+    run_with_spinner "Stopping Ollama service via systemctl..." sudo systemctl stop "$SERVICE_NAME"
     
     # Verification step: Check if the service is still active after the stop command.
     printMsgNoNewline "${T_INFO_ICON} Verifying service shutdown"

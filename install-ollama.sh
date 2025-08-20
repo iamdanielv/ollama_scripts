@@ -216,9 +216,9 @@ run_tests() {
     test_manage_network_exposure
 
     print_test_summary \
-        ollama command curl \
-        wait_for_ollama_service check_network_exposure \
-        expose_to_network prompt_yes_no
+        "ollama" "command" "curl" \
+        "wait_for_ollama_service" "check_network_exposure" \
+        "expose_to_network" "prompt_yes_no"
 }
 
 # --- Main Execution ---

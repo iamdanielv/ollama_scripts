@@ -13,15 +13,18 @@
 #   ./config-ollama-advanced.sh
 #
 
+# Determine the absolute path of the directory containing this script.
+SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+
 # Source common utilities for colors and functions
 # shellcheck source=./shared.sh
-if ! source "$(dirname "$0")/shared.sh"; then
+if ! source "${SCRIPT_DIR}/shared.sh"; then
     echo "Error: Could not source shared.sh. Make sure it's in the same directory." >&2
     exit 1
 fi
 
 # shellcheck source=./ollama-helpers.sh
-if ! source "$(dirname "$0")/ollama-helpers.sh"; then
+if ! source "${SCRIPT_DIR}/ollama-helpers.sh"; then
     echo "Error: Could not source ollama-helpers.sh. Make sure it's in the same directory." >&2
     exit 1
 fi

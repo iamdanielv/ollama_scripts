@@ -204,6 +204,7 @@ script_interrupt_handler() {
 
 # Set the trap. This will call our handler function whenever a command fails.
 # The arguments passed to the handler are the line number and the command that failed.
+# shellcheck disable=SC2064
 trap 'script_error_handler $LINENO "$BASH_COMMAND"' ERR
 trap 'script_interrupt_handler' INT
 
@@ -352,9 +353,16 @@ ensure_script_dir() {
     # This is more robust than passing BASH_SOURCE[0] as an argument.
     local SCRIPT_DIR
     SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[1]}" )" &> /dev/null && pwd )
+
+    # If SCRIPT_DIR is empty, it means the cd in the subshell failed.
+    if [[ -z "$SCRIPT_DIR" ]]; then
+        printErrMsg "Could not access script directory from path: ${BASH_SOURCE[1]}"
+        return 1
+    fi
+
     if [[ "$PWD" != "$SCRIPT_DIR" ]]; then
         printMsg "${T_INFO_ICON} Changing to script directory: ${C_L_BLUE}${SCRIPT_DIR}${T_RESET}"
-        cd "$SCRIPT_DIR"
+        cd "$SCRIPT_DIR" || return 1
     fi
 }
 

@@ -126,8 +126,8 @@ run_tests() {
     _run_test '_main_logic --invalid-flag &>/dev/null' 1 "Handles an invalid flag"
 
     print_test_summary \
-        ensure_root verify_ollama_service load_project_env prereq_checks \
-        expose_to_network restrict_to_localhost check_network_exposure
+        "ensure_root" "verify_ollama_service" "load_project_env" "prereq_checks" \
+        "expose_to_network" "restrict_to_localhost" "check_network_exposure"
 }
 
 
