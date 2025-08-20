@@ -18,6 +18,7 @@ These scripts provide a user-friendly way to:
 ```shell
 .
 ├── shared.sh                 # 🛠️ Common utility functions, colors, and error handling  
+├── ollama-helpers.sh         # 🤖 Helper functions specific to Ollama (API, service checks)
 ├── install-ollama.sh         # 📦 Installs or updates Ollama with version checking  
 ├── config-ollama-advanced.sh # ⚙️ Configures advanced Ollama settings (e.g., KV cache)
 ├── config-ollama-net.sh      # 🌐 Configures network access (localhost vs public)  
