@@ -25,6 +25,7 @@ show_help() {
 
     printMsg "\n${T_ULINE}Options:${T_RESET}"
     printMsg "  ${C_L_BLUE}-h, --help${T_RESET}      Show this help message."
+    printMsg "  ${C_L_BLUE}-t, --test${T_RESET}      Runs internal self-tests for script functions."
 }
 
 # Exit handler for this script to show logs if the restart fails.
