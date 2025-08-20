@@ -2,11 +2,6 @@
 
 # Stop OpenWebUI using docker compose
 
-# Exit immediately if a command exits with a non-zero status.
-set -e
-# The return value of a pipeline is the status of the last command to exit with a non-zero status.
-set -o pipefail
-
 # --- Source the shared libraries ---
 # shellcheck source=../shared.sh
 if ! source "$(dirname "$0")/../shared.sh"; then
