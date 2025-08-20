@@ -27,6 +27,7 @@ These scripts provide a user-friendly way to:
 ├── stop-ollama.sh            # 🛑 Stops the Ollama service cleanly  
 ├── logs-ollama.sh            # 📜 View Ollama service logs via journalctl  
 ├── check-status.sh           # 🔄 Checks status of services and lists installed models  
+├── test-all.sh               # 🧪 Runs all script self-tests
 ├── diagnose.sh               # 🩺 Generates diagnostic report for troubleshooting
 └── openwebui/                # 🌐 OpenWebUI management scripts and configuration files  
     ├── start-openwebui.sh  # ⚡ Starts the OpenWebUI service  
@@ -440,6 +441,18 @@ You can then share the contents of `report.txt` when creating a bug report or as
 ## 🤝 For Contributors
 
 I'm open to and encourage contributions of bug fixes, improvements, and documentation!
+
+### 🧪 Running Tests
+
+The project includes a testing utility to ensure script quality and prevent regressions. Several scripts contain internal self-tests that can be run with a `--test` or `-t` flag.
+
+To run all available tests across the project, use the `test-all.sh` script:
+
+```bash
+./test-all.sh
+```
+
+This script will automatically discover and execute the self-tests for all testable scripts in the repository and provide a summary of the results. This is a great way to verify your changes before submitting a contribution.
 
 ## 📜 License
 
