@@ -366,6 +366,57 @@ ensure_script_dir() {
     fi
 }
 
+# (Private) Finds the project root directory by searching upwards for a known file.
+# The result is stored in the global variable _PROJECT_ROOT and exported.
+# Returns 0 on success, 1 on failure.
+_find_project_root() {
+    # If already found, return success
+    if [[ -n "$_PROJECT_ROOT" ]]; then
+        return 0
+    fi
+
+    # Start searching from the directory of the top-level script that was executed.
+    local start_dir
+    start_dir=$(dirname "${BASH_SOURCE[-1]}")
+
+    local current_dir
+    current_dir=$(cd "$start_dir" && pwd)
+
+    while [[ "$current_dir" != "/" && "$current_dir" != "" ]]; do
+        # Using README.md and shared.sh as anchor files to identify the project root.
+        if [[ -f "$current_dir/README.md" && -f "$current_dir/shared.sh" ]]; then
+            _PROJECT_ROOT="$current_dir"
+            export _PROJECT_ROOT # Export so subshells can see it
+            return 0
+        fi
+        current_dir=$(dirname "$current_dir")
+    done
+
+    return 1 # Failed to find root
+}
+#export -f _find_project_root
+
+# A helper to run docker compose commands for OpenWebUI from any directory.
+# It automatically locates the 'openwebui' directory within the project.
+# Usage: run_webui_compose "ps" "--filter" "status=running"
+run_webui_compose() {
+    if ! _find_project_root; then
+        printErrMsg "Could not determine project root directory. Cannot run docker compose."
+        return 1
+    fi
+
+    local webui_dir="${_PROJECT_ROOT}/openwebui"
+    local compose_cmd
+    compose_cmd=$(get_docker_compose_cmd)
+    local compose_cmd_parts=($compose_cmd)
+
+    # Execute the command using --project-directory, which is safer than cd.
+    "${compose_cmd_parts[@]}" --project-directory "$webui_dir" "$@"
+}
+#export -f run_webui_compose
+
+
+
 # (Private) Validates the format of a .env file.
 # It prints a detailed error and returns 1 on the first invalid line found.
 # Returns 0 if the entire file is valid.
