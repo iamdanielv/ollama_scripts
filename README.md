@@ -27,6 +27,7 @@ These scripts provide a user-friendly way to:
 ├── stop-ollama.sh            # 🛑 Stops the Ollama service cleanly  
 ├── logs-ollama.sh            # 📜 View Ollama service logs via journalctl  
 ├── check-status.sh           # 🔄 Checks status of services and lists installed models  
+├── diagnose.sh               # 🩺 Generates diagnostic report for troubleshooting
 └── openwebui/                # 🌐 OpenWebUI management scripts and configuration files  
     ├── start-openwebui.sh  # ⚡ Starts the OpenWebUI service  
     ├── stop-openwebui.sh   # 🛑 Stops the OpenWebUI service  
@@ -85,6 +86,7 @@ After it starts, open the link provided (usually `http://localhost:3000`) and fo
 
 | Script | Description |
 |---|---|
+| `./diagnose.sh` | 🩺 Generates diagnostic report of the system, services, and configurations to help with troubleshooting. |
 | `./check-status.sh` | 🔄 Checks the status of Ollama and OpenWebUI. Can also list models (`--models`), watch loaded models (`--watch`), or run self-tests (`--test`). |
 
 ### 🤖 Ollama Management Scripts
@@ -374,6 +376,24 @@ OLLAMA_PORT=11434
 ```
 
 The Docker Compose file (`docker-compose.yaml`) is pre-configured to use these environment variables.
+
+---
+
+## 🩺 Troubleshooting with `diagnose.sh`
+
+If you encounter issues and need to ask for help, the `diagnose.sh` script is the best way to gather all the relevant information. It collects details about your system, dependencies, service status, logs, and configurations into a single report.
+
+```bash
+./diagnose.sh
+```
+
+This will print a detailed report to your terminal. For sharing, it's best to save it to a file:
+
+```bash
+./diagnose.sh -o report.txt
+```
+
+You can then share the contents of `report.txt` when creating a bug report or asking for help.
 
 ---
 
