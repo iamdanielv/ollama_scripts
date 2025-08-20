@@ -169,33 +169,36 @@ run_diagnostics() {
 
     # --- OpenWebUI Diagnostics ---
     _print_diag_header "OpenWebUI Diagnostics"
-    local webui_dir="${SCRIPT_DIR}/openwebui"
-    if [[ ! -d "$webui_dir" ]]; then
-        printMsg "  ${C_L_YELLOW}Directory 'openwebui' not found. Skipping OpenWebUI diagnostics.${T_RESET}"
+    if ! _find_project_root; then
+        printMsg "  ${C_L_YELLOW}Could not find project root. Skipping OpenWebUI diagnostics.${T_RESET}"
     else
-        (
-            cd "$webui_dir"
-            _run_and_print "Docker Compose Config" "cat" "docker-compose.yaml"
-            
-            if [[ -f ".env" ]]; then
-                _run_and_print "OpenWebUI .env" "cat" ".env"
+        local webui_dir="${_PROJECT_ROOT}/openwebui"
+        if [[ ! -d "$webui_dir" ]]; then
+            printMsg "  ${C_L_YELLOW}Directory 'openwebui' not found. Skipping OpenWebUI diagnostics.${T_RESET}"
+        else
+            _run_and_print "Docker Compose Config" "cat" "${webui_dir}/docker-compose.yaml"
+
+            if [[ -f "${webui_dir}/.env" ]]; then
+                _run_and_print "OpenWebUI .env" "cat" "${webui_dir}/.env"
             else
-                printMsg "  ${C_L_CYAN}OpenWebUI .env:${T_RESET} ${C_GRAY}Not found.${T_RESET}"
+                printMsg "\n  ${C_L_CYAN}OpenWebUI .env:${T_RESET} ${C_GRAY}Not found.${T_RESET}"
             fi
 
-            if [[ -f "../.env" ]]; then
-                _run_and_print "Project Root .env" "cat" "../.env"
+            if [[ -f "${_PROJECT_ROOT}/.env" ]]; then
+                _run_and_print "Project Root .env" "cat" "${_PROJECT_ROOT}/.env"
             else
-                printMsg "  ${C_L_CYAN}Project Root .env:${T_RESET} ${C_GRAY}Not found.${T_RESET}"
+                printMsg "\n  ${C_L_CYAN}Project Root .env:${T_RESET} ${C_GRAY}Not found.${T_RESET}"
             fi
 
-            if [[ -n "$compose_cmd" ]]; then
-                _run_and_print "Container Status" $compose_cmd "ps"
-                
+            if [[ -n "$compose_cmd" ]]; then # compose_cmd is defined in "Dependency Versions"
+                printMsgNoNewline "\n  ${C_L_CYAN}Container Status:${T_RESET}"
+                echo
+                run_webui_compose ps | sed 's/^/    /'
+
                 printMsg "\n  ${C_L_CYAN}OpenWebUI Logs (last 20 lines):${T_RESET}"
-                $compose_cmd logs --tail=20 | sed 's/^/    /'
+                run_webui_compose logs --tail=20 | sed 's/^/    /'
             fi
-        )
+        fi
     fi
 
     # --- Network Diagnostics ---
