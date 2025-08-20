@@ -261,45 +261,6 @@ delete_model() {
     fi
 }
 
-# --- Interactive Menus ---
-
-# Shows the sub-menu for pulling/updating models.
-# Usage: show_pull_menu <models_json>
-show_pull_menu() {
-    local models_json="$1"
-
-    # The main menu was already cleared. Now we show our sub-menu bar.
-    local menu_str
-    menu_str="  ${C_L_GREEN}(A)dd${T_RESET} Model  ${C_L_GRAY}|${T_RESET}"
-    menu_str+="  ${C_L_YELLOW}(U)pdate${T_RESET} Model  ${C_L_GRAY}|${T_RESET}"
-    menu_str+="  ${C_L_GRAY}(C)ancel${T_RESET}"
-
-    printMsg "${C_BLUE}${DIV}${T_RESET}"
-    printMsg "${menu_str}"
-    printMsg "${C_BLUE}${DIV}${T_RESET}"
-
-    local choice
-    choice=$(read_single_char)
-
-    # The menu takes up 3 lines, but we want to leave the first row
-    # so that the list of models is seperate
-    # We clear it before executing an action for a cleaner interface.
-    clear_lines_up 2
-
-    case "$choice" in
-        a|A)
-            pull_model
-            ;;
-        u|U)
-            update_models_interactive "$models_json"
-            ;;
-        c|C|"${KEY_ESC}")
-            # Cancel and return to main menu. The main loop will redraw.
-            return 0
-            ;;
-    esac
-}
-
 # Refreshes the cached model list used in the interactive menu.
 # It calls the shared fetcher function and updates the `cached_models_json`
 # variable in the main interactive loop's scope.
@@ -495,13 +456,15 @@ run_tests() {
         "prompt_yes_no" "run_with_spinner"
 }
 
-# --- Main Menu ---
+# --- Interactive Menu ---
 show_main_menu() {
     local menu_str
-    menu_str="  ${C_L_BLUE}(R)efresh${T_RESET} List  ${C_L_GRAY}|${T_RESET}"
-    menu_str+="  ${C_L_YELLOW}(P)ull${T_RESET} Model    ${C_L_GRAY}|${T_RESET}"
-    menu_str+="  ${C_L_RED}(D)elete${T_RESET} Model  ${C_L_GRAY}|${T_RESET}"
-    menu_str+="  ${C_L_GRAY}(Q)uit"
+    menu_str="  ${C_L_BLUE}(R)efresh${T_RESET}  ${C_L_GRAY}|"
+    menu_str+="  ${C_L_WHITE}Model:"
+    menu_str+="  ${C_L_GREEN}(P)ull"
+    menu_str+="  ${C_L_RED}(D)elete"
+    menu_str+="  ${C_MAGENTA}(U)pdate${T_RESET}  ${C_L_GRAY}|"
+    menu_str+="  ${C_L_WHITE}(Q)uit"
 
     printMsg "${C_BLUE}${DIV}${T_RESET}"
     printMsg "${menu_str}"
@@ -609,12 +572,12 @@ main() {
                 continue
                 ;; 
             p|P)
-                clear_lines_up 1 # Clear the first div since the pull menu adds it back in
-                show_pull_menu "$cached_models_json"
+                pull_model "" # Pass empty string to trigger interactive prompt
                 refresh_model_cache
-                # The spinner from the refresh prints a success line, which we want to clear
-                # to keep the UI clean before the next loop iteration.
-                clear_lines_up 1
+                ;;
+            u|U)
+                update_models_interactive "$cached_models_json"
+                refresh_model_cache
                 ;; 
             d|D)
                 delete_model "" "$cached_models_json"
