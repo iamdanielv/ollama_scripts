@@ -194,47 +194,13 @@ check_ollama_status() {
 
 # --- GPU Status ---
 check_gpu_status() {
-    # Only run if nvidia-smi is available
     if ! _check_command_exists "nvidia-smi"; then
         return
     fi
 
     printMsg "\n${T_BOLD}--- GPU Status (NVIDIA) ---${T_RESET}"
-
-    # Use a timeout to prevent the script from hanging if nvidia-smi is slow
-    local smi_output
-        # nvidia-smi has a bug where querying driver_version and cuda_version can fail.
-    # We'll get them separately for robustness.
-    local driver_version cuda_version
-    driver_version=$(nvidia-smi --query-gpu=driver_version --format=csv,noheader,nounits | head -n 1)
-    cuda_version=$(nvidia-smi | grep -oP 'CUDA Version: \K[^ ]+' | head -n 1)
-    
-    printInfoMsg "Driver:   ${C_L_BLUE}${driver_version:-N/A}${T_RESET} (CUDA: ${C_L_BLUE}${cuda_version:-N/A}${T_RESET})"
-
-    # Use a timeout to prevent the script from hanging if nvidia-smi is slow
-    local smi_output
-    smi_output=$(timeout 5 nvidia-smi --query-gpu=name,memory.used,memory.total,utilization.gpu,temperature.gpu --format=csv,noheader,nounits)
-
-    if [[ -z "$smi_output" ]]; then
-        printErrMsg "Could not retrieve GPU information from nvidia-smi."
-        return
-    fi
-
-    # The query command will output one line per GPU. We'll process each one.
-    local gpu_index=0
-    while IFS=',' read -r gpu_name mem_used mem_total gpu_util temp_gpu; do
-        # Trim leading/trailing whitespace that might sneak in
-        gpu_name=$(echo "$gpu_name" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
-        mem_used=$(echo "$mem_used" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
-        mem_total=$(echo "$mem_total" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
-        gpu_util=$(echo "$gpu_util" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
-        temp_gpu=$(echo "$temp_gpu" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
-
-        printOkMsg "GPU ${gpu_index}:    ${C_L_CYAN}${gpu_name}${T_RESET}"
-        printMsg "      - Memory: ${C_L_YELLOW}${mem_used} MiB / ${mem_total} MiB${T_RESET}"
-        printMsg "      - Usage:  ${C_L_YELLOW}${gpu_util}%${T_RESET} (Temp: ${C_L_YELLOW}${temp_gpu}°C${T_RESET})"
-        ((gpu_index++))
-    done <<< "$smi_output"
+    # Call the shared helper function from ollama-helpers.sh
+    print_gpu_status
 }
 
 # --- OpenWebUI Status ---
@@ -379,55 +345,32 @@ test_check_gpu_status() {
     printTestSectionHeader "Testing check_gpu_status function:"
 
     # --- Mock dependencies ---
+    # We only need to mock _check_command_exists and the new helper.
     command() {
         if [[ "$1" == "-v" && "$2" == "nvidia-smi" ]]; then
             [[ "$MOCK_NVIDIA_SMI_EXISTS" == "true" ]] && return 0 || return 1
         else
-            # Allow other command checks to pass through
             /usr/bin/command "$@"
         fi
     }
-    nvidia-smi() {
-        case "$*" in
-            *"--query-gpu=driver_version"*) 
-                echo "$MOCK_DRIVER_VERSION"
-                ;;
-            *"--query-gpu=name,memory.used"*) 
-                echo "$MOCK_GPU_DATA"
-                ;;
-            *) # This is the plain `nvidia-smi` call for CUDA version
-                echo "CUDA Version: $MOCK_CUDA_VERSION"
-                ;;
-        esac
+    print_gpu_status() {
+        MOCK_PRINT_GPU_STATUS_CALLED=true
     }
-    timeout() {
-        # Mock timeout to just run the command. We simulate a timeout by
-        # having the mock nvidia-smi return empty output.
-        shift # remove timeout duration
-        "$@"
-    }
-    export -f command nvidia-smi timeout
+    export -f command print_gpu_status
 
     # --- Test Cases ---
-    local actual_output
-    local actual_output_no_color
 
     # Scenario 1: nvidia-smi is not installed.
     export MOCK_NVIDIA_SMI_EXISTS=false
-    _run_string_test "$(check_gpu_status)" "" "Does nothing if nvidia-smi is not found"
+    MOCK_PRINT_GPU_STATUS_CALLED=false
+    check_gpu_status &>/dev/null
+    _run_string_test "$MOCK_PRINT_GPU_STATUS_CALLED" "false" "Does not call helper if nvidia-smi is not found"
 
-    # Scenario 2: nvidia-smi is installed and returns valid data.
+    # Scenario 2: nvidia-smi is installed.
     export MOCK_NVIDIA_SMI_EXISTS=true
-    export MOCK_DRIVER_VERSION="550.78" MOCK_CUDA_VERSION="12.4"
-    export MOCK_GPU_DATA="NVIDIA GeForce RTX 4090, 2048, 24564, 10, 50"
-    actual_output=$(check_gpu_status)
-    actual_output_no_color=$(echo "$actual_output" | sed 's/\x1b\[[0-9;]*m//g')
-    _run_test "[[ \"$actual_output_no_color\" == *\"Driver:   550.78 (CUDA: 12.4)\"* ]]" 0 "Reports correct driver and CUDA versions"
-    _run_test "[[ \"$actual_output_no_color\" == *\"GPU 0:    NVIDIA GeForce RTX 4090\"* ]]" 0 "Reports correct GPU name"
-
-    # Scenario 3: nvidia-smi returns empty data for the main query.
-    export MOCK_GPU_DATA=""
-    _run_test '[[ "$(check_gpu_status)" == *"Could not retrieve GPU information"* ]]' 0 "Handles nvidia-smi failure gracefully"
+    MOCK_PRINT_GPU_STATUS_CALLED=false
+    check_gpu_status &>/dev/null
+    _run_string_test "$MOCK_PRINT_GPU_STATUS_CALLED" "true" "Calls helper when nvidia-smi is found"
 }
 
 test_check_openwebui_status() {
@@ -498,8 +441,7 @@ run_tests() {
 
     print_test_summary \
         "_is_systemd_system" "_is_ollama_service_known" "systemctl" \
-        "check_endpoint_status" "check_network_exposure" \
-        "command" "nvidia-smi" "timeout" \
+        "check_endpoint_status" "check_network_exposure" "command" "print_gpu_status" \
         "get_docker_compose_cmd" "mock_compose_cmd"
 }
 
