@@ -33,11 +33,7 @@ show_docker_logs_and_exit() {
     local message="$1"
     printErrMsg "$message"
     printMsg "    ${T_INFO_ICON} Showing last 20 lines of container logs:"
-    local compose_cmd
-    compose_cmd=$(get_docker_compose_cmd)
-    local compose_cmd_parts=($compose_cmd)
-    # Use tail to limit output and sed to indent. The command is determined dynamically.
-    "${compose_cmd_parts[@]}" logs --tail=20 | sed 's/^/    /'
+    run_webui_compose logs --tail=20 | sed 's/^/    /'
     exit 1
 }
 
@@ -59,13 +55,7 @@ main() {
     printBanner "OpenWebUI Starter"
 
     printMsg "${T_INFO_ICON} Checking prerequisites..."
-
     check_docker_prerequisites
-    local docker_compose_cmd
-    docker_compose_cmd=$(get_docker_compose_cmd)
-
-    # Ensure we are running in the script's directory so docker-compose can find its files.
-    ensure_script_dir
 
     # Source .env file for configuration if it exists
     load_project_env "../.env" # source parent .env
@@ -101,8 +91,7 @@ main() {
         fi
     fi
 
-    local docker_compose_cmd_parts=($docker_compose_cmd)
-    if ! run_with_spinner "Starting OpenWebUI containers" "${docker_compose_cmd_parts[@]}" up -d; then
+    if ! run_with_spinner "Starting OpenWebUI containers" run_webui_compose up -d; then
         # The spinner function prints detailed errors, so we just need to exit.
         exit 1
     fi

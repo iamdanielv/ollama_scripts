@@ -46,16 +46,10 @@ main() {
     printBanner "OpenWebUI Stopper"
 
     printMsg "${T_INFO_ICON} Checking prerequisites..."
-
     check_docker_prerequisites
-    local docker_compose_cmd
-    docker_compose_cmd=$(get_docker_compose_cmd)
-
-    # Ensure we are running in the script's directory so docker-compose can find its files.
-    ensure_script_dir
 
     printMsg "${T_INFO_ICON} Stopping OpenWebUI containers..."
-    if ! $docker_compose_cmd down; then
+    if ! run_webui_compose down; then
         printErrMsg "Failed to stop OpenWebUI containers."
         printMsg "    ${T_INFO_ICON} You can check the status with 'docker ps'."
         exit 1
