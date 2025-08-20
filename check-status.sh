@@ -213,23 +213,10 @@ check_openwebui_status() {
         return
     fi
 
-    local compose_cmd
-    compose_cmd=$(get_docker_compose_cmd)
-    if [[ -z "$compose_cmd" ]]; then
-        printInfoMsg "Docker Compose not found. Skipping OpenWebUI check."
-        return
-    fi
-
-    local webui_dir
-    webui_dir="${SCRIPT_DIR}/openwebui"
-    if [[ ! -d "$webui_dir" ]]; then
-        printErrMsg "Directory 'openwebui' not found. Cannot check status."
-        return
-    fi
-
     # 1. Check container status
-    # Use --project-directory to avoid cd'ing
-    if $compose_cmd --project-directory "$webui_dir" ps --filter "status=running" --services | grep -q "open-webui"; then
+    # Use the shared helper to run docker compose. It will find the webui dir.
+    # We pipe the output to grep, and check the status of the pipe.
+    if run_webui_compose ps --filter "status=running" --services 2>/dev/null | grep -q "open-webui"; then
         printOkMsg "Container: ${C_GREEN}Running${T_RESET}"
     else
         printErrMsg "Container: ${C_RED}Not Running${T_RESET}"
