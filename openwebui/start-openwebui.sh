@@ -33,8 +33,11 @@ show_docker_logs_and_exit() {
     local message="$1"
     printErrMsg "$message"
     printMsg "    ${T_INFO_ICON} Showing last 20 lines of container logs:"
+    local compose_cmd
+    compose_cmd=$(get_docker_compose_cmd)
+    local compose_cmd_parts=($compose_cmd)
     # Use tail to limit output and sed to indent. The command is determined dynamically.
-    docker compose logs --tail=20 | sed 's/^/    /'
+    "${compose_cmd_parts[@]}" logs --tail=20 | sed 's/^/    /'
     exit 1
 }
 
