@@ -389,3 +389,50 @@ restrict_to_localhost() {
     printOkMsg "Ollama has been restricted to localhost and was restarted."
     return 0
 }
+
+# --- GPU Helpers ---
+
+# Prints a formatted summary of NVIDIA GPU status.
+# Does nothing if nvidia-smi is not found.
+# Usage: print_gpu_status [indent_prefix]
+#   indent_prefix: Optional string to prepend to each output line (e.g., "  ").
+print_gpu_status() {
+    local indent="${1:-}"
+    # Only run if nvidia-smi is available
+    if ! _check_command_exists "nvidia-smi"; then
+        return
+    fi
+
+    # Use a timeout to prevent the script from hanging if nvidia-smi is slow
+    # nvidia-smi has a bug where querying driver_version and cuda_version can fail.
+    # We'll get them separately for robustness.
+    local driver_version cuda_version
+    driver_version=$(timeout 5 nvidia-smi --query-gpu=driver_version --format=csv,noheader,nounits | head -n 1)
+    cuda_version=$(timeout 5 nvidia-smi | grep -oP 'CUDA Version: \K[^ ]+' | head -n 1)
+
+    printMsg "${indent}${T_INFO_ICON} Driver:   ${C_L_BLUE}${driver_version:-N/A}${T_RESET} (CUDA: ${C_L_BLUE}${cuda_version:-N/A}${T_RESET})"
+
+    local smi_output
+    smi_output=$(timeout 5 nvidia-smi --query-gpu=name,memory.used,memory.total,utilization.gpu,temperature.gpu --format=csv,noheader,nounits)
+
+    if [[ -z "$smi_output" ]]; then
+        printMsg "${indent}${T_ERR_ICON}${T_ERR} Could not retrieve GPU information from nvidia-smi.${T_RESET}"
+        return
+    fi
+
+    # The query command will output one line per GPU. We'll process each one.
+    local gpu_index=0
+    while IFS=',' read -r gpu_name mem_used mem_total gpu_util temp_gpu; do
+        # Trim leading/trailing whitespace that might sneak in
+        gpu_name=$(echo "$gpu_name" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+        mem_used=$(echo "$mem_used" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+        mem_total=$(echo "$mem_total" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+        gpu_util=$(echo "$gpu_util" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+        temp_gpu=$(echo "$temp_gpu" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+
+        printMsg "${indent}${T_OK_ICON} GPU ${gpu_index}:    ${C_L_CYAN}${gpu_name}${T_RESET}"
+        printMsg "${indent}      - Memory: ${C_L_YELLOW}${mem_used} MiB / ${mem_total} MiB${T_RESET}"
+        printMsg "${indent}      - Usage:  ${C_L_YELLOW}${gpu_util}%${T_RESET} (Temp: ${C_L_YELLOW}${temp_gpu}°C${T_RESET})"
+        ((gpu_index++))
+    done <<< "$smi_output"
+}
