@@ -11,9 +11,115 @@
 # shellcheck disable=SC1091
 source "$(dirname "$0")/shared.sh"
 
+# --- Self-Test Functions ---
+
+# Helper function to encapsulate the detection logic for easy testing.
+# Usage: _is_script_testable <path_to_script>
+# Returns 0 if testable, 1 otherwise.
+_is_script_testable() {
+    local script_path="$1"
+    # Check for test flags in shell script logic (case or if statements)
+    # This is more robust than a simple grep for the flag.
+    # It looks for patterns like:
+    #   -t|--test) in a case statement
+    #   if ... [[ "$1" == "-t" || ... ]]
+    # It ignores lines starting with #.
+    if grep -q -E '^\s*\|?\s*(-t|--test).*\)|^\s*[^#]*if.*["'\''](-t|--test)["'\'']' "$script_path"; then
+        return 0 # Testable
+    else
+        return 1 # Not testable
+    fi
+}
+
+run_tests() {
+    printBanner "Running Self-Tests for test-all.sh"
+    initialize_test_suite
+
+    # Create a temporary directory for our test files
+    local temp_dir
+    temp_dir=$(mktemp -d)
+    # Ensure cleanup on exit
+    trap 'rm -rf "$temp_dir"' EXIT
+
+    # --- Create Test Files ---
+    # Testable cases
+    echo 'case "$1" in -t|--test) exit 0 ;; esac' > "$temp_dir/testable_case.sh"
+    echo 'if [[ "$1" == "-t" ]]; then exit 0; fi' > "$temp_dir/testable_if.sh"
+    echo 'if [[ "$1" == "--test" ]]; then exit 0; fi' > "$temp_dir/testable_if_long.sh"
+    echo 'if [[ "$a" == "b" || "$1" == "--test" ]]; then exit 0; fi' > "$temp_dir/testable_if_or.sh"
+    echo '    -t|--test) # indented case' > "$temp_dir/testable_case_indent.sh"
+
+    # Not-testable cases
+    echo 'echo "no test flag"' > "$temp_dir/not_testable_simple.sh"
+    echo '# This is a comment about -t|--test)' > "$temp_dir/not_testable_comment.sh"
+    echo 'echo "this is a test"' > "$temp_dir/not_testable_word.sh"
+    echo 'ss -tlpn | column -t' > "$temp_dir/not_testable_false_positive.sh" # The original bug
+    echo 'if [[ "$1" == "--another-test" ]]; then exit 0; fi' > "$temp_dir/not_testable_other_flag.sh"
+    local unreadable_file="$temp_dir/unreadable.sh"
+    touch "$unreadable_file"
+    chmod 000 "$unreadable_file"
+
+    # This script's own path for testing the --check flag
+    local script_path="${BASH_SOURCE[0]}"
+
+    # --- Run Assertions ---
+    printTestSectionHeader "Testing script detection logic"
+    _run_test "_is_script_testable '$temp_dir/testable_case.sh'" 0 "Detects 'case' statement"
+    _run_test "_is_script_testable '$temp_dir/testable_if.sh'" 0 "Detects 'if' statement with -t"
+    _run_test "_is_script_testable '$temp_dir/testable_if_long.sh'" 0 "Detects 'if' statement with --test"
+    _run_test "_is_script_testable '$temp_dir/testable_if_or.sh'" 0 "Detects 'if' statement with ||"
+    _run_test "_is_script_testable '$temp_dir/testable_case_indent.sh'" 0 "Detects indented 'case' statement"
+
+    printTestSectionHeader "Testing non-testable scripts are skipped"
+    _run_test "_is_script_testable '$temp_dir/not_testable_simple.sh'" 1 "Skips script with no test flag"
+    _run_test "_is_script_testable '$temp_dir/not_testable_comment.sh'" 1 "Skips commented out test flag"
+    _run_test "_is_script_testable '$temp_dir/not_testable_word.sh'" 1 "Skips the word 'test'"
+    _run_test "_is_script_testable '$temp_dir/not_testable_false_positive.sh'" 1 "Skips false positive from 'column -t)'"
+    _run_test "_is_script_testable '$temp_dir/not_testable_other_flag.sh'" 1 "Skips other similar flags"
+
+    printTestSectionHeader "Testing command-line flags"
+    _run_string_test "$($script_path --check "$temp_dir/testable_case.sh")" "Testable" "Reports 'Testable' for a testable file via --check"
+    _run_string_test "$($script_path --check "$temp_dir/not_testable_simple.sh")" "NOT Testable" "Reports 'NOT Testable' for a non-testable file via --check"
+    _run_test "$script_path --check &>/dev/null" 1 "Fails when --check is missing a file path"
+    _run_test "$script_path --check /non/existent/file &>/dev/null" 1 "Fails when --check file does not exist"
+    _run_test "$script_path --check '$unreadable_file' &>/dev/null" 1 "Fails when --check file is not readable"
+
+    print_test_summary
+}
+
 # --- Main Logic ---
 
 main() {
+  # Handle self-test mode
+  if [[ "$1" == "-t" || "$1" == "--test" ]]; then
+    run_tests
+    exit $?
+  fi
+
+  # Handle single file check mode
+  if [[ "$1" == "--check" ]]; then
+    local file_to_check="$2"
+    if [[ -z "$file_to_check" ]]; then
+        printErrMsg "The --check flag requires a file path."
+        exit 1
+    fi
+    if [[ ! -f "$file_to_check" ]]; then
+        printErrMsg "File not found: $file_to_check"
+        exit 1
+    fi
+    if [[ ! -r "$file_to_check" ]]; then
+        printErrMsg "File is not readable: $file_to_check"
+        exit 1
+    fi
+
+    if _is_script_testable "$file_to_check"; then
+        echo "Testable"
+    else
+        echo "NOT Testable"
+    fi
+    exit 0
+  fi
+
   prereq_checks "grep" "mktemp" "sed"
 
   # Create a temporary file to store test output
@@ -34,13 +140,7 @@ main() {
   # --- Discover testable scripts ---
   for script in "${all_scripts[@]}"; do
     script_name=$(basename "$script")
-    # Check for test flags in shell script logic (case or if statements)
-    # This is more robust than a simple grep for the flag.
-    # It looks for patterns like:
-    #   -t|--test) in a case statement
-    #   if ... [[ "$1" == "-t" || ... ]]
-    # It ignores lines starting with #.
-    if grep -q -E '^\s*[^#]*(-t|--test)\s*.*[)]|^\s*[^#]*if.*(-t|--test)' "$script"; then
+    if _is_script_testable "$script"; then
       testable_scripts+=("$script_name")
     else
       not_testable_scripts+=("$script_name")
