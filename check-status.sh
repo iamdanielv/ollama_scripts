@@ -220,11 +220,11 @@ check_gpu_status() {
     local gpu_index=0
     while IFS=',' read -r gpu_name mem_used mem_total gpu_util temp_gpu; do
         # Trim leading/trailing whitespace that might sneak in
-        gpu_name=$(echo "$gpu_name" | xargs)
-        mem_used=$(echo "$mem_used" | xargs)
-        mem_total=$(echo "$mem_total" | xargs)
-        gpu_util=$(echo "$gpu_util" | xargs)
-        temp_gpu=$(echo "$temp_gpu" | xargs)
+        gpu_name=$(echo "$gpu_name" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+        mem_used=$(echo "$mem_used" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+        mem_total=$(echo "$mem_total" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+        gpu_util=$(echo "$gpu_util" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+        temp_gpu=$(echo "$temp_gpu" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
 
         printOkMsg "GPU ${gpu_index}:    ${C_L_CYAN}${gpu_name}${T_RESET}"
         printMsg "      - Memory: ${C_L_YELLOW}${mem_used} MiB / ${mem_total} MiB${T_RESET}"
