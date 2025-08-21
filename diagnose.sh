@@ -67,18 +67,11 @@ _run_and_print() {
     local exit_code=$?
 
     if [[ $exit_code -eq 0 ]]; then
-        local line_count
-        line_count=$(echo -n "$output" | wc -l)
-        # If output is single line and not empty, print it on the same line.
-        if [[ "$line_count" -le 1 && -n "$output" ]]; then
-            printMsg "${C_L_GREEN}${output}${T_RESET}"
+        if [[ -n "$output" ]]; then
+            echo
+            echo "$output" | sed 's/^/    /'
         else
-            if [[ -n "$output" ]]; then
-                echo
-                echo "$output" | sed 's/^/    /'
-            else
-                echo -e "\n    ${C_L_YELLOW}(No output)${T_RESET}"
-            fi
+            echo -e "\n    ${C_L_YELLOW}(No output)${T_RESET}"
         fi
     else
         printMsg "${C_RED}Failed (code: $exit_code)${T_RESET}"
@@ -143,11 +136,11 @@ run_diagnostics() {
 
             # The check_network_exposure is a shell function, not an external command.
             # Calling it directly is more robust than trying to export it to a subshell.
-            printMsgNoNewline "\n  ${C_L_CYAN}Network Exposure:${T_RESET} "
+            printMsg "\n  ${C_L_CYAN}Network Exposure:${T_RESET} "
             if check_network_exposure; then
-                printMsg "${C_L_YELLOW}Exposed (0.0.0.0)${T_RESET}"
+                printMsg "    ${C_L_YELLOW}Exposed (0.0.0.0)${T_RESET}"
             else
-                printMsg "${C_L_BLUE}Localhost Only${T_RESET}"
+                printMsg "    ${C_L_BLUE}Localhost Only${T_RESET}"
             fi
         fi
 
