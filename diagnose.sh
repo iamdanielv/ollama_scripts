@@ -67,8 +67,10 @@ _run_and_print() {
     local exit_code=$?
 
     if [[ $exit_code -eq 0 ]]; then
+        local line_count
+        line_count=$(echo -n "$output" | wc -l)
         # If output is single line and not empty, print it on the same line.
-        if [[ $(echo -n "$output" | wc -l) -le 1 && -n "$output" ]]; then
+        if [[ "$line_count" -le 1 && -n "$output" ]]; then
             printMsg "${C_L_GREEN}${output}${T_RESET}"
         else
             if [[ -n "$output" ]]; then
@@ -105,8 +107,10 @@ run_diagnostics() {
     _run_and_print "Curl Version" "curl" "--version"
     _run_and_print "Docker Version" "docker" "--version"
     local compose_cmd
+    # shellcheck disable=SC2207
     if compose_cmd=$(get_docker_compose_cmd 2>/dev/null); then
-        _run_and_print "Docker Compose Version" $compose_cmd "version"
+        local compose_cmd_parts=($compose_cmd)
+        _run_and_print "Docker Compose Version" "${compose_cmd_parts[@]}" "version"
     else
         printMsg "  ${C_L_CYAN}Docker Compose Version:${T_RESET} ${C_L_YELLOW}Not found${T_RESET}"
     fi
@@ -232,10 +236,10 @@ run_diagnostics() {
     
     printMsg "  ${C_L_CYAN}Firewall Status:${T_RESET}"
     if _check_command_exists "ufw"; then
-        sudo ufw status verbose | sed 's/^/    /'
+        ufw status verbose | sed 's/^/    /'
     elif _check_command_exists "firewall-cmd"; then
-        sudo firewall-cmd --state | sed 's/^/    /'
-        sudo firewall-cmd --list-all | sed 's/^/    /'
+        firewall-cmd --state | sed 's/^/    /'
+        firewall-cmd --list-all | sed 's/^/    /'
     else
         printMsg "    ${C_GRAY}No known firewall tool (ufw, firewall-cmd) found.${T_RESET}"
     fi

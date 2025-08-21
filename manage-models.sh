@@ -162,9 +162,13 @@ update_models_interactive() {
                 local model_name
                 model_name=$(echo "$models_json" | jq -r ".models | sort_by(.name)[$((num - 1))].name")
                 if [[ -n "$model_name" && "$model_name" != "null" ]]; then
-                    # Avoid duplicates
-                    if ! [[ " ${models_to_update[*]} " =~ " ${model_name} " ]]; then
-                        models_to_update+=("$model_name")
+                    # Check for duplicates before adding
+                    local found=false
+                    for item in "${models_to_update[@]}"; do
+                        if [[ "$item" == "$model_name" ]]; then found=true; break; fi
+                    done
+                    if ! $found; then
+                       models_to_update+=("$model_name")
                     fi
                 else
                     invalid_inputs+=("$num")

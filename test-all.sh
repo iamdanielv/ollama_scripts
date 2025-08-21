@@ -187,8 +187,9 @@ main() {
 
   local not_testable_count=${#not_testable_scripts[@]}
   if [ "$not_testable_count" -gt 0 ]; then
-    local not_testable_list
-    not_testable_list=$(IFS=' '; echo "${not_testable_scripts[*]}")
+    printf -v not_testable_list '%s ' "${not_testable_scripts[@]}"
+    # Trim trailing space from printf
+    not_testable_list="${not_testable_list% }"
     printInfoMsg "Not Testable: $not_testable_count"
     printInfoMsg "  $not_testable_list"
   else

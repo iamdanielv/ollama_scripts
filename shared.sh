@@ -843,9 +843,10 @@ print_test_summary() {
     # Unset any mock functions passed as arguments
     if [[ $# -gt 0 ]]; then
         # The -f flag is important to unset functions.
+        # Using -- prevents arguments like "-f" from being interpreted as options.
         # Redirecting stderr to /dev/null suppresses "not found" errors if a mock
         # wasn't defined (e.g., due to a test suite being skipped).
-        unset -f "$@" &>/dev/null
+        unset -f -- "$@" &>/dev/null
     fi
 
     if [[ $failures -eq 0 ]]; then exit 0; else exit 1; fi
