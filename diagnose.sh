@@ -239,13 +239,23 @@ run_diagnostics() {
         ss -tlpn 2>&1 | sed 's/^/    /'
     else
         # The script is already running as root via ensure_root.
-        # We use awk to select specific columns and column to align them.
-        # The header (NR==1) is handled separately because its word count differs from data rows.
+        # We use awk to parse the output and `column` to format it into a table.
+        # The awk script extracts the process name from the verbose output, e.g.,
+        # from 'users:(("ollama",pid=1234,fd=3))' it extracts 'ollama'.
         local ss_output
         ss_output=$(ss -tlpn 2>&1 | awk '
-            NR==1 { print $1, "Local-Address:Port", "Peer-Address:Port", $NF; next }
-            { print $1, $4, $5, $6 }
-        ' | column -t)
+            # Print a clean header.
+            NR==1 { print "Local Address\tPeer Address\tProcess"; next }
+            # Process data rows. $4 is Local Address, $5 is Peer Address, $6 is Process.
+            {
+                process = $6
+                # Find the string inside the first pair of quotes.
+                if (match(process, /"[^"]+"/)) {
+                    process = substr(process, RSTART + 1, RLENGTH - 2)
+                }
+                print $4 "\t" $5 "\t" process
+            }
+        ' | column -t -s $'\t')
         local exit_code=${PIPESTATUS[0]} # Get exit code of `ss`, not `column`
 
         if [[ $exit_code -ne 0 ]]; then
