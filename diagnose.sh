@@ -44,8 +44,10 @@ _print_diag_header() {
 # Runs a command and prints its output, indented.
 # If the command fails, it prints an error message.
 # Usage: _run_and_print "Description" [sudo] "command" "arg1" "arg2" ...
+# It uses the `timeout` command (if available) to prevent hanging.
 _run_and_print() {
     local desc="$1"
+    local timeout_duration="10s"
     shift
     # If the command was 'sudo', we just discard it since we are already root.
     if [[ "$1" == "sudo" ]]; then
@@ -62,9 +64,27 @@ _run_and_print() {
         return
     fi
 
-    # Execute command, capturing output and exit code
-    output=$("${cmd[@]}" 2>&1)
+    # Execute command with a timeout to prevent the script from hanging.
+    # The timeout command is part of coreutils and should be available on most systems.
+    local exec_cmd=()
+    if _check_command_exists "timeout"; then
+        exec_cmd=("timeout" "$timeout_duration")
+    fi
+    exec_cmd+=("${cmd[@]}")
+
+    output=$("${exec_cmd[@]}" 2>&1)
     local exit_code=$?
+
+    # The `timeout` command returns exit code 124 when the command times out.
+    if [[ $exit_code -eq 124 ]]; then
+        printMsg "${C_L_YELLOW}Timed out after ${timeout_duration}${T_RESET}"
+        if [[ -n "$output" ]]; then
+            while IFS= read -r line; do
+                printf '    %s\n' "$line"
+            done <<< "$output"
+        fi
+        return
+    fi
 
     if [[ $exit_code -eq 0 ]]; then
         if [[ -n "$output" ]]; then
