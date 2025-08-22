@@ -88,14 +88,14 @@ After it starts, open the link provided (usually `http://localhost:3000`) and fo
 | Script | Description |
 |---|---|
 | `./diagnose.sh` | 🩺 Generates diagnostic report of the system, services, and configurations to help with troubleshooting. |
-| `./check-status.sh` | 🔄 Checks the status of Ollama and OpenWebUI. Can also list models (`--models`), watch loaded models (`--watch`), or run self-tests (`--test`). |
+| `./check-status.sh` | 🔄 Checks the status of Ollama and OpenWebUI. Can also list installed models (`--models`), watch currently loaded models in real-time (`--watch`), or run self-tests (`--test`). |
 
 ### 🤖 Ollama Management Scripts
 
 | Script | Description |
 |---|---|
 | `./install-ollama.sh` | 📦 Installs or updates Ollama. Can also be run with `--version` to check for updates without installing. |
-| `./manage-models.sh` | ⚙️ An interactive script to list, pull (add), and delete local Ollama models. |
+| `./manage-models.sh` | ⚙️ An interactive script to list, pull, update, and delete local Ollama models. |
 | `./logs-ollama.sh` | 📜 A convenient wrapper to view the Ollama service logs using `journalctl`. |
 | `./restart-ollama.sh` | 🔄 Sometimes on wake from sleep, the `ollama` service will go into an inconsistent state. This script stops, resets GPU state (if applicable), and restarts the Ollama service using `systemd`. |
 | `./stop-ollama.sh` | 🛑 Stops the Ollama service. |
@@ -107,8 +107,8 @@ After it starts, open the link provided (usually `http://localhost:3000`) and fo
 | Script | Description |
 |---|---|
 | `./openwebui/start-openwebui.sh` | ⚡ Starts the OpenWebUI Docker containers in detached mode. |
-| `./openwebui/stop-openwebui.sh`  | 🛑 Stops the OpenWebUI Docker containers. |
-| `./openwebui/update-openwebui.sh`  | ⬆️ Pulls the latest Docker images for OpenWebUI. If new images are downloaded, it will prompt you to restart the service. |
+| `./openwebui/stop-openwebui.sh` | 🛑 Stops the OpenWebUI Docker containers. |
+| `./openwebui/update-openwebui.sh` | ⬆️ Pulls the latest Docker images for OpenWebUI and prompts for a restart if an update is found. |
 
 ---
 
@@ -306,6 +306,14 @@ This script is a simple wrapper that passes arguments directly to `journalctl -u
 
 Press `Ctrl+C` to stop following the logs. This script is a simple wrapper and requires a `systemd`-based system.
 
+### `./logs-ollama.sh` Available Flags
+
+| Flag | Alias | Description |
+|---|---|---|
+| `[journalctl_options]` | | Any valid options for `journalctl` (e.g., `-f`, `-n 100`). |
+| `--help` | `-h` | Shows the help message. |
+| `--test` | `-t` | Runs a self-test to check for dependencies. |
+
 ---
 
 ## 🌐 OpenWebUI Management
@@ -359,6 +367,14 @@ If you want to start the containers again manually, you can re-run the start scr
 ./openwebui/start-openwebui.sh
 ```
 
+#### Available Flags
+
+| Flag | Alias | Description |
+|---|---|---|
+| `--test` | `-t` | Runs internal self-tests for script functions. |
+| `--help` | `-h` | Shows the help message. |
+
+
 ### 🛠️ Configuration
 
 To customize ports, create a `.env` file in the root of the project directory. The scripts will automatically load it.
@@ -395,6 +411,13 @@ This will print a detailed report to your terminal. For sharing, it's best to sa
 ```
 
 You can then share the contents of `report.txt` when creating a bug report or asking for help.
+
+### `./diagnose.sh` Available Flags
+
+| Flag | Alias | Description |
+|---|---|---|
+| `--output <file>` | `-o <file>` | Saves the report to the specified file instead of printing it to the terminal. |
+| `--help` | `-h` | Shows the help message. |
 
 ---
 
