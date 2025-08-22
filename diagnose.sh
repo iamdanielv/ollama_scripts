@@ -218,11 +218,24 @@ run_diagnostics() {
 
             if [[ -n "$compose_cmd" ]]; then # compose_cmd is defined in "Dependency Versions"
                 printMsgNoNewline "\n  ${C_L_CYAN}Container Status:${T_RESET}"
-                echo
-                run_webui_compose ps | sed 's/^/    /'
+                local container_status
+                container_status=$(run_webui_compose ps 2>&1)
+                # Check if output is empty or just a header line
+                if [[ -z "$container_status" || $(echo "$container_status" | wc -l) -le 1 ]]; then
+                    echo -e "\n    ${C_L_YELLOW}No running containers found.${T_RESET}"
+                else
+                    echo
+                    echo "$container_status" | sed 's/^/    /'
+                fi
 
                 printMsg "\n  ${C_L_CYAN}OpenWebUI Logs (last 20 lines):${T_RESET}"
-                run_webui_compose logs --tail=20 | sed 's/^/    /'
+                local container_logs
+                container_logs=$(run_webui_compose logs --tail=20 2>&1)
+                if [[ -z "$container_logs" ]]; then
+                    echo "    ${C_L_YELLOW}No logs available${T_RESET}"
+                else
+                    echo "$container_logs" | sed 's/^/    /'
+                fi
             fi
         fi
     fi
