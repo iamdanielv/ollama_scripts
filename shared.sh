@@ -622,6 +622,101 @@ check_systemd_service_exists() {
     return 0
 }
 
+# (Private) The core logic for non-interactive mode (e.g., in CI/CD).
+# Runs a command, captures its output, and prints a simple status.
+# Arguments:
+#   $1 - Description of the task.
+#   $@ - The command and its arguments.
+# Returns: The exit code of the command.
+# Sets global SPINNER_OUTPUT.
+_run_with_spinner_non_interactive() {
+    local desc="$1"
+    shift
+    local cmd=("$@")
+
+    printMsgNoNewline "    ${T_INFO_ICON} ${desc}... " >&2
+    # Run the command in the foreground, capturing its output.
+    # The `if` statement checks the exit code of the command substitution.
+    if SPINNER_OUTPUT=$("${cmd[@]}" 2>&1); then
+        echo -e "${C_L_GREEN}Done.${T_RESET}" >&2
+        return 0
+    else
+        local exit_code=$?
+        echo -e "${C_RED}Failed.${T_RESET}" >&2
+        # Print the captured error output for debugging in non-interactive environments.
+        while IFS= read -r line; do
+            printf '    %s\n' "$line"
+        done <<< "$SPINNER_OUTPUT" >&2
+        return $exit_code
+    fi
+}
+
+# (Private) The core logic for the interactive spinner.
+# Runs a command in the background, shows an animation, and captures output.
+# Arguments:
+#   $1 - Description of the task.
+#   $@ - The command and its arguments.
+# Returns: The exit code of the command.
+# Sets global SPINNER_OUTPUT.
+_run_with_spinner_interactive() {
+    local desc="$1"
+    shift
+    local cmd=("$@")
+    local temp_output_file
+    temp_output_file=$(mktemp)
+    if [[ ! -f "$temp_output_file" ]]; then
+        printErrMsg "Failed to create a temporary file with mktemp." >&2
+        printMsg "    ${T_INFO_ICON} This can be caused by permission issues in /tmp or if 'mktemp' is not installed." >&2
+        return 1
+    fi
+
+    local spinner_chars="⣾⣷⣯⣟⡿⢿⣻⣽"
+    local i=0
+
+    # Run the command in the background, redirecting its output to the temp file.
+    "${cmd[@]}" &> "$temp_output_file" &
+    local pid=$!
+
+    # Hide cursor and set a trap to restore it on exit or interrupt.
+    tput civis
+    trap 'tput cnorm; rm -f "$temp_output_file"; exit 130' INT TERM
+
+    # Initial spinner print
+    printMsgNoNewline "    ${C_L_BLUE}${spinner_chars:0:1}${T_RESET} ${desc}" >&2
+
+    while ps -p $pid > /dev/null; do
+        echo -ne "\r\e[2K" >&2 # Clear the current line
+        local current_output_line
+        current_output_line=$(tail -n 1 "$temp_output_file" 2>/dev/null | tr -d '\r' || true)
+        echo -ne "    ${C_L_BLUE}${spinner_chars:$i:1}${T_RESET} ${desc}" >&2
+        if [[ -n "$current_output_line" ]]; then
+            echo -ne " ${C_GRAY}[${current_output_line:0:70}]${T_RESET}" >&2
+        fi
+        i=$(((i + 1) % ${#spinner_chars}))
+        sleep 0.1
+    done
+
+    wait $pid
+    local exit_code=$?
+
+    SPINNER_OUTPUT=$(<"$temp_output_file")
+    rm "$temp_output_file"
+
+    tput cnorm
+    trap - INT TERM
+
+    clear_current_line >&2
+    if [[ $exit_code -eq 0 ]]; then
+        printOkMsg "${desc}" >&2
+    else
+        printErrMsg "Task failed: ${desc}" >&2
+        while IFS= read -r line; do
+            printf '    %s\n' "$line"
+        done <<< "$SPINNER_OUTPUT" >&2
+    fi
+    return $exit_code
+}
+
 # A function to display a spinner while a command runs in the background.
 # It detects if it's running in an interactive terminal and disables the
 # spinner animation if it's not, falling back to simpler output.
@@ -631,104 +726,11 @@ check_systemd_service_exists() {
 # The captured stdout is stored in the global variable SPINNER_OUTPUT.
 SPINNER_OUTPUT=""
 run_with_spinner() {
-    local desc="$1"
-    shift
-    local cmd=("$@")
-    local temp_output_file
-    # Create a temporary file and check for failure.
-    temp_output_file=$(mktemp)
-    if [[ ! -f "$temp_output_file" ]]; then
-        printErrMsg "Failed to create a temporary file with mktemp." >&2
-        printMsg "    ${T_INFO_ICON} This can be caused by permission issues in /tmp or if 'mktemp' is not installed." >&2
-        return 1 # Return a non-zero exit code
-    fi
-
-    # --- Non-Interactive Mode ---
-    # If not in an interactive terminal (e.g., in a script or CI/CD),
-    # run the command without the spinner animation for cleaner logs.
     if [[ ! -t 1 ]]; then
-        printMsgNoNewline "    ${T_INFO_ICON} ${desc}... " >&2
-        # Run the command in the foreground, capturing its output.
-        if SPINNER_OUTPUT=$("${cmd[@]}" 2>&1); then
-            # Using echo -e to process potential backspaces from the previous line
-            echo -e "${C_L_GREEN}Done.${T_RESET}" >&2
-            rm "$temp_output_file"
-            return 0
-        else
-            local exit_code=$?
-            echo -e "${C_RED}Failed.${T_RESET}" >&2
-            rm "$temp_output_file"
-            # The error message will be printed by the calling context if needed
-            # based on the non-zero exit code.
-            return $exit_code
-        fi
-    fi
-
-    # --- Interactive Mode ---
-    local spinner_chars="⣾⣷⣯⣟⡿⢿⣻⣽"
-    local i=0
-
-    # Run the command in the background, redirecting its output to the temp file.
-    "${cmd[@]}" &> "$temp_output_file" &
-    local pid=$!
-
-    # Hide cursor and set a trap to restore it on exit or interrupt.
-tput civis
-trap 'tput cnorm; rm -f "$temp_output_file"; exit 130' INT TERM
-
-    # Initial spinner print
-    printMsgNoNewline "    ${C_L_BLUE}${spinner_chars:0:1}${T_RESET} ${desc}" >&2
-
-    while ps -p $pid > /dev/null; do
-        # Clear the current line and move cursor to the beginning
-        echo -ne "\r\e[2K" >&2
-
-        # Get the last line of output from the temp file.
-        # `tr -d '\r'` is important to strip carriage returns from docker's progress bars.
-        local current_output_line
-        current_output_line=$(tail -n 1 "$temp_output_file" 2>/dev/null | tr -d '\r' || true)
-
-        # Print the spinner and description
-        echo -ne "    ${C_L_BLUE}${spinner_chars:$i:1}${T_RESET} ${desc}" >&2
-
-        # If there is any output, show a truncated version of the last line.
-        if [[ -n "$current_output_line" ]]; then
-            # Truncate to 70 characters to prevent line wrapping
-            echo -ne " ${C_GRAY}[${current_output_line:0:70}]${T_RESET}" >&2
-        fi
-
-        i=$(((i + 1) % ${#spinner_chars}))
-        sleep 0.1
-    done
-
-    # Wait for the command to finish and get its exit code
-    wait $pid
-    local exit_code=$?
-
-    # Read the output from the temp file into the global variable
-    SPINNER_OUTPUT=$(<"$temp_output_file")
-    rm "$temp_output_file"
-
-    # Show cursor again and clear the trap
-    tput cnorm
-    trap - INT TERM
-
-    # Overwrite the spinner line with the final status message
-    clear_current_line >&2
-    if [[ $exit_code -eq 0 ]]; then
-        printOkMsg "${desc}" >&2
+        _run_with_spinner_non_interactive "$@"
     else
-        # In case of failure, the spinner line is already cleared.
-        # We print the error message on a new line for clarity.
-        printErrMsg "Task failed: ${desc}" >&2
-        # Indent the captured output for readability.
-        # A while-read loop is more efficient for large variables than piping to sed.
-        while IFS= read -r line; do
-            printf '    %s\n' "$line"
-        done <<< "$SPINNER_OUTPUT" >&2
+        _run_with_spinner_interactive "$@"
     fi
-
-    return $exit_code
 }
 
 # --- Test Framework ---

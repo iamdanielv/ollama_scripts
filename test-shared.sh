@@ -277,6 +277,86 @@ test_validate_env_file() {
     rm "$test_file"
 }
 
+test_run_with_spinner() {
+    printTestSectionHeader "Testing run_with_spinner and its helpers"
+
+    # --- Test _run_with_spinner_non_interactive ---
+    printTestSectionHeader "--- Non-Interactive Mode ---"
+
+    # Scenario 1: Success
+    local stderr_file
+    stderr_file=$(mktemp)
+    SPINNER_OUTPUT="" # Reset global
+    _run_with_spinner_non_interactive "Non-interactive success" echo "Success!" 2> "$stderr_file"
+    local exit_code_s1=$?
+    local stderr_output
+    stderr_output=$(<"$stderr_file")
+    rm "$stderr_file"
+
+    _run_test "[[ $exit_code_s1 -eq 0 ]]" 0 "Non-interactive success returns 0"
+    _run_string_test "$SPINNER_OUTPUT" "Success!" "Non-interactive success captures stdout"
+    _run_test '[[ "$stderr_output" == *"Done."* ]]' 0 "Non-interactive success prints 'Done.'"
+
+    # Scenario 2: Failure
+    stderr_file=$(mktemp)
+    SPINNER_OUTPUT="" # Reset global
+    # Use bash -c to create a command that fails and prints to stderr
+    _run_with_spinner_non_interactive "Non-interactive failure" bash -c 'echo "Error!" >&2; exit 42' 2> "$stderr_file"
+    local exit_code_s2=$?
+    stderr_output=$(<"$stderr_file")
+    rm "$stderr_file"
+
+    _run_test "[[ $exit_code_s2 -eq 42 ]]" 0 "Non-interactive failure returns correct exit code"
+    _run_string_test "$SPINNER_OUTPUT" "Error!" "Non-interactive failure captures stderr"
+    _run_test '[[ "$stderr_output" == *"Failed."* && "$stderr_output" == *"Error!"* ]]' 0 "Non-interactive failure prints 'Failed' and the error"
+
+    # --- Test _run_with_spinner_interactive ---
+    printTestSectionHeader "--- Interactive Mode ---"
+
+    # Mock tput to prevent it from messing with the test terminal
+    tput() { :; }
+    export -f tput
+
+    # Scenario 3: Success
+    stderr_file=$(mktemp)
+    SPINNER_OUTPUT="" # Reset global
+    # Run directly, redirecting stderr. The function's internal trap will be handled correctly.
+    _run_with_spinner_interactive "Interactive success" bash -c 'echo "Interactive OK"' 2> "$stderr_file"
+    local exit_code_s3=$?
+    local stderr_output_raw
+    stderr_output_raw=$(<"$stderr_file")
+    rm "$stderr_file"
+    # Clean the raw output, removing ANSI escape codes and carriage returns for stable testing.
+    local clean_stderr
+    clean_stderr=$(echo "$stderr_output_raw" | sed -E 's/\x1b\[[0-9;?]*[a-zA-Z]//g' | tr -d '\r')
+
+    _run_test "[[ $exit_code_s3 -eq 0 ]]" 0 "Interactive success returns 0"
+    _run_string_test "$SPINNER_OUTPUT" "Interactive OK" "Interactive success captures stdout"
+    _run_test "[[ \"$clean_stderr\" == *\"[✓] Interactive success\"* ]]" 0 "Interactive success prints OK message"
+
+    # Scenario 4: Failure
+    stderr_file=$(mktemp)
+    SPINNER_OUTPUT="" # Reset global
+    _run_with_spinner_interactive "Interactive failure" bash -c 'echo "Interactive Error" >&2; exit 88' 2> "$stderr_file"
+    local exit_code_s4=$?
+    stderr_output_raw=$(<"$stderr_file")
+    rm "$stderr_file"
+    clean_stderr=$(echo "$stderr_output_raw" | sed -E 's/\x1b\[[0-9;?]*[a-zA-Z]//g' | tr -d '\r')
+
+    _run_test "[[ $exit_code_s4 -eq 88 ]]" 0 "Interactive failure returns correct exit code"
+    _run_string_test "$SPINNER_OUTPUT" "Interactive Error" "Interactive failure captures stderr"
+    _run_test "[[ \"$clean_stderr\" == *\"[✗] Task failed: Interactive failure\"* && \"$clean_stderr\" == *\"Interactive Error\"* ]]" 0 "Interactive failure prints FAIL message and error"
+
+    # Scenario 5: mktemp failure
+    mktemp() { return 1; }
+    export -f mktemp
+    # This test doesn't need to capture output, as it's testing an early exit.
+    _run_test '_run_with_spinner_interactive "mktemp fail" echo "wont run" &>/dev/null' 1 "Interactive mode fails if mktemp fails"
+
+    # Cleanup mocks
+    unset -f tput mktemp
+}
+
 # --- Main Test Runner ---
 
 main() {
@@ -301,6 +381,7 @@ main() {
     test_check_network_exposure
     test_check_ollama_installed
 	test_validate_env_file
+    test_run_with_spinner
 
     # --- Test Summary ---
     printTestSectionHeader "Test Summary:"
