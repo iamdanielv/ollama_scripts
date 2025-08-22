@@ -90,6 +90,11 @@ run_diagnostics() {
     _print_diag_header "System Information"
     _run_and_print "OS Version" "cat" "/etc/os-release"
     _run_and_print "Kernel Version" "uname" "-a"
+    # Check user groups, which is important for Docker permissions.
+    # We check for the original user who ran sudo, not root.
+    local original_user=${SUDO_USER:-$USER}
+    _run_and_print "User Groups for '${original_user}'" "id" "-nG" "$original_user"
+
     _run_and_print "CPU Info" "lscpu"
     _run_and_print "Memory Usage" "free" "-h"
     _run_and_print "Disk Usage" "df" "-h"
