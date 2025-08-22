@@ -69,14 +69,18 @@ _run_and_print() {
     if [[ $exit_code -eq 0 ]]; then
         if [[ -n "$output" ]]; then
             echo
-            echo "$output" | sed 's/^/    /'
+            while IFS= read -r line; do
+                printf '    %s\n' "$line"
+            done <<< "$output"
         else
             echo -e "\n    ${C_L_YELLOW}(No output)${T_RESET}"
         fi
     else
         printMsg "${C_RED}Failed (code: $exit_code)${T_RESET}"
         if [[ -n "$output" ]]; then
-            echo "$output" | sed 's/^/    /'
+            while IFS= read -r line; do
+                printf '    %s\n' "$line"
+            done <<< "$output"
         fi
     fi
 }
