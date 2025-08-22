@@ -23,12 +23,21 @@ _is_script_testable() {
     # It looks for patterns like:
     #   -t|--test) in a case statement
     #   if ... [[ "$1" == "-t" || ... ]]
-    # It ignores lines starting with #.
-    if grep -q -E '^\s*\|?\s*(-t|--test).*\)|^\s*[^#]*if.*["'\''](-t|--test)["'\'']' "$script_path"; then
+    # The regex for 'case' is designed to avoid false positives from command
+    # substitutions like `var=$(... command -t)`. It does this by excluding lines
+    # that contain an equals sign ('=') or are comments ('#') before the flag.
+
+    # Check for case statement patterns like: -t) or -t|--test)
+    if grep -q -E '^\s*[^#=)'\'']*(-t|--test)\b[^)]*\)' "$script_path"; then
         return 0 # Testable
-    else
-        return 1 # Not testable
     fi
+
+    # Check for if statement patterns like: if [[ "$1" == "-t" ]]
+    if grep -q -E 'if\s+.*["'\''](-t|--test)["'\'']' "$script_path"; then
+        return 0 # Testable
+    fi
+
+    return 1 # Not testable
 }
 
 run_tests() {
@@ -44,12 +53,40 @@ run_tests() {
     # --- Create Test Files ---
     # Testable cases
     echo 'case "$1" in -t|--test) exit 0 ;; esac' > "$temp_dir/testable_case.sh"
+    echo 'case "$1" in -t) exit 0 ;; esac' > "$temp_dir/testable_case_single.sh"
+    echo '    -t|--test) # indented case' > "$temp_dir/testable_case_indent.sh"
+
+    # More specific testable cases for '-t'
+    echo 'case "$1" in -t|--other) exit 0;; esac' > "$temp_dir/testable_case_t_first.sh"
+    echo 'case "$1" in --other|-t) exit 0;; esac' > "$temp_dir/testable_case_t_last.sh"
+    echo '    -t) # indented case with only -t' > "$temp_dir/testable_case_indent_single.sh"
+
+    # Whitespace variations
+    echo 'case "$1" in -t  |--test) exit 0;; esac' > "$temp_dir/testable_case_space_before_pipe.sh"
+    echo 'case "$1" in -t|  --test) exit 0;; esac' > "$temp_dir/testable_case_space_after_pipe.sh"
+    echo 'case "$1" in -t  |  --test  ) exit 0;; esac' > "$temp_dir/testable_case_many_spaces.sh"
+    echo '  -t) # indented with spaces' > "$temp_dir/testable_case_indent_spaces.sh"
+
+    # Tests for if statements
     echo 'if [[ "$1" == "-t" ]]; then exit 0; fi' > "$temp_dir/testable_if.sh"
     echo 'if [[ "$1" == "--test" ]]; then exit 0; fi' > "$temp_dir/testable_if_long.sh"
     echo 'if [[ "$a" == "b" || "$1" == "--test" ]]; then exit 0; fi' > "$temp_dir/testable_if_or.sh"
-    echo '    -t|--test) # indented case' > "$temp_dir/testable_case_indent.sh"
+
+    # Multi-line case statement tests
+    cat <<- 'EOF' > "$temp_dir/testable_case_multiline_full.sh"
+		#!/bin/bash
+		case "$1" in
+		    -h|--help) echo "Help"; exit 0 ;;
+		    -t|--test)
+		        echo "Running tests"
+		        exit 0
+		        ;;
+		    *) echo "Default"; exit 1 ;;
+		esac
+	EOF
 
     # Not-testable cases
+    echo 'case "$1" in --teaast) exit 0 ;; esac' > "$temp_dir/not_testable_substring.sh"
     echo 'echo "no test flag"' > "$temp_dir/not_testable_simple.sh"
     echo '# This is a comment about -t|--test)' > "$temp_dir/not_testable_comment.sh"
     echo 'echo "this is a test"' > "$temp_dir/not_testable_word.sh"
@@ -60,17 +97,43 @@ run_tests() {
     chmod 000 "$unreadable_file"
 
     # This script's own path for testing the --check flag
-    local script_path="${BASH_SOURCE[0]}"
-
+    local script_path
+    # If BASH_SOURCE[0] doesn't contain a slash, it's a bare command name
+    # that was found via the PATH or run by `bash script.sh`.
+    # Prepend './' to make it executable from the current directory for the test.
+    if [[ "${BASH_SOURCE[0]}" != */* ]]; then
+        script_path="./${BASH_SOURCE[0]}"
+    else
+        script_path="${BASH_SOURCE[0]}"
+    fi
     # --- Run Assertions ---
-    printTestSectionHeader "Testing script detection logic"
-    _run_test "_is_script_testable '$temp_dir/testable_case.sh'" 0 "Detects 'case' statement"
+    # testing for case
+    printTestSectionHeader "Testing script detection logic for -- case --"
+    _run_test "_is_script_testable '$temp_dir/testable_case.sh'" 0 "Detects 'case' statement with -t|--test"
+    _run_test "_is_script_testable '$temp_dir/testable_case_single.sh'" 0 "Detects 'case' statement with just -t"
+    _run_test "_is_script_testable '$temp_dir/testable_case_indent.sh'" 0 "Detects indented 'case' statement"
+    _run_test "_is_script_testable '$temp_dir/testable_case_t_first.sh'" 0 "Detects 'case' with -t as first option"
+    _run_test "_is_script_testable '$temp_dir/testable_case_t_last.sh'" 0 "Detects 'case' with -t as last option"
+    _run_test "_is_script_testable '$temp_dir/testable_case_indent_single.sh'" 0 "Detects indented 'case' with only -t"
+
+    printTestSectionHeader "Testing whitespace variations"
+    _run_test "_is_script_testable '$temp_dir/testable_case_space_before_pipe.sh'" 0 "Detects 'case' with space before pipe"
+    _run_test "_is_script_testable '$temp_dir/testable_case_space_after_pipe.sh'" 0 "Detects 'case' with space after pipe"
+    _run_test "_is_script_testable '$temp_dir/testable_case_many_spaces.sh'" 0 "Detects 'case' with multiple spaces"
+    _run_test "_is_script_testable '$temp_dir/testable_case_indent_spaces.sh'" 0 "Detects indented 'case' with spaces"
+
+    # testing for if
+    printTestSectionHeader "Testing script detection logic for -- if --"
     _run_test "_is_script_testable '$temp_dir/testable_if.sh'" 0 "Detects 'if' statement with -t"
     _run_test "_is_script_testable '$temp_dir/testable_if_long.sh'" 0 "Detects 'if' statement with --test"
     _run_test "_is_script_testable '$temp_dir/testable_if_or.sh'" 0 "Detects 'if' statement with ||"
-    _run_test "_is_script_testable '$temp_dir/testable_case_indent.sh'" 0 "Detects indented 'case' statement"
 
+    printTestSectionHeader "Testing multi-line case statements"
+    _run_test "_is_script_testable '$temp_dir/testable_case_multiline_full.sh'" 0 "Detects multi-line 'case' statement"
+   
+    # Testing that files are reported as NOT Testable
     printTestSectionHeader "Testing non-testable scripts are skipped"
+    _run_test "_is_script_testable '$temp_dir/not_testable_substring.sh'" 1 "Skips substring matches like --teaast"
     _run_test "_is_script_testable '$temp_dir/not_testable_simple.sh'" 1 "Skips script with no test flag"
     _run_test "_is_script_testable '$temp_dir/not_testable_comment.sh'" 1 "Skips commented out test flag"
     _run_test "_is_script_testable '$temp_dir/not_testable_word.sh'" 1 "Skips the word 'test'"
@@ -130,7 +193,7 @@ main() {
   trap 'rm -f "$test_output_file"' EXIT
 
   local -a all_scripts
-  mapfile -t all_scripts < <(find . -maxdepth 1 -name "*.sh" -type f -not -name "$(basename "$0")" -not -name "shared.sh" | sort)
+  mapfile -t all_scripts < <(find . -maxdepth 1 -name "*.sh" -type f | sort)
   local testable_scripts=()
   local not_testable_scripts=()
   local failed_scripts=()
