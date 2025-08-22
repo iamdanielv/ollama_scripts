@@ -721,9 +721,11 @@ trap 'tput cnorm; rm -f "$temp_output_file"; exit 130' INT TERM
         # In case of failure, the spinner line is already cleared.
         # We print the error message on a new line for clarity.
         printErrMsg "Task failed: ${desc}" >&2
-        # Indent the captured output for readability
-        # Use printf to avoid "Argument list too long" for very large outputs.
-        printf "%s\n" "${SPINNER_OUTPUT}" | sed 's/^/    /' >&2
+        # Indent the captured output for readability.
+        # A while-read loop is more efficient for large variables than piping to sed.
+        while IFS= read -r line; do
+            printf '    %s\n' "$line"
+        done <<< "$SPINNER_OUTPUT" >&2
     fi
 
     return $exit_code
@@ -779,7 +781,9 @@ _run_test() {
         _test_failed "${description}" "Expected: ${expected_code}, Got: ${actual_code}"
         # Print the captured output on failure for debugging
         if [[ -n "$output" ]]; then
-            echo -e "${output}" | sed 's/^/    /'
+            while IFS= read -r line; do
+                printf '    %s\n' "$line"
+            done <<< "$output"
         fi
         ((failures++))
     fi
