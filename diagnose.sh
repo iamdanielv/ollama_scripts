@@ -251,24 +251,25 @@ run_diagnostics() {
         printMsg "    ${C_L_YELLOW}Cannot format (awk or column not found). Showing raw output.${T_RESET}"
         ss -tlpn 2>&1 | sed 's/^/    /'
     else
-        # The script is already running as root via ensure_root.
-        # We use awk to parse the output and `column` to format it into a table.
+        # The script is already running as root.
+        # We use awk to parse the output, sort to order it, and `column` to format it.
         # The awk script extracts the process name from the verbose output, e.g.,
         # from 'users:(("ollama",pid=1234,fd=3))' it extracts 'ollama'.
         local ss_output
         ss_output=$(ss -tlpn 2>&1 | awk '
             # Print a clean header.
             NR==1 { print "Local Address\tPeer Address\tProcess"; next }
-            # Process data rows. $4 is Local Address, $5 is Peer Address, $6 is Process.
+            # Process data rows. $4 is Local Address, $5 is Peer Address, $6 is Process info.
             {
                 process = $6
                 # Find the string inside the first pair of quotes.
                 if (match(process, /"[^"]+"/)) {
                     process = substr(process, RSTART + 1, RLENGTH - 2)
                 }
-                print $4 "\t" $5 "\t" process
+                # Print as TSV for the next stage in the pipeline.
+                printf "%s\t%s\t%s\n", $4, $5, process
             }
-        ' | column -t -s $'\t')
+        ' | (read -r header; echo "$header"; sort -t $'\t' -k3) | column -t -s $'\t')
         local exit_code=${PIPESTATUS[0]} # Get exit code of `ss`, not `column`
 
         if [[ $exit_code -ne 0 ]]; then
