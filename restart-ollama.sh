@@ -78,7 +78,7 @@ main() {
     "$(dirname "$0")/stop-ollama.sh"
 
     # --- Reset NVIDIA UVM (if applicable) ---
-    if [ "$IS_NVIDIA" = true ]; then
+    if [[ "$IS_NVIDIA" == "true" ]]; then
         printMsgNoNewline "${T_INFO_ICON} Reloading ${C_L_BLUE}'nvidia_uvm'${T_RESET} module...\t"
         # Unload the module. Ignore error if not loaded.
         rmmod nvidia_uvm &>/dev/null || true
