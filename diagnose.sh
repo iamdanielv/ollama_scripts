@@ -232,7 +232,7 @@ run_diagnostics() {
         fi
     fi
     
-    printMsg "  ${C_L_CYAN}Firewall Status:${T_RESET}"
+    printMsg "\n  ${C_L_CYAN}Firewall Status:${T_RESET}"
     if _check_command_exists "ufw"; then
         ufw status verbose | sed 's/^/    /'
     elif _check_command_exists "firewall-cmd"; then
