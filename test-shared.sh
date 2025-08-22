@@ -151,11 +151,10 @@ test_read_single_char() {
     # and capture the output. We use printf for reliable escape sequence handling.
 
     # Scenario 1: Simple character
+    # We send "ab" to ensure it only reads the first character.
     local output
-    output=$(printf "a" | read_single_char)
-    _run_string_test "$output" "a" "Handles a simple character"
-
-    # Scenario 2: Lone ESC key
+    output=$(printf "ab" | read_single_char)
+    _run_string_test "$output" "a" "Handles a simple character and ignores subsequent ones"
     output=$(printf "%s" "$KEY_ESC" | read_single_char)
     _run_string_test "$output" "$KEY_ESC" "Handles a lone ESC key"
 
@@ -174,6 +173,33 @@ test_read_single_char() {
     # Scenario 6: Arrow key sequence (Left Arrow)
     output=$(printf "%s" "$KEY_LEFT" | read_single_char)
     _run_string_test "$output" "$KEY_LEFT" "Handles an arrow key sequence (Left)"
+
+    printTestSectionHeader "--- Corner Cases ---"
+
+    # Scenario 7: Enter key
+    output=$(printf "\n" | read_single_char)
+    _run_string_test "$output" "$KEY_ENTER" "Handles the Enter key"
+
+    # Scenario 8: Tab key
+    output=$(printf "\t" | read_single_char)
+    _run_string_test "$output" "$KEY_TAB" "Handles the Tab key"
+
+    # Scenario 9: Longer function key sequence
+    local KEY_F5=$'\e[15~'
+    output=$(printf "%s" "$KEY_F5" | read_single_char)
+    _run_string_test "$output" "$KEY_F5" "Handles a longer function key sequence (F5)"
+
+    # Scenario 10: Backspace key
+    output=$(printf "%s" "$KEY_BACKSPACE" | read_single_char)
+    _run_string_test "$output" "$KEY_BACKSPACE" "Handles the Backspace key"
+
+    # Scenario 11: Home key
+    output=$(printf "%s" "$KEY_HOME" | read_single_char)
+    _run_string_test "$output" "$KEY_HOME" "Handles the Home key sequence"
+
+    # Scenario 12: Delete key
+    output=$(printf "%s" "$KEY_DELETE" | read_single_char)
+    _run_string_test "$output" "$KEY_DELETE" "Handles the Delete key sequence"
 }
 
 test_check_network_exposure() {

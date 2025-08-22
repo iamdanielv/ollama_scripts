@@ -45,6 +45,11 @@ export KEY_DOWN=$'\e[B'
 export KEY_RIGHT=$'\e[C'
 export KEY_LEFT=$'\e[D'
 export KEY_ENTER="ENTER"
+export KEY_TAB=$'\t'
+export KEY_BACKSPACE=$'\x7f' # ASCII DEL character for backspace
+export KEY_HOME=$'\e[H'
+export KEY_END=$'\e[F'
+export KEY_DELETE=$'\e[3~'
 
 # --- Banner Control ---
 # This logic helps determine if a script is being called by another script in this project.
@@ -146,28 +151,26 @@ clear_lines_up() {
 #     # Handle enter
 #   fi
 read_single_char() {
-    local choice
+    local char
     local seq
     # -s: silent, -n 1: one char, -r: raw
-    read -rsn1 choice
+    IFS= read -rsn1 char
     # Check for Enter key, which read consumes but returns as an empty string.
-    if [[ -z "$choice" ]]; then
+    if [[ -z "$char" ]]; then
         echo "$KEY_ENTER"
         return
     fi
     # If the character is ESC, check for a following sequence.
-    if [[ "$choice" == "$KEY_ESC" ]]; then
-        # Read with a very short timeout to see if other characters follow.
-        # If read succeeds, it's an escape sequence (like an arrow key).
-        if read -rsn2 -t 0.01 seq; then
-            echo "${choice}${seq}"
-        else
-            # If read times out, it was a lone ESC key.
-            echo "$choice"
-        fi
-    else
-        echo "$choice"
+    if [[ "$char" == "$KEY_ESC" ]]; then
+        # Try to read the rest of an escape sequence with a short timeout.
+        # This loop will continue to read as long as characters are
+        # available in the input buffer without a significant delay.
+        # This is more robust than reading a fixed number of characters.
+        while IFS= read -rsn1 -t 0.001 seq; do
+            char+="$seq"
+        done
     fi
+    echo "$char"
 }
 
 # --- Error Handling & Traps ---
@@ -756,9 +759,14 @@ _run_string_test() {
     if [[ "$actual" == "$expected" ]]; then
         _test_passed "${description}"
     else
+        # Sanitize output for printing to prevent control characters from
+        # messing up the terminal output. `printf %q` is perfect for this.
+        local sanitized_expected sanitized_actual
+        sanitized_expected=$(printf '%q' "$expected")
+        sanitized_actual=$(printf '%q' "$actual")
         _test_failed "${description}"
-        printErrMsg "    Expected: '${expected}'"
-        printErrMsg "    Got:      '${actual}'"
+        printErrMsg "    Expected: ${sanitized_expected}"
+        printErrMsg "    Got:      ${sanitized_actual}"
         ((failures++))
     fi
 }
