@@ -366,33 +366,56 @@ delete_models_interactive() {
 # This is intended for non-interactive use via flags.
 # Usage: delete_model <model_name>
 delete_model() {
-    local model_name="$1"
+    local model_name_or_num="$1"
     local ollama_port=${OLLAMA_PORT:-11434}
 
-    if [[ -z "$model_name" ]]; then
-        printErrMsg "delete_model function requires a model name."
+    if [[ -z "$model_name_or_num" ]]; then
+        printErrMsg "delete_model function requires a model name or number."
         return 1
     fi
 
+    local model_to_delete="$model_name_or_num"
+
+    # Check if input is a number, and if so, resolve it to a model name.
+    if [[ "$model_name_or_num" =~ ^[0-9]+$ ]]; then
+        local models_json
+        if ! models_json=$(get_ollama_models_json); then
+            printErrMsg "Could not fetch model list to resolve number."
+            return 1
+        fi
+
+        local -a model_names
+        mapfile -t model_names < <(echo "$models_json" | jq -r '.models | sort_by(.name)[] | .name')
+
+        local num_models=${#model_names[@]}
+        local index=$((model_name_or_num - 1))
+
+        if [[ $index -lt 0 || $index -ge $num_models ]]; then
+            printErrMsg "Invalid model number: ${model_name_or_num}. Please choose a number between 1 and ${num_models}."
+            return 1
+        fi
+        model_to_delete="${model_names[index]}"
+    fi
+
     # Confirm the deletion
-    if ! prompt_yes_no "Are you sure you want to delete the model: ${C_L_RED}${model_name}${T_RESET}?" "n"; then
+    if ! prompt_yes_no "Are you sure you want to delete the model: ${C_L_RED}${model_to_delete}${T_RESET}?" "n"; then
         printInfoMsg "Deletion cancelled."
         return 1
     fi
 
     # Call the Ollama API to delete the model
-    local payload
     local delete_url="http://localhost:${ollama_port}/api/delete"
-    local desc="Deleting model ${C_L_RED}${model_name}${T_RESET}"
-    payload=$(jq -n --arg name "$model_name" '{name: $name}')
+    local desc="Deleting model ${C_L_RED}${model_to_delete}${T_RESET}"
+    local payload; payload=$(jq -n --arg name "$model_to_delete" '{name: $name}')
     if run_with_spinner "${desc}" curl --silent --show-error --fail -X DELETE -d "$payload" "$delete_url"; then
-        printOkMsg "Successfully deleted model: ${C_L_BLUE}${model_name}${T_RESET}"
+        printOkMsg "Successfully deleted model: ${C_L_BLUE}${model_to_delete}${T_RESET}"
     else
         # The spinner will print the error, but we can add context.
         printInfoMsg "Please check that the model name is correct and that the model exists."
         return 1
     fi
 }
+
 
 # Refreshes the cached model list used in the interactive menu.
 # It calls the shared fetcher function and updates the `cached_models_json`
@@ -547,11 +570,11 @@ test_delete_model() {
     export MOCK_PROMPT_RETURN_CODE=0
     MOCK_SPINNER_CALLED_WITH_CMD=()
     MOCK_PROMPT_CALLED_WITH=""
-    delete_model "2" &>/dev/null
+    delete_model "2" &>/dev/null # gemma is #1, llama3 is #2
     local exit_code_s3=$?
     _run_string_test "$exit_code_s3" "0" "Succeeds when deleting by number"
     # The prompt should contain the resolved model name, which is llama3 (the 2nd in sorted list).
-    _run_test '[[ "$MOCK_PROMPT_CALLED_WITH" == *"llama3"* ]]' 0 "Resolves number to correct model name for prompt"
+    _run_test '[[ "$MOCK_PROMPT_CALLED_WITH" == *"llama3:latest"* ]]' 0 "Resolves number to correct model name for prompt"
 
     # Scenario 4: Delete with invalid number.
     _run_test 'delete_model "99" &>/dev/null' 1 "Fails when given an invalid model number"
