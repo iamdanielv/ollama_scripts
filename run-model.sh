@@ -27,23 +27,74 @@ run_tests() {
     printBanner "Running Self-Tests for run-model.sh"
     initialize_test_suite
 
-    printWarnMsg "No tests implemented yet for run-model.sh"
+    # --- Mock dependencies ---
+    # These will be mocked globally for all tests in this suite.
+    load_project_env() { :; }
+    check_ollama_installed() { return 0; }
+    check_jq_installed() { return 0; }
+    verify_ollama_api_responsive() { return 0; }
+    clear() { :; } # prevent screen clearing during tests
+    
+    # These mocks are controlled by environment variables for each test case.
+    fetch_models_with_spinner() {
+        if [[ "${MOCK_FETCH_MODELS_EXIT_CODE:-0}" -eq 0 ]]; then
+            echo "${MOCK_FETCH_MODELS_JSON:-}"
+            return 0
+        else
+            return 1
+        fi
+    }
+    interactive_single_select_list_models() {
+        if [[ "${MOCK_SELECT_EXIT_CODE:-0}" -eq 0 ]]; then
+            echo "${MOCK_SELECTED_MODEL:-}"
+            return 0
+        else
+            return 1
+        fi
+    }
+    ollama() {
+        if [[ "$1" == "run" ]]; then
+            MOCK_OLLAMA_RUN_CALLED_WITH="$2"
+        fi
+    }
+    export -f load_project_env check_ollama_installed check_jq_installed verify_ollama_api_responsive clear fetch_models_with_spinner interactive_single_select_list_models ollama
 
-    print_test_summary
+    # --- Test Cases ---
+    printTestSectionHeader "Testing main execution logic"
+
+    # Scenario 1: Happy path - select a model and run it.
+    export MOCK_FETCH_MODELS_EXIT_CODE=0 MOCK_FETCH_MODELS_JSON='{"models": [{"name": "llama3"}]}'
+    export MOCK_SELECT_EXIT_CODE=0 MOCK_SELECTED_MODEL="llama3:latest"
+    MOCK_OLLAMA_RUN_CALLED_WITH=""
+    run_model_logic &>/dev/null
+    _run_string_test "$MOCK_OLLAMA_RUN_CALLED_WITH" "llama3:latest" "Calls 'ollama run' with the selected model"
+
+    # Scenario 2: User cancels model selection.
+    export MOCK_SELECT_EXIT_CODE=1
+    MOCK_OLLAMA_RUN_CALLED_WITH=""
+    run_model_logic &>/dev/null
+    _run_string_test "$MOCK_OLLAMA_RUN_CALLED_WITH" "" "Does not call 'ollama run' if selection is cancelled"
+
+    # Scenario 3: No local models are found.
+    export MOCK_FETCH_MODELS_JSON='{"models": []}'
+    MOCK_OLLAMA_RUN_CALLED_WITH=""
+    run_model_logic &>/dev/null
+    _run_string_test "$MOCK_OLLAMA_RUN_CALLED_WITH" "" "Does not call 'ollama run' if no models are found"
+
+    # Scenario 4: Fails to fetch models from API.
+    export MOCK_FETCH_MODELS_EXIT_CODE=1
+    MOCK_OLLAMA_RUN_CALLED_WITH=""
+    _run_test 'run_model_logic &>/dev/null' 1 "Returns with error if model fetch fails"
+    _run_string_test "$MOCK_OLLAMA_RUN_CALLED_WITH" "" "Does not call 'ollama run' if model fetch fails"
+
+    print_test_summary \
+        "load_project_env" "check_ollama_installed" "check_jq_installed" \
+        "verify_ollama_api_responsive" "clear" "fetch_models_with_spinner" \
+        "interactive_single_select_list_models" "ollama"
 }
 
-main() {
-    case "$1" in
-        -h|--help)
-            show_help
-            exit 0
-            ;;
-        -t|--test)
-            run_tests
-            exit 0
-            ;;
-    esac
-
+# Contains the core logic of the script, using `return` instead of `exit` to be testable.
+run_model_logic() {
     load_project_env "$(dirname "$0")/.env"
 
     # --- Pre-flight checks ---
@@ -55,14 +106,14 @@ main() {
     local models_json
     if ! models_json=$(fetch_models_with_spinner "Fetching model list..."); then
         printInfoMsg "Could not retrieve model list from Ollama API."
-        exit 1
+        return 1
     fi
 
     # Check if there are any models to run.
     if [[ -z "$(echo "$models_json" | jq '.models | .[]')" ]]; then
         printWarnMsg "No local models found to run."
         printInfoMsg "Use ${C_L_BLUE}./manage-models.sh -p <model_name>${T_RESET} to pull a model first."
-        exit 0
+        return 0
     fi
 
     clear_lines_up 1 # remove "Fetching model..." from output
@@ -75,7 +126,7 @@ main() {
 
     if [[ $exit_code -ne 0 ]]; then
         printInfoMsg "No model selected. Aborting."
-        exit 1
+        return 1
     fi
 
     # --- Run model ---
@@ -89,6 +140,22 @@ main() {
 
     printMsg "${C_BLUE}${DIV}${T_RESET}"
     printOkMsg "Finished session with ${C_L_BLUE}${model_to_run}${T_RESET}."
+    return 0
+}
+
+main() {
+    case "$1" in
+        -h|--help)
+            show_help
+            exit 0
+            ;;
+        -t|--test)
+            run_tests
+            exit 0
+            ;;
+    esac
+    run_model_logic
+    exit $?
 }
 
 # --- Script Execution ---
