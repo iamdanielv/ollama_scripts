@@ -36,6 +36,13 @@ show_help() {
     printMsg "  $(basename "$0") -o diag-report.txt"
 }
 
+# (Private) Prints a block of text, indented.
+# Usage: _print_indented_output "text"
+_print_indented_output() {
+    # Use sed to prepend spaces to each line
+    echo "$1" | sed 's/^/    /'
+}
+
 # Prints a section header for the report.
 _print_diag_header() {
     printMsg "\n${C_L_WHITE}===== ${1} =====${T_RESET}"
@@ -78,30 +85,22 @@ _run_and_print() {
     # The `timeout` command returns exit code 124 when the command times out.
     if [[ $exit_code -eq 124 ]]; then
         printMsg "${C_L_YELLOW}Timed out after ${timeout_duration}${T_RESET}"
-        if [[ -n "$output" ]]; then
-            while IFS= read -r line; do
-                printf '    %s\n' "$line"
-            done <<< "$output"
-        fi
-        return
-    fi
-
-    if [[ $exit_code -eq 0 ]]; then
+    elif [[ $exit_code -eq 0 ]]; then
         if [[ -n "$output" ]]; then
             echo
-            while IFS= read -r line; do
-                printf '    %s\n' "$line"
-            done <<< "$output"
+            _print_indented_output "$output"
         else
+            # Use echo -e to handle the newline and color codes correctly.
             echo -e "\n    ${C_L_YELLOW}(No output)${T_RESET}"
         fi
+        return # Success case, so we return early.
     else
         printMsg "${C_RED}Failed (code: $exit_code)${T_RESET}"
-        if [[ -n "$output" ]]; then
-            while IFS= read -r line; do
-                printf '    %s\n' "$line"
-            done <<< "$output"
-        fi
+    fi
+
+    # This block now handles printing output for both timeout and failure cases.
+    if [[ -n "$output" ]]; then
+        _print_indented_output "$output"
     fi
 }
 
