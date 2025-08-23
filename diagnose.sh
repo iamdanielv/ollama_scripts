@@ -307,8 +307,39 @@ run_diagnostics() {
     # --- Network Diagnostics ---
     _print_diag_header "Network Diagnostics"
 
+    # Focused check for key service ports
+    printMsg "\n  ${C_L_CYAN}Key Service Ports:${T_RESET}"
+    if ! _check_command_exists "ss"; then
+        printMsg "    ${C_L_YELLOW}ss command not found, skipping port checks.${T_RESET}"
+    else
+        # Check for Ollama
+        local ollama_listen_info
+        ollama_listen_info=$(ss -tlpn 2>/dev/null | grep '("ollama"')
+        if [[ -n "$ollama_listen_info" ]]; then
+            # A process can listen on multiple sockets (e.g., IPv4 and IPv6).
+            # We use xargs to join the multiple lines from awk into a single line.
+            local listen_addrs
+            listen_addrs=$(echo "$ollama_listen_info" | awk '{print $4}' | xargs)
+            printMsg "    ${T_OK_ICON} Ollama is listening on: ${C_L_BLUE}${listen_addrs}${T_RESET}"
+        else
+            printMsg "    ${T_ERR_ICON} Ollama process not found listening on any port."
+        fi
+
+        # Check for OpenWebUI (via docker-proxy)
+        local webui_port=${OPEN_WEBUI_PORT:-3000}
+        local webui_listen_info
+        webui_listen_info=$(ss -tlpn 2>/dev/null | grep -F ":${webui_port} ")
+        if [[ -n "$webui_listen_info" ]]; then
+            local listen_addrs
+            listen_addrs=$(echo "$webui_listen_info" | awk '{print $4}' | xargs)
+            printMsg "    ${T_OK_ICON} A service (likely OpenWebUI) is listening on port ${webui_port}: ${C_L_BLUE}${listen_addrs}${T_RESET}"
+        else
+            printMsg "    ${T_WARN_ICON} No process found listening on the expected OpenWebUI port (${webui_port})."
+        fi
+    fi
+
     # Special handling for `ss` to format output for readability.
-    printMsg "\n  ${C_L_CYAN}Listening Ports:${T_RESET}"
+    printMsg "\n  ${C_L_CYAN}All Listening Ports (via ss):${T_RESET}"
     if ! _check_command_exists "ss"; then
         printMsg "    ${C_L_YELLOW}ss command not found.${T_RESET}"
     elif ! _check_command_exists "awk" || ! _check_command_exists "column"; then
@@ -387,6 +418,12 @@ main() {
     # Since some diagnostic commands require root, we ensure it at the start.
     # This is simpler than checking for sudo access for individual commands.
     ensure_root "Root privileges are needed to gather full network and firewall status." "$@"
+
+    # Load environment variables from .env file at project root, if it exists.
+    # This makes custom ports (OLLAMA_PORT, OPEN_WEBUI_PORT) available.
+    if _find_project_root && [[ -f "${_PROJECT_ROOT}/.env" ]]; then
+        load_project_env "${_PROJECT_ROOT}/.env"
+    fi
 
     # If an output file is specified, redirect all output of run_diagnostics to it.
     if [[ -n "$output_file" ]]; then
