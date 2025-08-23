@@ -376,7 +376,12 @@ _render_multi_select_table() {
         printMsg "${pointer} ${highlight_start}${line}${highlight_end}$(tput el)" >/dev/tty
     done
     printMsg "${C_BLUE}${DIV}${T_RESET}" >/dev/tty
-    printMsg "  ${C_WHITE}${C_L_CYAN}↑↓${C_WHITE} to navigate | ${C_L_CYAN}space${C_WHITE} to select | ${C_L_GREEN}enter${C_WHITE} to confirm | ${C_L_YELLOW}q/esc${C_WHITE} to cancel${T_RESET}" >/dev/tty
+    local help_text="  ${C_L_MAGENTA}↑↓${C_WHITE}(Move) | ${C_L_MAGENTA}SPACE${C_WHITE}(Select)"
+    if [[ "$with_all_option" == "true" ]]; then
+        help_text+=" | ${C_L_GREEN}(A)ll${C_WHITE}(Toggle)"
+    fi
+    help_text+=" | ${C_L_MAGENTA}ENTER${C_WHITE}(Confirm) | ${C_L_YELLOW}Q/ESC${C_WHITE}(Cancel)${T_RESET}"
+    printMsg "${help_text}" >/dev/tty
     printMsg "${C_BLUE}${DIV}${T_RESET}" >/dev/tty
 }
 
@@ -519,6 +524,14 @@ interactive_multi_select_list_models() {
             ' '|"h"|"l")
                 _handle_multi_select_toggle "$with_all_option" "$current_option" "$num_options" selected_options
                 state_changed=true
+                ;;
+            "a"|"A")
+                if [[ "$with_all_option" == "true" ]]; then
+                    # This is a special shortcut to toggle the "All" option (at index 0)
+                    # without having to navigate to it.
+                    _handle_multi_select_toggle "$with_all_option" "0" "$num_options" selected_options
+                    state_changed=true
+                fi
                 ;;
             "$KEY_ENTER")
                 break # Exit loop to process selections
