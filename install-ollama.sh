@@ -1,15 +1,16 @@
 #!/bin/bash
 # Install or update Ollama.
 
+SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 # --- Source the shared libraries ---
 # shellcheck source=./shared.sh
-if ! source "$(dirname "$0")/shared.sh"; then
+if ! source "${SCRIPT_DIR}/shared.sh"; then
     echo "Error: Could not source shared.sh. Make sure it's in the same directory." >&2
     exit 1
 fi
 
 # shellcheck source=./ollama-helpers.sh
-if ! source "$(dirname "$0")/ollama-helpers.sh"; then
+if ! source "${SCRIPT_DIR}/ollama-helpers.sh"; then
     echo "Error: Could not source ollama-helpers.sh. Make sure it's in the same directory." >&2
     exit 1
 fi
@@ -224,7 +225,7 @@ run_tests() {
 # --- Main Execution ---
 
 main() {
-    load_project_env "$(dirname "$0")/.env"
+    load_project_env "${SCRIPT_DIR}/.env"
 
     # --- Non-Interactive Argument Handling ---
     if [[ -n "$1" ]]; then

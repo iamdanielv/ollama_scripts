@@ -8,8 +8,12 @@
 #
 
 # Load shared functions
-# shellcheck disable=SC1091
-source "$(dirname "$0")/shared.sh"
+SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+# shellcheck source=./shared.sh
+if ! source "${SCRIPT_DIR}/shared.sh"; then
+    echo "Error: Could not source shared.sh. Make sure it's in the same directory." >&2
+    exit 1
+fi
 
 # --- Self-Test Functions ---
 

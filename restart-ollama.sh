@@ -8,15 +8,16 @@ set -e
 # The return value of a pipeline is the status of the last command to exit with a non-zero status.
 set -o pipefail
 
+SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 # --- Source the shared libraries ---
 # shellcheck source=./shared.sh
-if ! source "$(dirname "$0")/shared.sh"; then
+if ! source "${SCRIPT_DIR}/shared.sh"; then
     echo "Error: Could not source shared.sh. Make sure it's in the same directory." >&2
     exit 1
 fi
 
 # shellcheck source=./ollama-helpers.sh
-if ! source "$(dirname "$0")/ollama-helpers.sh"; then
+if ! source "${SCRIPT_DIR}/ollama-helpers.sh"; then
     echo "Error: Could not source ollama-helpers.sh. Make sure it's in the same directory." >&2
     exit 1
 fi
@@ -52,7 +53,7 @@ main() {
         esac
     fi
 
-    load_project_env "$(dirname "$0")/.env"
+    load_project_env "${SCRIPT_DIR}/.env"
 
     ensure_root "This script requires root privileges for systemd and kernel modules." "$@"
     printBanner "Ollama Service Restarter"
@@ -75,7 +76,7 @@ main() {
 
     # --- Stop Ollama Service ---
     # Call the stop script directly. It handles its own output and banners.
-    "$(dirname "$0")/stop-ollama.sh"
+    "${SCRIPT_DIR}/stop-ollama.sh"
 
     # --- Reset NVIDIA UVM (if applicable) ---
     if [[ "$IS_NVIDIA" == "true" ]]; then

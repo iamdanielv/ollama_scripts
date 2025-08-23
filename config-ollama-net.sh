@@ -2,14 +2,15 @@
 # Configure Ollama network exposure (localhost vs. network).
 
 # Source common utilities
+SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 # shellcheck source=./shared.sh
-if ! source "$(dirname "$0")/shared.sh"; then
+if ! source "${SCRIPT_DIR}/shared.sh"; then
     echo "Error: Could not source shared.sh. Make sure it's in the same directory." >&2
     exit 1
 fi
 
 # shellcheck source=./ollama-helpers.sh
-if ! source "$(dirname "$0")/ollama-helpers.sh"; then
+if ! source "${SCRIPT_DIR}/ollama-helpers.sh"; then
     echo "Error: Could not source ollama-helpers.sh. Make sure it's in the same directory." >&2
     exit 1
 fi
@@ -153,7 +154,7 @@ main() {
 
 _main_logic() {
     prereq_checks "sudo" "systemctl"
-    load_project_env "$(dirname "$0")/.env"
+    load_project_env "${SCRIPT_DIR}/.env"
 
     local command="$1"
 
