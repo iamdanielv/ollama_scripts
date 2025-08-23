@@ -861,9 +861,6 @@ _run_with_spinner_interactive() {
     tput civis
     trap 'tput cnorm; rm -f "$temp_output_file"; exit 130' INT TERM
 
-    # Initial spinner print
-    printMsgNoNewline "    ${C_L_BLUE}${spinner_chars:0:1}${T_RESET} ${desc}" >&2
-
     while ps -p $pid > /dev/null; do
         echo -ne "\r\e[2K" >&2 # Clear the current line
         local current_output_line
