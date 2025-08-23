@@ -296,17 +296,18 @@ delete_model() {
 # variable in the main interactive loop's scope.
 # This function is defined here to avoid passing the variable name as an argument.
 # Usage: refresh_model_cache
+# Returns: 0 on success, 1 on failure.
 refresh_model_cache() {
     local new_json
     if new_json=$(fetch_models_with_spinner "Refreshing model list..."); then
-        clear_lines_up 1
         cached_models_json="$new_json"
+        return 0 # Success
+    else
+        return 1 # Failure
     fi
 }
 
 # --- Test Suites ---
-
-
 
 test_pull_model() {
     printTestSectionHeader "Testing pull_model function"
@@ -581,32 +582,46 @@ main() {
     # This trap temporarily overwrites the one in shared.sh to add cursor restoration.
     # It ensures that if the user presses Ctrl+C, the cursor is made visible again.
     trap 'tput cnorm; script_interrupt_handler' INT TERM
-
-    # Interactive mode
-    while true; do
+    
+    # This function redraws the entire screen. It's called after an action is completed.
+    redraw_full_screen() {
         clear
         printBanner "Ollama Model Manager"
         list_models "$cached_models_json"
         clear_lines_up 1
         show_main_menu
+    }
 
+    # Initial draw
+    redraw_full_screen
+
+    # Interactive loop
+    while true; do
         # Read a single character, handling ESC and arrow keys.
         local choice=$(read_single_char)
 
-        # The menu takes up 2 lines (menu, div).
-        # We clear it before executing an action for a cleaner interface.
-        clear_lines_up 2
+        # By default, we assume an action is taken that requires a pause and redraw.
+        # For invalid keys, we'll skip this.
+        local action_taken=true
 
         case "$choice" in
             r|R)
-                refresh_model_cache
-                continue
+                # If refresh succeeds, it's silent, so we can redraw immediately
+                # without waiting for user acknowledgement.
+                if refresh_model_cache; then
+                    action_taken=false
+                    redraw_full_screen
+                fi
+                # If it fails, an error is printed. We let action_taken remain true
+                # so the main loop will pause for user input.
                 ;; 
             p|P)
+                clear_lines_up 2
                 pull_model "" # Pass empty string to trigger interactive prompt
                 refresh_model_cache
                 ;;
             u|U)
+                # These clear the screen themselves, so no pre-clearing needed.
                 update_models_interactive "$cached_models_json"
                 refresh_model_cache
                 ;; 
@@ -615,17 +630,22 @@ main() {
                 refresh_model_cache
                 ;; 
             q|Q|"${KEY_ESC}") # Quit
+                clear_lines_up 2
                 printOkMsg "Goodbye!"
                 break
                 ;; 
             *)
-                # Silently ignore invalid keypresses, the loop will redraw.
+                # Invalid key. Do nothing, don't pause, don't redraw.
+                action_taken=false
                 continue
                 ;; 
         esac
-        # Pause for user to see the output of pull/delete before clearing.
-        echo
-        read -r -p "$(echo -e "${T_INFO_ICON} Press Enter to continue...")"
+
+        if [[ "$action_taken" == "true" ]]; then
+            echo
+            read -r -p "$(echo -e "${T_INFO_ICON} Press Enter to continue...")"
+            redraw_full_screen
+        fi
     done
 
     # Restore cursor and reset the trap to the default behavior from shared.sh
