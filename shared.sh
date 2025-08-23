@@ -16,6 +16,7 @@ export C_L_CYAN='\e[36;1m'
 export C_L_WHITE='\e[37;1m'
 
 # Background Colors
+export BG_BLACK='\e[40;1m'
 export BG_RED='\e[41;1m'
 export BG_GREEN='\e[42;1m'
 export BG_YELLOW='\e[43;1m'
@@ -346,6 +347,181 @@ prompt_yes_no() {
                 ;;
         esac
     done
+}
+
+
+##
+# Displays an interactive multi-select menu.
+# Allows the user to select multiple options using arrow keys and the spacebar.
+#
+# ## Usage:
+#   local -a options=("All" "Option 1" "Option 2" "Option 3")
+#   # if "All" is provided it enables toggling of all elements
+#   local menu_output
+#   menu_output=$(interactive_multi_select_menu "Select items:" "${options[@]}")
+#   local exit_code=$?
+#
+#   if [[ $exit_code -eq 0 ]]; then
+#     mapfile -t selected_indices <<< "$menu_output"
+#     echo "You selected the following options:"
+#     for index in "${selected_indices[@]}"; do
+#       echo " - ${options[index]} (index: $index)"
+#     done
+#   else
+#     echo "No options were selected or the selection was cancelled."
+#   fi
+#
+# ## Arguments:
+#  $1 - The prompt to display to the user.
+#  $@ - The list of options for the menu.
+#       If "All" is the first entry, it enables toggling of all elements
+#
+# ## Returns:
+#  On success (Enter pressed with selections):
+#    - Prints the indices of the selected options to stdout, one per line.
+#    - Returns with exit code 0.
+#  On cancellation (ESC or q pressed) or no selection:
+#    - Prints nothing to stdout.
+#    - Returns with exit code 1.
+##
+interactive_multi_select_menu() {
+    # Ensure the script is running in an interactive terminal
+    # When called via command substitution `$(...)`, stdout is not a tty.
+    # We must check stdin (`-t 0`) instead and redirect all interactive
+    # output to `/dev/tty` to ensure it appears on the user's screen.
+    if ! [[ -t 0 ]]; then
+        printErrMsg "Not an interactive session." >&2
+        return 1
+    fi
+
+    local prompt="$1"
+    shift
+    local -a options=("$@")
+    local num_options=${#options[@]}
+
+    if [[ $num_options -eq 0 ]]; then
+        printErrMsg "No options provided to menu." >&2
+        return 1
+    fi
+
+    # State variables
+    local current_option=0
+    local -a selected_options=()
+    for ((i=0; i<num_options; i++)); do
+        selected_options[i]=0
+    done
+
+    # If the first option is "All", enable special select/deselect all behavior.
+    local has_all_option=0
+    if [[ "${options[0]}" == "All" ]]; then
+        has_all_option=1
+    fi
+
+    # Helper function to print the menu
+    _print_menu() {
+        printMsg "${T_QST_ICON} ${prompt}" >/dev/tty
+        printMsg "    ${C_WHITE}(Use ${C_L_CYAN}↑ ↓${C_WHITE} to navigate, ${C_L_CYAN}space${C_WHITE} to select, ${C_L_GREEN}enter${C_WHITE} to confirm, ${C_L_YELLOW}q/esc${C_WHITE} to cancel)${T_RESET}" >&2
+        for i in "${!options[@]}"; do
+            local pointer=" "
+            local checkbox="[ ]"
+            local highlight_start=""
+            local highlight_end=""
+
+            if [[ ${selected_options[i]} -eq 1 ]]; then
+                checkbox="${C_GREEN}${T_BOLD}[✓]"
+            fi
+
+            if [[ $i -eq $current_option ]]; then
+                pointer="${T_BOLD}${C_L_MAGENTA}❯${T_RESET}"
+                highlight_start="$(tput rev)" # reverse video
+                highlight_end="$(tput sgr0)"  # reset attributes
+            fi
+
+            # `tput el` clears to the end of the line to prevent artifacts from varying line lengths.
+            printMsg "  ${pointer} ${highlight_start}${checkbox} ${options[i]} ${highlight_end} ${T_RESET}$(tput el)" >/dev/tty
+        done
+    }
+
+    # Hide cursor and set a trap to restore it on exit
+    tput civis >/dev/tty
+    # The EXIT trap will run on any exit, including from the INT trap in shared.sh
+    trap 'tput cnorm >/dev/tty' EXIT
+
+    # Initial draw of the menu
+    _print_menu
+
+    local key
+    local menu_height=$((num_options + 2)) # +2 for prompt and help line
+
+    while true; do
+        # Move cursor up to the start of the menu, so we can overwrite it.
+        tput cuu "${menu_height}" >/dev/tty
+
+        # Read from the controlling terminal, not stdin which might be redirected
+        key=$(read_single_char </dev/tty)
+
+        case "$key" in
+            "$KEY_UP"|"k") current_option=$(( (current_option - 1 + num_options) % num_options ));;
+            "$KEY_DOWN"|"j") current_option=$(( (current_option + 1) % num_options ));;
+            ' '|"h"|"l") 
+                selected_options[current_option]=$(( 1 - selected_options[current_option] ))
+
+                # Handle "Select All" / "Deselect All" logic if "All" option exists
+                if [[ $has_all_option -eq 1 ]]; then
+                    if [[ $current_option -eq 0 ]]; then
+                        # "All" was toggled, so set all other options to its state
+                        local all_state=${selected_options[0]}
+                        for i in "${!options[@]}"; do
+                            selected_options[i]=$all_state
+                        done
+                    else
+                        # Another item was toggled, update "All" status
+                        local all_selected=1
+                        # Loop from 1 to skip the "All" option itself
+                        for ((i=1; i<num_options; i++)); do
+                            if [[ ${selected_options[i]} -eq 0 ]]; then
+                                all_selected=0
+                                break
+                            fi
+                        done
+                        selected_options[0]=$all_selected
+                    fi
+                fi
+                ;;
+            "$KEY_ENTER"|"$KEY_ESC"|"q")
+                # Before exiting, clear the menu from the screen.
+                # The cursor is at the top of the menu area.
+                for ((i=0; i < menu_height; i++)); do
+                    tput el >/dev/tty # Clear the line
+                    tput cud1 >/dev/tty # Move down to the next line
+                done
+                # Move cursor back to the starting line.
+                tput cuu "${menu_height}" >/dev/tty
+
+                if [[ "$key" == "$KEY_ENTER" ]]; then
+                    break
+                else
+                    return 1
+                fi
+                ;;
+        esac
+        # Redraw the menu with updated state
+        _print_menu
+    done
+
+    local has_selection=0
+    for i in "${!options[@]}"; do
+        if [[ ${selected_options[i]} -eq 1 ]]; then
+            has_selection=1
+            echo "$i"
+        fi
+    done
+
+    if [[ $has_selection -eq 1 ]]; then
+        return 0
+    else
+        return 1
+    fi
 }
 
 # Ensures the script is running from its own directory.
