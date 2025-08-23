@@ -238,18 +238,18 @@ print_ollama_models_table() {
     while IFS=$'\t' read -r name size_gb modified; do
         # Determine background color for size
         # < 3GB: Green (Small), 3-6GB: Blue (Medium), 6-9GB: Yellow (Large), >= 9GB: Red (Extra Large)
-        local size_bg_color="${BG_GREEN}" # Default to Small
+        local size_bg_color="${C_GREEN}" # Default to Small
         local size_gb_int=${size_gb%.*}
 
         if [[ "$size_gb_int" -ge 9 ]]; then
-            size_bg_color="${BG_RED}"      # Extra Large
+            size_bg_color="${C_RED}"      # Extra Large
         elif [[ "$size_gb_int" -ge 6 ]]; then
-            size_bg_color="${BG_YELLOW}"   # Large
+            size_bg_color="${C_YELLOW}"   # Large
         elif [[ "$size_gb_int" -ge 3 ]]; then
-            size_bg_color="${BG_BLUE}"     # Medium
+            size_bg_color="${C_BLUE}"     # Medium
         fi
 
-        printf "  %-5s ${C_L_CYAN}%-40s${T_RESET} ${size_bg_color}${C_BLACK}%10s${T_RESET}  ${C_MAGENTA}%-15s${T_RESET}\n" "$i" "$name" "${size_gb} GB" "$modified"
+        printf "  %-5s ${C_L_CYAN}%-40s${T_RESET} ${T_BOLD}${size_bg_color}%10s${T_RESET}  ${C_MAGENTA}%-15s${T_RESET}\n" "$i" "$name" "${size_gb} GB" "$modified"
         ((i++))
     done <<< "$models_tsv" # Use a "here string" for cleaner input to loop
 
