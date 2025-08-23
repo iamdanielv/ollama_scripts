@@ -652,8 +652,8 @@ main() {
         esac
 
         if [[ "$action_taken" == "true" ]]; then
-            echo
-            read -r -p "$(echo -e "${T_INFO_ICON} Press Enter to continue...")"
+            # Use -n 1 to wait for a single key press, -s for silent, -r for raw.
+            read -n 1 -s -r -p "$(echo -e "${T_INFO_ICON} Press any key to continue...")"
             redraw_full_screen
         fi
     done
