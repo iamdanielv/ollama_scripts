@@ -814,7 +814,7 @@ _run_with_spinner_non_interactive() {
     shift
     local cmd=("$@")
 
-    printMsgNoNewline "    ${T_INFO_ICON} ${desc}... " >&2
+    printMsgNoNewline "${desc} " >&2
     # Run the command in the foreground, capturing its output.
     # The `if` statement checks the exit code of the command substitution.
     if SPINNER_OUTPUT=$("${cmd[@]}" 2>&1); then
@@ -865,7 +865,7 @@ _run_with_spinner_interactive() {
         echo -ne "\r\e[2K" >&2 # Clear the current line
         local current_output_line
         current_output_line=$(tail -n 1 "$temp_output_file" 2>/dev/null | tr -d '\r' || true)
-        echo -ne "    ${C_L_BLUE}${spinner_chars:$i:1}${T_RESET} ${desc}" >&2
+        echo -ne " ${C_L_BLUE}${spinner_chars:$i:1}${T_RESET}  ${desc}" >&2
         if [[ -n "$current_output_line" ]]; then
             echo -ne " ${C_GRAY}[${current_output_line:0:70}]${T_RESET}" >&2
         fi
