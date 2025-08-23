@@ -250,6 +250,9 @@ main() {
     if [[ "$exit_code" -eq 0 ]]; then
       printOkMsg "${C_L_GREEN}PASS${T_RESET}: ${C_L_BLUE}$script_name${T_RESET}"
       passed_count=$((passed_count + 1))
+      # For passing tests, show just the summary content (not the header).
+      # This finds the line after "Test Summary", takes non-blank lines, and indents them.
+      awk '/Test Summary/ {f=1; next} f && NF' "$output_file" | sed 's/^/      /'
     else
       printErrMsg "${C_L_RED}FAIL${T_RESET}: ${T_BOLD}$script_name${T_RESET}"
       failed_count=$((failed_count + 1))
