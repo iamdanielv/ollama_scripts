@@ -910,6 +910,70 @@ run_with_spinner() {
     fi
 }
 
+# A function to display a spinner while waiting for a list of background PIDs to complete.
+# It detects if it's running in an interactive terminal and falls back to simpler output if not.
+# Usage: wait_for_pids_with_spinner "Description of task..." pid1 pid2 ...
+# The function returns the exit code of the `wait` command.
+wait_for_pids_with_spinner() {
+    local desc="$1"
+    shift
+    local pids_to_wait_for=("$@")
+
+    # Non-interactive mode
+    if [[ ! -t 1 ]]; then
+        printMsgNoNewline "    ${T_INFO_ICON} ${desc}... " >&2
+        # In non-interactive mode, just wait without a spinner.
+        # The `wait` command will return a non-zero status only if one of the PIDs
+        # is not a valid child process, not if the child process itself fails.
+        if wait "${pids_to_wait_for[@]}"; then
+            echo -e "${C_L_GREEN}Done.${T_RESET}" >&2
+            return 0
+        else
+            local exit_code=$?
+            echo -e "${C_RED}Failed (wait command exit code: $exit_code).${T_RESET}" >&2
+            return $exit_code
+        fi
+    fi
+
+    # Interactive mode
+    _spinner() {
+        local spinner_chars="⣾⣷⣯⣟⡿⢿⣻⣽"
+        local i=0
+        while true; do
+            echo -ne "\r\e[2K" >&2
+            echo -ne "    ${C_L_BLUE}${spinner_chars:$i:1}${T_RESET} ${desc}" >&2
+            i=$(((i + 1) % ${#spinner_chars}))
+            sleep 0.1
+        done
+    }
+
+    tput civis
+    _spinner &
+    local spinner_pid=$!
+
+    # Set a trap to clean up the spinner if the script is interrupted.
+    # This trap is local to this function call.
+    trap 'kill "$spinner_pid" &>/dev/null; tput cnorm; exit 130' INT TERM
+
+    # Wait for all the specified PIDs in the foreground.
+    # The spinner runs in the background.
+    wait "${pids_to_wait_for[@]}"
+    local exit_code=$?
+
+    # Clean up the spinner and the trap
+    kill "$spinner_pid" &>/dev/null
+    tput cnorm
+    trap - INT TERM # remove the temporary trap
+
+    clear_current_line >&2
+    if [[ $exit_code -eq 0 ]]; then
+        printOkMsg "${desc}" >&2
+    else
+        printErrMsg "Wait command failed with exit code ${exit_code} for task: ${desc}" >&2
+    fi
+    return $exit_code
+}
+
 # --- Test Framework ---
 # These are not 'local' so the helper functions can access them.
 test_count=0 # Global test counter
