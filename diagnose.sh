@@ -114,10 +114,18 @@ run_diagnostics() {
     _print_diag_header "System Information"
     _run_and_print "OS Version" "cat" "/etc/os-release"
     _run_and_print "Kernel Version" "uname" "-a"
+
     # Check user groups, which is important for Docker permissions.
     # We check for the original user who ran sudo, not root.
     local original_user=${SUDO_USER:-$USER}
     _run_and_print "User Groups for '${original_user}'" "id" "-nG" "$original_user"
+    # Explicitly check for 'docker' group membership.
+    printMsgNoNewline "\n  ${C_L_CYAN}User in 'docker' group?:${T_RESET} "
+    if id -nG "$original_user" 2>/dev/null | grep -qw "docker"; then
+        printMsg "${C_GREEN}Yes${T_RESET}"
+    else
+        printMsg "${C_L_YELLOW}No${T_RESET} ${C_GRAY}(May need to run Docker commands with sudo)${T_RESET}"
+    fi
 
     _run_and_print "CPU Info" "lscpu"
     _run_and_print "Memory Usage" "free" "-h"
@@ -128,6 +136,7 @@ run_diagnostics() {
     _run_and_print "Bash Version" "bash" "--version"
     _run_and_print "Curl Version" "curl" "--version"
     _run_and_print "Docker Version" "docker" "--version"
+    _run_and_print "Docker Info" "docker" "info"
     local compose_cmd
     # shellcheck disable=SC2207
     if compose_cmd=$(get_docker_compose_cmd 2>/dev/null); then
@@ -163,6 +172,9 @@ run_diagnostics() {
         else
             _run_and_print "Service Status" "systemctl" "status" "ollama.service" "--no-pager"
 
+            # Show the effective environment variables the service is running with.
+            _run_and_print "Effective Environment" "systemctl" "show" "--no-pager" "--property=Environment" "ollama.service"
+
             # The check_network_exposure is a shell function, not an external command.
             # Calling it directly is more robust than trying to export it to a subshell.
             printMsg "\n  ${C_L_CYAN}Network Exposure:${T_RESET} "
@@ -182,6 +194,40 @@ run_diagnostics() {
             done
         else
             printMsg "    ${C_L_GRAY}No override files found.${T_RESET}"
+        fi
+
+        # Ollama Models Directory
+        printMsg "\n  ${C_L_CYAN}Ollama Models Directory:${T_RESET}"
+        if ! _is_systemd_system || ! _is_ollama_service_known; then
+            printMsg "    ${C_GRAY}Cannot determine (not a systemd system or service not found).${T_RESET}"
+        else
+            local ollama_env
+            ollama_env=$(systemctl show --no-pager --property=Environment ollama.service 2>/dev/null)
+            local models_dir
+            models_dir=$(echo "$ollama_env" | grep -o 'OLLAMA_MODELS=[^ ]*' | cut -d'=' -f2 | tr -d '"')
+
+            local source_msg=""
+            if [[ -z "$models_dir" ]]; then
+                # Determine default path based on the service user
+                local ollama_user
+                ollama_user=$(systemctl show --no-pager --property=User --value ollama.service 2>/dev/null)
+                if [[ -z "$ollama_user" || "$ollama_user" == "root" ]]; then
+                    models_dir="/root/.ollama/models"
+                else
+                    # Default user is 'ollama', home is '/usr/share/ollama'
+                    models_dir="/usr/share/ollama/.ollama/models"
+                fi
+                source_msg="${C_GRAY}(default path for user '${ollama_user:-ollama}')${T_RESET}"
+            else
+                source_msg="${C_GRAY}(from OLLAMA_MODELS env var)${T_RESET}"
+            fi
+
+            printMsg "    Path: ${C_L_BLUE}${models_dir}${T_RESET} ${source_msg}"
+            if [[ -d "$models_dir" ]]; then
+                _run_and_print "    Size" "du" "-sh" "$models_dir"
+            else
+                printMsg "    ${C_L_YELLOW}Directory not found.${T_RESET}"
+            fi
         fi
 
         # Ollama Logs
@@ -232,9 +278,27 @@ run_diagnostics() {
                 local container_logs
                 container_logs=$(run_webui_compose logs --tail=20 2>&1)
                 if [[ -z "$container_logs" ]]; then
-                    echo "    ${C_L_YELLOW}No logs available${T_RESET}"
+                    printMsg "    ${C_L_YELLOW}No logs available${T_RESET}"
                 else
                     echo "$container_logs" | sed 's/^/    /'
+                fi
+
+                # Active connectivity check from WebUI container to Ollama
+                printMsg "\n  ${C_L_CYAN}Connectivity from WebUI to Ollama:${T_RESET}"
+                if ! run_webui_compose ps --filter "status=running" --services 2>/dev/null | grep -q "open-webui"; then
+                    printMsg "    ${C_L_YELLOW}Skipped (OpenWebUI container is not running).${T_RESET}"
+                else
+                    local ollama_port=${OLLAMA_PORT:-11434}
+                    local ollama_check_url="http://host.docker.internal:${ollama_port}"
+                    printMsgNoNewline "    - Checking connectivity to ${C_L_BLUE}${ollama_check_url}${T_RESET}... "
+
+                    if run_webui_compose exec -T open-webui curl --silent --fail --head --connect-timeout 5 "${ollama_check_url}" >/dev/null 2>&1; then
+                        printMsg "${C_GREEN}Success${T_RESET}"
+                    else
+                        printMsg "${C_RED}Failed${T_RESET}"
+                        printMsg "      ${C_GRAY}This is a common issue. It can mean Ollama is not configured for network access"
+                        printMsg "      ${C_GRAY}or a firewall is blocking the connection. Try running: ${C_L_BLUE}./config-ollama-net.sh --expose${T_RESET}"
+                    fi
                 fi
             fi
         fi
