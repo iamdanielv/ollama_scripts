@@ -479,7 +479,11 @@ interactive_multi_select_list_models() {
     for ((i=0; i<num_options; i++)); do selected_options[i]=0; done
 
     # 3. Set up interactive environment
-    tput civis >/dev/tty; trap 'tput cnorm >/dev/tty' EXIT
+    # Disable character echoing to prevent user input from flickering on the screen.
+    # The trap ensures that echoing is re-enabled when the function exits.
+    stty -echo
+    tput civis >/dev/tty; trap 'tput cnorm >/dev/tty; stty echo' EXIT
+
     local menu_height=$((num_options + 7)) # Header, footer, etc.
     _render_multi_select_table "$prompt" "$with_all_option" "$current_option" \
         model_names model_sizes model_dates selected_options
@@ -623,7 +627,11 @@ interactive_single_select_list_models() {
     local current_option=0
 
     # 3. Set up interactive environment
-    tput civis >/dev/tty; trap 'tput cnorm >/dev/tty' EXIT
+    # Disable character echoing to prevent user input from flickering on the screen.
+    # The trap ensures that echoing is re-enabled when the function exits.
+    stty -echo
+    tput civis >/dev/tty; trap 'tput cnorm >/dev/tty; stty echo' EXIT
+
     local menu_height=$((num_options + 7)) # Banner(2), header(1), div(1), N lines, div(1), help(1), div(1)
     _render_single_select_table "$prompt" "$current_option" model_names model_sizes model_dates
 
