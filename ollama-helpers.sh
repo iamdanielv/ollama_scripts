@@ -487,37 +487,43 @@ interactive_multi_select_list_models() {
     # 4. Main interactive loop
     local key
     while true; do
-        tput cuu "${menu_height}" >/dev/tty
         key=$(read_single_char </dev/tty)
+        local state_changed=false
 
         case "$key" in
             "$KEY_UP"|"k")
                 current_option=$(( (current_option - 1 + num_options) % num_options ))
+                state_changed=true
                 ;;
             "$KEY_DOWN"|"j")
                 current_option=$(( (current_option + 1) % num_options ))
+                state_changed=true
                 ;;
             ' '|"h"|"l")
                 _handle_multi_select_toggle "$with_all_option" "$current_option" "$num_options" selected_options
+                state_changed=true
                 ;;
             "$KEY_ENTER")
                 break # Exit loop to process selections
                 ;;
             "$KEY_ESC"|"q")
                 # Clean up screen and exit without selection
-                for ((i=0; i < menu_height; i++)); do tput el >/dev/tty; tput cud1 >/dev/tty; done
-                tput cuu "${menu_height}" >/dev/tty
+                clear_lines_up "$menu_height" >/dev/tty
                 return 1
                 ;;
+            *)
+                continue # Ignore other keys and loop without redrawing
+                ;;
         esac
-        # Re-render the table with updated state
-        _render_multi_select_table "$prompt" "$with_all_option" "$current_option" \
-            model_names model_sizes model_dates selected_options
+        if [[ "$state_changed" == "true" ]]; then
+            tput cuu "${menu_height}" >/dev/tty
+            _render_multi_select_table "$prompt" "$with_all_option" "$current_option" \
+                model_names model_sizes model_dates selected_options
+        fi
     done
 
     # 5. Clean up screen and process output
-    for ((i=0; i < menu_height; i++)); do tput el >/dev/tty; tput cud1 >/dev/tty; done
-    tput cuu "${menu_height}" >/dev/tty
+    clear_lines_up "$menu_height" >/dev/tty
 
     _process_multi_select_output "$with_all_option" model_names selected_options
     return $?
@@ -624,25 +630,35 @@ interactive_single_select_list_models() {
     # 4. Main interactive loop
     local key
     while true; do
-        tput cuu "${menu_height}" >/dev/tty
         key=$(read_single_char </dev/tty)
+        local state_changed=false
 
         case "$key" in
-            "$KEY_UP"|"k") current_option=$(( (current_option - 1 + num_options) % num_options ));;
-            "$KEY_DOWN"|"j") current_option=$(( (current_option + 1) % num_options ));;
+            "$KEY_UP"|"k")
+                current_option=$(( (current_option - 1 + num_options) % num_options ))
+                state_changed=true
+                ;;
+            "$KEY_DOWN"|"j")
+                current_option=$(( (current_option + 1) % num_options ))
+                state_changed=true
+                ;;
             "$KEY_ENTER") break ;;
             "$KEY_ESC"|"q")
-                for ((i=0; i < menu_height; i++)); do tput el >/dev/tty; tput cud1 >/dev/tty; done
-                tput cuu "${menu_height}" >/dev/tty
+                clear_lines_up "$menu_height" >/dev/tty
                 return 1
                 ;;
+            *)
+                continue # Ignore other keys and loop without redrawing
+                ;;
         esac
-        _render_single_select_table "$prompt" "$current_option" model_names model_sizes model_dates
+        if [[ "$state_changed" == "true" ]]; then
+            tput cuu "${menu_height}" >/dev/tty
+            _render_single_select_table "$prompt" "$current_option" model_names model_sizes model_dates
+        fi
     done
 
     # 5. Clean up screen and process output
-    for ((i=0; i < menu_height; i++)); do tput el >/dev/tty; tput cud1 >/dev/tty; done
-    tput cuu "${menu_height}" >/dev/tty
+    clear_lines_up "$menu_height" >/dev/tty
 
     echo "${model_names[current_option]}"
     return 0
