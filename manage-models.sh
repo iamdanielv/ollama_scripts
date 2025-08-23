@@ -166,6 +166,141 @@ _perform_model_deletions() {
     fi
 }
 
+# --- Interactive Multi-Select Helpers ---
+
+# Private helper to parse model JSON for the multi-select menu.
+# Populates the provided nameref arrays.
+# Usage: _parse_multi_select_model_data "$models_json" "$with_all" model_names_ref model_sizes_ref model_dates_ref
+_parse_multi_select_model_data() {
+    local models_json="$1"
+    local with_all_option="$2"
+    local -n names_ref="$3"
+    local -n sizes_ref="$4"
+    local -n dates_ref="$5"
+
+    # Parse models into arrays. Sorting is done by jq.
+    mapfile -t names_ref < <(echo "$models_json" | jq -r '.models | sort_by(.name)[] | .name')
+    mapfile -t sizes_ref < <(echo "$models_json" | jq -r '.models | sort_by(.name)[] | .size')
+    mapfile -t dates_ref < <(echo "$models_json" | jq -r '.models | sort_by(.name)[] | .modified_at | .[:10]')
+
+    if [[ ${#names_ref[@]} -eq 0 ]]; then
+        return 1
+    fi
+
+    # Add "All" option if requested
+    if [[ "$with_all_option" == "true" ]]; then
+        names_ref=("All" "${names_ref[@]}")
+        sizes_ref=("" "${sizes_ref[@]}")
+        dates_ref=("" "${dates_ref[@]}")
+    fi
+    return 0
+}
+
+# Private helper to render the interactive model selection table.
+# This is a pure display function.
+# Usage: _render_multi_select_table "Prompt" with_all_flag current_opt_idx names_arr_ref sizes_arr_ref dates_arr_ref selected_arr_ref
+_render_multi_select_table() {
+    local prompt="$1"
+    local with_all_option="$2"
+    local current_option="$3"
+    local -n names_ref="$4"
+    local -n sizes_ref="$5"
+    local -n dates_ref="$6"
+    local -n selected_ref="$7"
+
+    printBanner "${prompt}" >/dev/tty
+    printf "  %-3s %-40s %10s  %-15s\n" "" "NAME" "SIZE" "MODIFIED" >/dev/tty
+    printMsg "${C_BLUE}${DIV}${T_RESET}" >/dev/tty
+
+    for i in "${!names_ref[@]}"; do
+        local pointer=" "; local checkbox="[ ]"; local highlight_start=""; local highlight_end=""
+        if [[ ${selected_ref[i]} -eq 1 ]]; then checkbox="${C_GREEN}${T_BOLD}[✓]"; fi
+
+        if [[ $i -eq $current_option ]]; then pointer="${T_BOLD}${C_L_MAGENTA}❯${T_RESET}"; highlight_start="$(tput rev)"; highlight_end="${T_RESET}"; fi
+
+        local line
+        if [[ "$with_all_option" == "true" && $i -eq 0 ]]; then
+            line=$(printf "%-3s ${highlight_start}${T_BOLD}%-40s %10s${T_RESET}" "${checkbox}" "${names_ref[i]}" "")
+        else
+            local name="${names_ref[i]}"; local size_bytes="${sizes_ref[i]}"; local modified="${dates_ref[i]}"
+            local size_gb; size_gb=$(awk -v size="$size_bytes" 'BEGIN { printf "%.2f", size / 1e9 }')
+            local size_bg_color="${C_GREEN}"; local size_gb_int=${size_gb%.*}
+            if [[ "$size_gb_int" -ge 9 ]]; then size_bg_color="${C_RED}"; elif [[ "$size_gb_int" -ge 6 ]]; then size_bg_color="${C_YELLOW}"; elif [[ "$size_gb_int" -ge 3 ]]; then size_bg_color="${C_BLUE}"; fi
+            line=$(printf "%-3s %-40s ${size_bg_color}%10s${T_RESET}  ${C_MAGENTA}%-15s${T_RESET}" "${checkbox}" "$name" "${size_gb} GB" "$modified")
+        fi
+        printMsg "${pointer} ${highlight_start}${line}${highlight_end}$(tput el)" >/dev/tty
+    done
+    printMsg "${C_BLUE}${DIV}${T_RESET}" >/dev/tty
+    printMsg "  ${C_WHITE}${C_L_CYAN}↑↓${C_WHITE} to navigate | ${C_L_CYAN}space${C_WHITE} to select | ${C_L_GREEN}enter${C_WHITE} to confirm | ${C_L_YELLOW}q/esc${C_WHITE} to cancel${T_RESET}" >/dev/tty
+    printMsg "${C_BLUE}${DIV}${T_RESET}" >/dev/tty
+}
+
+# Private helper to handle the logic of toggling an item in the multi-select menu.
+# Modifies the selected_options array by reference.
+# Usage: _handle_multi_select_toggle with_all_flag current_opt_idx num_options selected_arr_ref
+_handle_multi_select_toggle() {
+    local with_all_option="$1"
+    local current_option="$2"
+    local num_options="$3"
+    local -n selected_ref="$4"
+
+    # Toggle the current option
+    selected_ref[current_option]=$(( 1 - selected_ref[current_option] ))
+
+    # Handle "All" option logic
+    if [[ "$with_all_option" == "true" ]]; then
+        if [[ $current_option -eq 0 ]]; then
+            # If "All" is toggled, set all other options to the same state
+            local all_state=${selected_ref[0]}
+            for ((j=1; j<num_options; j++)); do selected_ref[j]=$all_state; done
+        else
+            # If an individual item is toggled, check if all are now selected
+            # to update the "All" checkbox state.
+            local all_selected=1
+            for ((j=1; j<num_options; j++)); do
+                if [[ ${selected_ref[j]} -eq 0 ]]; then
+                    all_selected=0
+                    break
+                fi
+            done
+            selected_ref[0]=$all_selected
+        fi
+    fi
+}
+
+# Private helper to process the final selections from the multi-select menu.
+# Prints selected model names to stdout and returns an appropriate exit code.
+# Usage: _process_multi_select_output with_all_flag names_arr_ref selected_arr_ref
+_process_multi_select_output() {
+    local with_all_option="$1"
+    local -n names_ref="$2"
+    local -n selected_ref="$3"
+    local num_options=${#names_ref[@]}
+
+    local has_selection=0
+    # If "All" was an option and it was selected, output all model names.
+    if [[ "$with_all_option" == "true" && ${selected_ref[0]} -eq 1 ]]; then
+        for ((i=1; i<num_options; i++)); do
+            echo "${names_ref[i]}"
+        done
+        has_selection=1
+    else
+        # Otherwise, iterate through the selections and output the chosen ones.
+        local start_index=0
+        if [[ "$with_all_option" == "true" ]]; then
+            start_index=1 # Skip the "All" option itself
+        fi
+        for ((i=start_index; i<num_options; i++)); do
+            if [[ ${selected_ref[i]} -eq 1 ]]; then
+                has_selection=1
+                echo "${names_ref[i]}"
+            fi
+        done
+    fi
+
+    if [[ $has_selection -eq 1 ]]; then return 0; else return 1; fi
+}
+
 # Renders an interactive, multi-selectable table of Ollama models.
 # It combines the display of `print_ollama_models_table` with the interactivity
 # of `interactive_multi_select_menu`.
@@ -196,100 +331,64 @@ interactive_multi_select_list_models() {
     local prompt="$1"
     local models_json="$2"
     local with_all_option=false
-    if [[ "$3" == "--with-all" ]]; then
-        with_all_option=true
-    fi
+    [[ "$3" == "--with-all" ]] && with_all_option=true
 
-    # Parse models into arrays. Sorting is done by jq.
+    # 1. Parse model data from JSON into arrays
     local -a model_names model_sizes model_dates
-    mapfile -t model_names < <(echo "$models_json" | jq -r '.models | sort_by(.name)[] | .name')
-    mapfile -t model_sizes < <(echo "$models_json" | jq -r '.models | sort_by(.name)[] | .size')
-    mapfile -t model_dates < <(echo "$models_json" | jq -r '.models | sort_by(.name)[] | .modified_at | .[:10]')
-
-    if [[ ${#model_names[@]} -eq 0 ]]; then
-        return 1
-    fi
-
-    # Add "All" option if requested
-    if [[ "$with_all_option" == "true" ]]; then
-        model_names=("All" "${model_names[@]}")
-        model_sizes=("" "${model_sizes[@]}")
-        model_dates=("" "${model_dates[@]}")
+    if ! _parse_multi_select_model_data "$models_json" "$with_all_option" \
+        model_names model_sizes model_dates; then
+        return 1 # No models found
     fi
     local num_options=${#model_names[@]}
 
-    # State variables
+    # 2. Initialize state
     local current_option=0
     local -a selected_options=()
     for ((i=0; i<num_options; i++)); do selected_options[i]=0; done
 
-    # Helper function to print the table
-    _print_model_table() {
-        printBanner "${prompt}" >/dev/tty
-        printf "  %-3s %-40s %10s  %-15s\n" "" "NAME" "SIZE" "MODIFIED" >/dev/tty
-        printMsg "${C_BLUE}${DIV}${T_RESET}" >/dev/tty
-
-        for i in "${!model_names[@]}"; do
-            local pointer=" "; local checkbox="[ ]"; local highlight_start=""; local highlight_end=""
-            if [[ ${selected_options[i]} -eq 1 ]]; then checkbox="${C_GREEN}${T_BOLD}[✓]"; fi
-
-            # if [[ $i -eq $current_option ]]; then pointer="${T_BOLD}${C_L_MAGENTA}❯${T_RESET}"; highlight_start="$(tput rev)"; highlight_end="$(tput sgr0)"; fi
-            if [[ $i -eq $current_option ]]; then pointer="${T_BOLD}${C_L_MAGENTA}❯${T_RESET}"; highlight_start="$(tput rev)"; highlight_end="${T_RESET}"; fi
-
-            local line
-            if [[ "$with_all_option" == "true" && $i -eq 0 ]]; then
-                # line=$(printf "%-3s ${C_L_WHITE}${T_BOLD}%-40s ${T_RESET}" "${checkbox}" "${model_names[i]}")
-                line=$(printf "%-3s ${highlight_start}${T_BOLD}%-40s %10s${T_RESET}" "${checkbox}" "${model_names[i]}" "")
-            else
-                local name="${model_names[i]}"; local size_bytes="${model_sizes[i]}"; local modified="${model_dates[i]}"
-                local size_gb; size_gb=$(awk -v size="$size_bytes" 'BEGIN { printf "%.2f", size / 1e9 }')
-                local size_bg_color="${C_GREEN}"; local size_gb_int=${size_gb%.*}
-                if [[ "$size_gb_int" -ge 9 ]]; then size_bg_color="${C_RED}"; elif [[ "$size_gb_int" -ge 6 ]]; then size_bg_color="${C_YELLOW}"; elif [[ "$size_gb_int" -ge 3 ]]; then size_bg_color="${C_BLUE}"; fi
-                # line=$(printf "%-3s ${C_L_CYAN}%-40s${T_RESET} ${size_bg_color}${C_BLACK}%10s${T_RESET}  ${C_MAGENTA}%-15s${T_RESET}" "${checkbox}" "$name" "${size_gb} GB" "$modified")
-                # line=$(printf "%-3s %-40s ${size_bg_color}${C_BLACK}%10s${T_RESET}  ${C_MAGENTA}%-15s${T_RESET}" "${checkbox}" "$name" "${size_gb} GB" "$modified")
-                line=$(printf "%-3s %-40s ${size_bg_color}%10s${T_RESET}  ${C_MAGENTA}%-15s${T_RESET}" "${checkbox}" "$name" "${size_gb} GB" "$modified")
-            fi
-            printMsg "${pointer} ${highlight_start}${line}${highlight_end}$(tput el)" >/dev/tty
-        done
-        printMsg "${C_BLUE}${DIV}${T_RESET}" >/dev/tty
-        printMsg "  ${C_WHITE}${C_L_CYAN}↑↓${C_WHITE} to navigate | ${C_L_CYAN}space${C_WHITE} to select | ${C_L_GREEN}enter${C_WHITE} to confirm | ${C_L_YELLOW}q/esc${C_WHITE} to cancel${T_RESET}" >/dev/tty
-        printMsg "${C_BLUE}${DIV}${T_RESET}" >/dev/tty
-    }
-
+    # 3. Set up interactive environment
     tput civis >/dev/tty; trap 'tput cnorm >/dev/tty' EXIT
-    local menu_height=$((num_options + 7)); _print_model_table
+    local menu_height=$((num_options + 7)) # Header, footer, etc.
+    _render_multi_select_table "$prompt" "$with_all_option" "$current_option" \
+        model_names model_sizes model_dates selected_options
 
+    # 4. Main interactive loop
     local key
     while true; do
-        tput cuu "${menu_height}" >/dev/tty; key=$(read_single_char </dev/tty)
+        tput cuu "${menu_height}" >/dev/tty
+        key=$(read_single_char </dev/tty)
+
         case "$key" in
-            "$KEY_UP"|"k") current_option=$(( (current_option - 1 + num_options) % num_options ));;
-            "$KEY_DOWN"|"j") current_option=$(( (current_option + 1) % num_options ));;
-            ' '|"h"|"l") selected_options[current_option]=$(( 1 - selected_options[current_option] ))
-                if [[ "$with_all_option" == "true" ]]; then
-                    if [[ $current_option -eq 0 ]]; then
-                        local all_state=${selected_options[0]}; for j in "${!model_names[@]}"; do selected_options[j]=$all_state; done
-                    else
-                        local all_selected=1; for ((j=1; j<num_options; j++)); do if [[ ${selected_options[j]} -eq 0 ]]; then all_selected=0; break; fi; done; selected_options[0]=$all_selected
-                    fi
-                fi;;
-            "$KEY_ENTER"|"$KEY_ESC"|"q")
-                for ((i=0; i < menu_height; i++)); do tput el >/dev/tty; tput cud1 >/dev/tty; done; tput cuu "${menu_height}" >/dev/tty
-                if [[ "$key" == "$KEY_ENTER" ]]; then break; else return 1; fi;;
+            "$KEY_UP"|"k")
+                current_option=$(( (current_option - 1 + num_options) % num_options ))
+                ;;
+            "$KEY_DOWN"|"j")
+                current_option=$(( (current_option + 1) % num_options ))
+                ;;
+            ' '|"h"|"l")
+                _handle_multi_select_toggle "$with_all_option" "$current_option" "$num_options" selected_options
+                ;;
+            "$KEY_ENTER")
+                break # Exit loop to process selections
+                ;;
+            "$KEY_ESC"|"q")
+                # Clean up screen and exit without selection
+                for ((i=0; i < menu_height; i++)); do tput el >/dev/tty; tput cud1 >/dev/tty; done
+                tput cuu "${menu_height}" >/dev/tty
+                return 1
+                ;;
         esac
-        _print_model_table
+        # Re-render the table with updated state
+        _render_multi_select_table "$prompt" "$with_all_option" "$current_option" \
+            model_names model_sizes model_dates selected_options
     done
 
-    local has_selection=0
-    if [[ "$with_all_option" == "true" && ${selected_options[0]} -eq 1 ]]; then
-        for ((i=1; i<num_options; i++)); do echo "${model_names[i]}"; done; has_selection=1
-    else
-        local start_index=0; if [[ "$with_all_option" == "true" ]]; then start_index=1; fi
-        for ((i=start_index; i<num_options; i++)); do
-            if [[ ${selected_options[i]} -eq 1 ]]; then has_selection=1; echo "${model_names[i]}"; fi
-        done
-    fi
-    if [[ $has_selection -eq 1 ]]; then return 0; else return 1; fi
+    # 5. Clean up screen and process output
+    for ((i=0; i < menu_height; i++)); do tput el >/dev/tty; tput cud1 >/dev/tty; done
+    tput cuu "${menu_height}" >/dev/tty
+
+    _process_multi_select_output "$with_all_option" model_names selected_options
+    return $?
 }
 
 # Updates one or more existing models interactively.
