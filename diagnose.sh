@@ -104,6 +104,36 @@ _run_and_print() {
     fi
 }
 
+# (Private) Checks versions of key command-line dependencies.
+_check_dependency_versions() {
+    _print_diag_header "Dependency Versions"
+ 
+    # Use a 'here document' (heredoc) to feed the list of dependencies
+    # directly into the while loop. This is a clean way to handle multi-line input.
+    # The `<<-` operator strips leading tab characters, allowing the heredoc to be indented.
+    # The format is "Description;command and args".
+    while IFS=';' read -r desc cmd_str; do
+        # Convert the command string into an array for safe execution.
+        # This is safe for these specific commands as they don't have arguments with spaces.
+        local -a cmd_parts=($cmd_str)
+        _run_and_print "$desc" "${cmd_parts[@]}"
+    done <<-EOF
+		Bash Version;bash --version
+		Curl Version;curl --version
+		Docker Version;docker --version
+		Docker Info;docker info
+		jq Version;jq --version
+	EOF
+
+    # Docker Compose is handled separately due to its dynamic command name.
+    local compose_cmd
+    if compose_cmd=$(get_docker_compose_cmd 2>/dev/null); then
+        _run_and_print "Docker Compose Version" $compose_cmd version
+    else
+        printMsg "\n  ${C_L_CYAN}Docker Compose Version:${T_RESET} ${C_L_YELLOW}Not found${T_RESET}"
+    fi
+}
+
 # --- Main Logic ---
 run_diagnostics() {
     printBanner "Ollama & OpenWebUI Diagnostic Report"
@@ -131,20 +161,7 @@ run_diagnostics() {
     _run_and_print "Disk Usage" "df" "-h"
 
     # --- Dependency Versions ---
-    _print_diag_header "Dependency Versions"
-    _run_and_print "Bash Version" "bash" "--version"
-    _run_and_print "Curl Version" "curl" "--version"
-    _run_and_print "Docker Version" "docker" "--version"
-    _run_and_print "Docker Info" "docker" "info"
-    local compose_cmd
-    # shellcheck disable=SC2207
-    if compose_cmd=$(get_docker_compose_cmd 2>/dev/null); then
-        local compose_cmd_parts=($compose_cmd)
-        _run_and_print "Docker Compose Version" "${compose_cmd_parts[@]}" "version"
-    else
-        printMsg "  ${C_L_CYAN}Docker Compose Version:${T_RESET} ${C_L_YELLOW}Not found${T_RESET}"
-    fi
-    _run_and_print "jq Version" "jq" "--version"
+    _check_dependency_versions
 
     # --- GPU Information ---
     _print_diag_header "GPU Information"
