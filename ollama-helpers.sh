@@ -523,6 +523,131 @@ interactive_multi_select_list_models() {
     return $?
 }
 
+# Private helper to parse model JSON for the single-select menu.
+# Populates the provided nameref arrays.
+# Usage: _parse_single_select_model_data "$models_json" model_names_ref model_sizes_ref model_dates_ref
+_parse_single_select_model_data() {
+    local models_json="$1"
+    local -n names_ref="$2"
+    local -n sizes_ref="$3"
+    local -n dates_ref="$4"
+
+    # Parse models into arrays. Sorting is done by jq.
+    mapfile -t names_ref < <(echo "$models_json" | jq -r '.models | sort_by(.name)[] | .name')
+    mapfile -t sizes_ref < <(echo "$models_json" | jq -r '.models | sort_by(.name)[] | .size')
+    mapfile -t dates_ref < <(echo "$models_json" | jq -r '.models | sort_by(.name)[] | .modified_at | .[:10]')
+
+    if [[ ${#names_ref[@]} -eq 0 ]]; then
+        return 1
+    fi
+    return 0
+}
+
+# Private helper to render the interactive model selection table for single-select.
+# This is a pure display function.
+# Usage: _render_single_select_table "Prompt" current_opt_idx names_arr_ref sizes_arr_ref dates_arr_ref
+_render_single_select_table() {
+    local prompt="$1"
+    local current_option="$2"
+    local -n names_ref="$3"
+    local -n sizes_ref="$4"
+    local -n dates_ref="$5"
+
+    printBanner "${prompt}" >/dev/tty
+    # Header with padding to align with the pointer column
+    printf "  %-2s%-40s %10s  %-15s\n" "" "NAME" "SIZE" "MODIFIED" >/dev/tty
+    printMsg "${C_BLUE}${DIV}${T_RESET}" >/dev/tty
+
+    for i in "${!names_ref[@]}"; do
+        local pointer=" "; local highlight_start=""; local highlight_end=""
+
+        if [[ $i -eq $current_option ]]; then
+            pointer="${T_BOLD}${C_L_MAGENTA}❯${T_RESET}"; highlight_start="$(tput rev)"; highlight_end="${T_RESET}";
+        fi
+
+        local name="${names_ref[i]}"; local size_bytes="${sizes_ref[i]}"; local modified="${dates_ref[i]}"
+        local size_gb; size_gb=$(awk -v size="$size_bytes" 'BEGIN { printf "%.2f", size / 1e9 }')
+        local size_bg_color="${C_GREEN}"; local size_gb_int=${size_gb%.*}
+        if [[ "$size_gb_int" -ge 9 ]]; then size_bg_color="${C_RED}"; elif [[ "$size_gb_int" -ge 6 ]]; then size_bg_color="${C_YELLOW}"; elif [[ "$size_gb_int" -ge 3 ]]; then size_bg_color="${C_BLUE}"; fi
+        local line
+        line=$(printf "%-40s ${size_bg_color}%10s${T_RESET}  ${C_MAGENTA}%-15s${T_RESET}" "$name" "${size_gb} GB" "$modified")
+        
+        printMsg "  ${pointer} ${highlight_start}${line}${highlight_end}$(tput el)" >/dev/tty
+    done
+    printMsg "${C_BLUE}${DIV}${T_RESET}" >/dev/tty
+    printMsg "  ${C_WHITE}${C_L_CYAN}↑↓${C_WHITE} to navigate | ${C_L_GREEN}enter${C_WHITE} to confirm | ${C_L_YELLOW}q/esc${C_WHITE} to cancel${T_RESET}" >/dev/tty
+    printMsg "${C_BLUE}${DIV}${T_RESET}" >/dev/tty
+}
+
+# Renders an interactive, single-selectable table of Ollama models.
+#
+# ## Usage:
+#   local selected_model
+#   selected_model=$(interactive_single_select_list_models "Select a model:" "$models_json")
+#   local exit_code=$?
+#
+# ## Arguments:
+#  $1 - The prompt to display to the user.
+#  $2 - The JSON string of models from the Ollama API.
+#
+# ## Returns:
+#  On success (Enter pressed):
+#    - Prints the name of the selected model to stdout.
+#    - Returns with exit code 0.
+#  On cancellation (ESC or q pressed):
+#    - Prints nothing to stdout.
+#    - Returns with exit code 1.
+interactive_single_select_list_models() {
+    if ! [[ -t 0 ]]; then
+        printErrMsg "Not an interactive session." >&2
+        return 1
+    fi
+
+    local prompt="$1"
+    local models_json="$2"
+
+    # 1. Parse model data from JSON into arrays
+    local -a model_names model_sizes model_dates
+    if ! _parse_single_select_model_data "$models_json" model_names model_sizes model_dates; then
+        return 1 # No models found
+    fi
+    local num_options=${#model_names[@]}
+
+    # 2. Initialize state
+    local current_option=0
+
+    # 3. Set up interactive environment
+    tput civis >/dev/tty; trap 'tput cnorm >/dev/tty' EXIT
+    local menu_height=$((num_options + 7)) # Banner(2), header(1), div(1), N lines, div(1), help(1), div(1)
+    _render_single_select_table "$prompt" "$current_option" model_names model_sizes model_dates
+
+    # 4. Main interactive loop
+    local key
+    while true; do
+        tput cuu "${menu_height}" >/dev/tty
+        key=$(read_single_char </dev/tty)
+
+        case "$key" in
+            "$KEY_UP"|"k") current_option=$(( (current_option - 1 + num_options) % num_options ));;
+            "$KEY_DOWN"|"j") current_option=$(( (current_option + 1) % num_options ));;
+            "$KEY_ENTER") break ;;
+            "$KEY_ESC"|"q")
+                for ((i=0; i < menu_height; i++)); do tput el >/dev/tty; tput cud1 >/dev/tty; done
+                tput cuu "${menu_height}" >/dev/tty
+                return 1
+                ;;
+        esac
+        _render_single_select_table "$prompt" "$current_option" model_names model_sizes model_dates
+    done
+
+    # 5. Clean up screen and process output
+    for ((i=0; i < menu_height; i++)); do tput el >/dev/tty; tput cud1 >/dev/tty; done
+    tput cuu "${menu_height}" >/dev/tty
+
+    echo "${model_names[current_option]}"
+    return 0
+}
+
 # --- Ollama Network Configuration Helpers ---
 
 # Checks if Ollama is exposed to network.
