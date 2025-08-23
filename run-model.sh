@@ -68,31 +68,14 @@ main() {
     clear_lines_up 1 # remove "Fetching model..." from output
 
     # --- Select model ---
-    local menu_output
-    # We use the multi-select menu but will only use the first selection.
-    # The '--with-all' option is omitted as it doesn't make sense here.
-    menu_output=$(interactive_multi_select_list_models "Select a model to RUN:" "$models_json")
+    local model_to_run
+    # Use the new single-select menu.
+    model_to_run=$(interactive_single_select_list_models "Select a model to RUN:" "$models_json")
     local exit_code=$?
 
     if [[ $exit_code -ne 0 ]]; then
         printInfoMsg "No model selected. Aborting."
         exit 1
-    fi
-
-    local -a selected_models=()
-    mapfile -t selected_models <<< "$menu_output"
-
-    if [[ ${#selected_models[@]} -eq 0 ]]; then
-        printWarnMsg "Selection process returned no models. Aborting."
-        exit 1
-    fi
-
-    local model_to_run="${selected_models[0]}"
-
-    if [[ ${#selected_models[@]} -gt 1 ]]; then
-        printWarnMsg "Multiple models were selected. Only the first one will be used: ${C_L_BLUE}${model_to_run}${T_RESET}"
-        echo
-        read -r -p "$(echo -e "${T_INFO_ICON} Press Enter to continue...")"
     fi
 
     # --- Run model ---
