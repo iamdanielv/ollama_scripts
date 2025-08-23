@@ -299,6 +299,7 @@ delete_model() {
 refresh_model_cache() {
     local new_json
     if new_json=$(fetch_models_with_spinner "Refreshing model list..."); then
+        clear_lines_up 1
         cached_models_json="$new_json"
     fi
 }
