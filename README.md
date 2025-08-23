@@ -24,6 +24,7 @@ These scripts provide a user-friendly way to:
 ├── config-ollama-net.sh      # 🌐 Configures network access (localhost vs public)  
 ├── restart-ollama.sh         # 🔄 Restarts Ollama service after system wake/sleep issues  
 ├── manage-models.sh          # ⚙️ Interactively pull, delete, and manage models
+├── run-model.sh              # ▶️ Interactively select and run a local model
 ├── stop-ollama.sh            # 🛑 Stops the Ollama service cleanly  
 ├── logs-ollama.sh            # 📜 View Ollama service logs via journalctl  
 ├── check-status.sh           # 🔄 Checks status of services and lists installed models  
@@ -95,6 +96,7 @@ After it starts, open the link provided (usually `http://localhost:3000`) and fo
 | Script | Description |
 |---|---|
 | `./install-ollama.sh` | 📦 Installs or updates Ollama. Can also be run with `--version` to check for updates without installing. |
+| `./run-model.sh` | ▶️ Interactively select and run a local model. |
 | `./manage-models.sh` | ⚙️ An interactive script to list, pull, update, and delete local Ollama models. |
 | `./logs-ollama.sh` | 📜 A convenient wrapper to view the Ollama service logs using `journalctl`. |
 | `./restart-ollama.sh` | 🔄 Sometimes on wake from sleep, the `ollama` service will go into an inconsistent state. This script stops, resets GPU state (if applicable), and restarts the Ollama service using `systemd`. |
@@ -148,6 +150,18 @@ $ ./install-ollama.sh --version
   [i] Installed: 0.9.6
   [i] Latest:    0.10.1
 ```
+
+---
+
+### ▶️ Running a Model (`run-model.sh`)
+
+To quickly run any of your installed models from the command line, use the `run-model.sh` script.
+
+```bash
+./run-model.sh
+```
+
+This will show a list of your local models. Choose one to start a chat session directly in your terminal.
 
 ---
 
