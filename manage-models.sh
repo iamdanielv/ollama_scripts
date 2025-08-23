@@ -69,7 +69,7 @@ pull_model() {
 
     # 1. If no model name is passed as an argument, prompt the user.
     if [[ -z "$model_name" ]]; then
-        read -r -p "$(echo -e "${T_QST_ICON} Enter the name of the model to pull (e.g., llama3): ")" model_name
+        read -r -p "$(echo -e "${T_QST_ICON} Name of model to pull (e.g., llama3): ")" model_name
         if [[ -z "$model_name" ]]; then
             printErrMsg "No model name entered. Aborting."
             return 1
@@ -126,9 +126,178 @@ _perform_model_updates() {
     fi
 }
 
+# Private helper to perform the actual 'ollama rm' for a list of models.
+# Not intended to be called directly by the user.
+# Usage: _perform_model_deletions "model1" "model2" ...
+_perform_model_deletions() {
+    local models_to_delete=("$@")
+    local ollama_port=${OLLAMA_PORT:-11434}
+    local delete_url="http://localhost:${ollama_port}/api/delete"
+
+    if [[ ${#models_to_delete[@]} -eq 0 ]]; then
+        printWarnMsg "No models specified for deletion."
+        return 0
+    fi
+
+    printInfoMsg "The following models will be deleted: ${C_L_RED}${models_to_delete[*]}${T_RESET}"
+    if ! prompt_yes_no "Are you sure you want to delete these ${#models_to_delete[@]} models?" "n"; then
+        printInfoMsg "Deletion cancelled."
+        return 1
+    fi
+
+    local -a failed_model_names=()
+    for model_name in "${models_to_delete[@]}"; do
+        printMsg "\n${C_BLUE}${DIV}${T_RESET}"
+        local payload; payload=$(jq -n --arg name "$model_name" '{name: $name}')
+        local desc="Deleting model ${C_L_RED}${model_name}${T_RESET}"
+        if ! run_with_spinner "${desc}" curl --silent --show-error --fail -X DELETE -d "$payload" "$delete_url"; then
+            failed_model_names+=("$model_name")
+        fi
+    done
+    printMsg "${C_BLUE}${DIV}${T_RESET}"
+
+    if [[ ${#failed_model_names[@]} -gt 0 ]]; then
+        printWarnMsg "Finished deleting, but ${#failed_model_names[@]} model(s) failed."
+        printMsg "    ${T_ERR_ICON} Failed models: ${C_L_RED}${failed_model_names[*]}${T_RESET}"
+        return 1
+    else
+        printOkMsg "Finished deleting models successfully."
+        return 0
+    fi
+}
+
+# Renders an interactive, multi-selectable table of Ollama models.
+# It combines the display of `print_ollama_models_table` with the interactivity
+# of `interactive_multi_select_menu`.
+#
+# ## Usage:
+#   local menu_output
+#   menu_output=$(interactive_multi_select_list_models "Select Models:" "$models_json" [--with-all])
+#   local exit_code=$?
+#
+# ## Arguments:
+#  $1 - The prompt to display to the user.
+#  $2 - The JSON string of models from the Ollama API.
+#  $3 - (Optional) "--with-all" to include a "Select All" option.
+#
+# ## Returns:
+#  On success (Enter pressed with selections):
+#    - Prints the names of the selected models to stdout, one per line.
+#    - Returns with exit code 0.
+#  On cancellation (ESC or q pressed) or no selection:
+#    - Prints nothing to stdout.
+#    - Returns with exit code 1.
+interactive_multi_select_list_models() {
+    if ! [[ -t 0 ]]; then
+        printErrMsg "Not an interactive session." >&2
+        return 1
+    fi
+
+    local prompt="$1"
+    local models_json="$2"
+    local with_all_option=false
+    if [[ "$3" == "--with-all" ]]; then
+        with_all_option=true
+    fi
+
+    # Parse models into arrays. Sorting is done by jq.
+    local -a model_names model_sizes model_dates
+    mapfile -t model_names < <(echo "$models_json" | jq -r '.models | sort_by(.name)[] | .name')
+    mapfile -t model_sizes < <(echo "$models_json" | jq -r '.models | sort_by(.name)[] | .size')
+    mapfile -t model_dates < <(echo "$models_json" | jq -r '.models | sort_by(.name)[] | .modified_at | .[:10]')
+
+    if [[ ${#model_names[@]} -eq 0 ]]; then
+        return 1
+    fi
+
+    # Add "All" option if requested
+    if [[ "$with_all_option" == "true" ]]; then
+        model_names=("All" "${model_names[@]}")
+        model_sizes=("" "${model_sizes[@]}")
+        model_dates=("" "${model_dates[@]}")
+    fi
+    local num_options=${#model_names[@]}
+
+    # State variables
+    local current_option=0
+    local -a selected_options=()
+    for ((i=0; i<num_options; i++)); do selected_options[i]=0; done
+
+    # Helper function to print the table
+    _print_model_table() {
+        printBanner "${prompt}" >/dev/tty
+        printf "  %-3s %-40s %10s  %-15s\n" "" "NAME" "SIZE" "MODIFIED" >/dev/tty
+        printMsg "${C_BLUE}${DIV}${T_RESET}" >/dev/tty
+
+        for i in "${!model_names[@]}"; do
+            local pointer=" "; local checkbox="[ ]"; local highlight_start=""; local highlight_end=""
+            if [[ ${selected_options[i]} -eq 1 ]]; then checkbox="${C_GREEN}${T_BOLD}[✓]"; fi
+
+            # if [[ $i -eq $current_option ]]; then pointer="${T_BOLD}${C_L_MAGENTA}❯${T_RESET}"; highlight_start="$(tput rev)"; highlight_end="$(tput sgr0)"; fi
+            if [[ $i -eq $current_option ]]; then pointer="${T_BOLD}${C_L_MAGENTA}❯${T_RESET}"; highlight_start="$(tput rev)"; highlight_end="${T_RESET}"; fi
+
+            local line
+            if [[ "$with_all_option" == "true" && $i -eq 0 ]]; then
+                # line=$(printf "%-3s ${C_L_WHITE}${T_BOLD}%-40s ${T_RESET}" "${checkbox}" "${model_names[i]}")
+                line=$(printf "%-3s ${highlight_start}${T_BOLD}%-40s %10s${T_RESET}" "${checkbox}" "${model_names[i]}" "")
+            else
+                local name="${model_names[i]}"; local size_bytes="${model_sizes[i]}"; local modified="${model_dates[i]}"
+                local size_gb; size_gb=$(awk -v size="$size_bytes" 'BEGIN { printf "%.2f", size / 1e9 }')
+                local size_bg_color="${C_GREEN}"; local size_gb_int=${size_gb%.*}
+                if [[ "$size_gb_int" -ge 9 ]]; then size_bg_color="${C_RED}"; elif [[ "$size_gb_int" -ge 6 ]]; then size_bg_color="${C_YELLOW}"; elif [[ "$size_gb_int" -ge 3 ]]; then size_bg_color="${C_BLUE}"; fi
+                # line=$(printf "%-3s ${C_L_CYAN}%-40s${T_RESET} ${size_bg_color}${C_BLACK}%10s${T_RESET}  ${C_MAGENTA}%-15s${T_RESET}" "${checkbox}" "$name" "${size_gb} GB" "$modified")
+                # line=$(printf "%-3s %-40s ${size_bg_color}${C_BLACK}%10s${T_RESET}  ${C_MAGENTA}%-15s${T_RESET}" "${checkbox}" "$name" "${size_gb} GB" "$modified")
+                line=$(printf "%-3s %-40s ${size_bg_color}%10s${T_RESET}  ${C_MAGENTA}%-15s${T_RESET}" "${checkbox}" "$name" "${size_gb} GB" "$modified")
+            fi
+            printMsg "${pointer} ${highlight_start}${line}${highlight_end}$(tput el)" >/dev/tty
+        done
+        printMsg "${C_BLUE}${DIV}${T_RESET}" >/dev/tty
+        printMsg "  ${C_WHITE}${C_L_CYAN}↑↓${C_WHITE} to navigate | ${C_L_CYAN}space${C_WHITE} to select | ${C_L_GREEN}enter${C_WHITE} to confirm | ${C_L_YELLOW}q/esc${C_WHITE} to cancel${T_RESET}" >/dev/tty
+        printMsg "${C_BLUE}${DIV}${T_RESET}" >/dev/tty
+    }
+
+    tput civis >/dev/tty; trap 'tput cnorm >/dev/tty' EXIT
+    local menu_height=$((num_options + 7)); _print_model_table
+
+    local key
+    while true; do
+        tput cuu "${menu_height}" >/dev/tty; key=$(read_single_char </dev/tty)
+        case "$key" in
+            "$KEY_UP"|"k") current_option=$(( (current_option - 1 + num_options) % num_options ));;
+            "$KEY_DOWN"|"j") current_option=$(( (current_option + 1) % num_options ));;
+            ' '|"h"|"l") selected_options[current_option]=$(( 1 - selected_options[current_option] ))
+                if [[ "$with_all_option" == "true" ]]; then
+                    if [[ $current_option -eq 0 ]]; then
+                        local all_state=${selected_options[0]}; for j in "${!model_names[@]}"; do selected_options[j]=$all_state; done
+                    else
+                        local all_selected=1; for ((j=1; j<num_options; j++)); do if [[ ${selected_options[j]} -eq 0 ]]; then all_selected=0; break; fi; done; selected_options[0]=$all_selected
+                    fi
+                fi;;
+            "$KEY_ENTER"|"$KEY_ESC"|"q")
+                for ((i=0; i < menu_height; i++)); do tput el >/dev/tty; tput cud1 >/dev/tty; done; tput cuu "${menu_height}" >/dev/tty
+                if [[ "$key" == "$KEY_ENTER" ]]; then break; else return 1; fi;;
+        esac
+        _print_model_table
+    done
+
+    local has_selection=0
+    if [[ "$with_all_option" == "true" && ${selected_options[0]} -eq 1 ]]; then
+        for ((i=1; i<num_options; i++)); do echo "${model_names[i]}"; done; has_selection=1
+    else
+        local start_index=0; if [[ "$with_all_option" == "true" ]]; then start_index=1; fi
+        for ((i=start_index; i<num_options; i++)); do
+            if [[ ${selected_options[i]} -eq 1 ]]; then has_selection=1; echo "${model_names[i]}"; fi
+        done
+    fi
+    if [[ $has_selection -eq 1 ]]; then return 0; else return 1; fi
+}
+
 # Updates one or more existing models interactively.
 # Usage: update_models_interactive <models_json>
 update_models_interactive() {
+
+    clear
+
     local models_json="$1"
 
     # Check if there are any models to update.
@@ -137,56 +306,23 @@ update_models_interactive() {
         return 0 # Exit gracefully.
     fi
 
-    # Prompt for input. -a reads into an array.
-    local -a model_inputs
-    read -r -p "$(echo -e "${T_QST_ICON} Enter model number(s) to update (e.g., 1 3 4), or 'all': ")" -a model_inputs
-    if [[ ${#model_inputs[@]} -eq 0 ]]; then
-        printErrMsg "No input provided. Aborting."
+    local menu_output
+    menu_output=$(interactive_multi_select_list_models "Select Models to UPDATE:" "$models_json" "--with-all")
+    local exit_code=$?
+
+    if [[ $exit_code -ne 0 ]]; then
+        printInfoMsg "No models selected for update."
         return 1
     fi
 
-    local models_to_update=()
-    local invalid_inputs=()
-    local total_models
-    total_models=$(echo "$models_json" | jq '.models | length')
-
-    # Handle 'all' keyword (case-insensitive)
-    # shellcheck disable=SC2206 # Word splitting is not an issue for the first element.
-    if [[ "${model_inputs[0],,}" == "all" ]]; then
-        # Get all model names, sorted to be predictable
-        mapfile -t models_to_update < <(echo "$models_json" | jq -r '.models | sort_by(.name)[] | .name')
-    else
-        # Process numeric inputs
-        for num in "${model_inputs[@]}"; do
-            if [[ "$num" =~ ^[1-9][0-9]*$ && "$num" -le "$total_models" ]]; then
-                local model_name
-                model_name=$(echo "$models_json" | jq -r ".models | sort_by(.name)[$((num - 1))].name")
-                if [[ -n "$model_name" && "$model_name" != "null" ]]; then
-                    # Check for duplicates before adding
-                    local found=false
-                    for item in "${models_to_update[@]}"; do
-                        if [[ "$item" == "$model_name" ]]; then found=true; break; fi
-                    done
-                    if ! $found; then
-                       models_to_update+=("$model_name")
-                    fi
-                else
-                    invalid_inputs+=("$num")
-                fi
-            else
-                invalid_inputs+=("$num")
-            fi
-        done
-    fi
-
-    # Report invalid inputs
-    if [[ ${#invalid_inputs[@]} -gt 0 ]]; then
-        printWarnMsg "Ignoring invalid inputs: ${invalid_inputs[*]}"
-    fi
+    local -a models_to_update=()
+    mapfile -t models_to_update <<< "$menu_output"
 
     # Check if there are any valid models to update
     if [[ ${#models_to_update[@]} -eq 0 ]]; then
-        printErrMsg "No valid models selected for update."
+        # This case should ideally not be reached if the menu function returns 0,
+        # but it's a good safeguard.
+        printWarnMsg "No models were selected for update."
         return 1
     fi
 
@@ -196,53 +332,46 @@ update_models_interactive() {
 
 # --- Model Deletion ---
 
-# Deletes a local model.
-# Usage: delete_model [model_name_or_number]
+# Deletes one or more existing models interactively using a multi-select menu.
+# Usage: delete_models_interactive <models_json>
+delete_models_interactive() {
+
+    clear
+
+    local models_json="$1"
+
+    # Check if there are any models to delete.
+    if [[ -z "$(echo "$models_json" | jq '.models | .[]')" ]]; then
+        printWarnMsg "No local models found to delete."
+        return 0 # Exit gracefully.
+    fi
+
+    local menu_output
+    menu_output=$(interactive_multi_select_list_models "Select Models to DELETE:" "$models_json")
+    local exit_code=$?
+
+    if [[ $exit_code -ne 0 ]]; then
+        printInfoMsg "No models selected for deletion."
+        return 1
+    fi
+
+    local -a models_to_delete
+    mapfile -t models_to_delete <<< "$menu_output"
+
+    # Delete the selected models
+    _perform_model_deletions "${models_to_delete[@]}"
+}
+
+# Deletes a single local model, with confirmation.
+# This is intended for non-interactive use via flags.
+# Usage: delete_model <model_name>
 delete_model() {
-    local model_input="$1"
-    local models_json="$2" # Optional: pass in pre-fetched JSON
+    local model_name="$1"
     local ollama_port=${OLLAMA_PORT:-11434}
 
-    # Get model data to resolve names/numbers if not provided
-    if [[ -z "$models_json" ]]; then
-        if ! models_json=$(get_ollama_models_json); then
-            printErrMsg "Failed to get model list from Ollama API."
-            return 1
-        fi
-    fi
-
-    # If no model input is provided, show a list and prompt the user.
-    if [[ -z "$model_input" ]]; then
-        # In interactive mode, the main loop has already displayed the list.
-        # We just need to check if there are any models to delete.
-
-        if [[ -z "$(echo "$models_json" | jq '.models | .[]')" ]]; then
-            # The main list_models call already showed a "no models" message.
-            return 0 # Exit gracefully.
-        fi
-
-        read -r -p "$(echo -e "${T_QST_ICON} Enter the name or number of the model to delete: ")" model_input
-        if [[ -z "$model_input" ]]; then
-            printErrMsg "No model name or number entered. Aborting."
-            return 1
-        fi
-    fi
-
-    # Resolve model name from input (which could be a number)
-    local model_name
-    # Regex to check if input is a positive integer
-    if [[ "$model_input" =~ ^[1-9][0-9]*$ ]]; then
-        # It's a number, so find the corresponding model name
-        # We sort the models by name first to match the displayed list.
-        # Then we select by index (jq arrays are 0-indexed, so we subtract 1).
-        model_name=$(echo "$models_json" | jq -r ".models | sort_by(.name)[$((model_input - 1))].name")
-        if [[ -z "$model_name" || "$model_name" == "null" ]]; then
-            printErrMsg "Invalid model number: ${C_L_YELLOW}${model_input}${T_RESET}"
-            return 1
-        fi
-    else
-        # It's not a number, so treat it as a name
-        model_name="$model_input"
+    if [[ -z "$model_name" ]]; then
+        printErrMsg "delete_model function requires a model name."
+        return 1
     fi
 
     # Confirm the deletion
@@ -253,14 +382,14 @@ delete_model() {
 
     # Call the Ollama API to delete the model
     local payload
-    payload=$(jq -n --arg name "$model_name" '{name: $name}')
     local delete_url="http://localhost:${ollama_port}/api/delete"
     local desc="Deleting model ${C_L_RED}${model_name}${T_RESET}"
+    payload=$(jq -n --arg name "$model_name" '{name: $name}')
     if run_with_spinner "${desc}" curl --silent --show-error --fail -X DELETE -d "$payload" "$delete_url"; then
         printOkMsg "Successfully deleted model: ${C_L_BLUE}${model_name}${T_RESET}"
     else
         # The spinner will print the error, but we can add context.
-        printInfoMsg "Please check that the model name is correct."
+        printInfoMsg "Please check that the model name is correct and that the model exists."
         return 1
     fi
 }
@@ -342,26 +471,24 @@ test_perform_model_updates() {
     # Scenario 1: Successfully updates multiple models. We run the function directly
     # to capture its exit code and check the side-effect on the mock counter.
     MOCK_OLLAMA_CALL_COUNT=0
-    MOCK_OLLAMA_CALLED_WITH=()
     export MOCK_OLLAMA_FAIL_ON=""
     _perform_model_updates "model1" "model2" &>/dev/null
     local exit_code_success=$?
-    _run_test "[[ $exit_code_success -eq 0 ]]" 0 "Succeeds when all updates work"
+    _run_string_test "$exit_code_success" "0" "Succeeds when all updates work"
     _run_string_test "$MOCK_OLLAMA_CALL_COUNT" "2" "Calls ollama for each model"
 
     # Scenario 2: Fails if one of the model updates fails.
     MOCK_OLLAMA_CALL_COUNT=0
-    MOCK_OLLAMA_CALLED_WITH=()
     export MOCK_OLLAMA_FAIL_ON="model2"
     _perform_model_updates "model1" "model2" &>/dev/null
     local exit_code_fail=$?
-    _run_test "[[ $exit_code_fail -eq 1 ]]" 0 "Fails when one update fails"
+    _run_string_test "$exit_code_fail" "1" "Fails when one update fails"
     _run_string_test "$MOCK_OLLAMA_CALL_COUNT" "2" "Attempts all models even if one fails"
 
     # Scenario 3: Handles being called with no models.
     MOCK_OLLAMA_CALL_COUNT=0
     _perform_model_updates &>/dev/null
-    _run_test "[[ $? -eq 0 ]]" 0 "Handles being called with no models"
+    _run_string_test "$?" "0" "Handles being called with no models"
     _run_string_test "$MOCK_OLLAMA_CALL_COUNT" "0" "Does not call ollama if no models are given"
 
     # --- Cleanup ---
@@ -405,7 +532,7 @@ test_delete_model() {
     MOCK_SPINNER_CALLED_WITH_CMD=()
     delete_model "llama3" &>/dev/null
     local exit_code_s1=$?
-    _run_test "[[ $exit_code_s1 -eq 0 ]]" 0 "Succeeds when deleting by name with confirmation"
+    _run_string_test "$exit_code_s1" "0" "Succeeds when deleting by name with confirmation"
     _run_string_test "${MOCK_SPINNER_CALLED_WITH_CMD[4]}" "-X" "Calls curl with correct method (-X)"
 
     # Scenario 2: Delete by name, user denies.
@@ -413,7 +540,7 @@ test_delete_model() {
     MOCK_SPINNER_CALLED_WITH_CMD=()
     delete_model "llama3" &>/dev/null
     local exit_code_s2=$?
-    _run_test "[[ $exit_code_s2 -eq 1 ]]" 0 "Fails when user denies deletion"
+    _run_string_test "$exit_code_s2" "1" "Fails when user denies deletion"
     _run_string_test "${#MOCK_SPINNER_CALLED_WITH_CMD[@]}" "0" "Does not call API when user denies"
 
     # Scenario 3: Delete by number, user confirms.
@@ -422,7 +549,7 @@ test_delete_model() {
     MOCK_PROMPT_CALLED_WITH=""
     delete_model "2" &>/dev/null
     local exit_code_s3=$?
-    _run_test "[[ $exit_code_s3 -eq 0 ]]" 0 "Succeeds when deleting by number"
+    _run_string_test "$exit_code_s3" "0" "Succeeds when deleting by number"
     # The prompt should contain the resolved model name, which is llama3 (the 2nd in sorted list).
     _run_test '[[ "$MOCK_PROMPT_CALLED_WITH" == *"llama3"* ]]' 0 "Resolves number to correct model name for prompt"
 
@@ -435,11 +562,8 @@ test_delete_model() {
     _run_test 'delete_model "llama3" &>/dev/null' 1 "Fails when the API call fails"
     export MOCK_SPINNER_RETURN_CODE=0 # Reset
 
-    # Scenario 6: No models exist.
-    # Override the mock to return an empty list.
-    get_ollama_models_json() { echo '{"models": []}'; }
-    export -f get_ollama_models_json
-    _run_test 'delete_model "" &>/dev/null' 0 "Handles no models existing gracefully"
+    # Scenario 6: No model name given.
+    _run_test 'delete_model "" &>/dev/null' 1 "Fails when no model name is given"
 
     # --- Cleanup ---
     unset -f get_ollama_models_json prompt_yes_no run_with_spinner
@@ -520,7 +644,12 @@ main() {
                 exit $?
                 ;; 
             -d | --delete)
-                delete_model "$2"
+                local model_name="$2"
+                if [[ -z "$model_name" || "$model_name" =~ ^- ]]; then
+                    printErrMsg "The --delete flag requires a model name."
+                    exit 1
+                fi
+                delete_model "$model_name"
                 exit $?
                 ;; 
             -h | --help)
@@ -584,7 +713,7 @@ main() {
                 refresh_model_cache
                 ;; 
             d|D)
-                delete_model "" "$cached_models_json"
+                delete_models_interactive "$cached_models_json"
                 refresh_model_cache
                 ;; 
             q|Q|"${KEY_ESC}") # Quit
