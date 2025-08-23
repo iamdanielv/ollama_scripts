@@ -143,7 +143,7 @@ _perform_model_deletions() {
     printInfoMsg "The following models will be deleted: ${C_L_RED}${models_to_delete[*]}${T_RESET}"
     if ! prompt_yes_no "Are you sure you want to delete these ${#models_to_delete[@]} models?" "n"; then
         printInfoMsg "Deletion cancelled."
-        return 1
+        return 2 # 2 means user cancelled, no state change
     fi
 
     local -a failed_model_names=()
@@ -187,7 +187,7 @@ update_models_interactive() {
 
     if [[ $exit_code -ne 0 ]]; then
         printInfoMsg "No models selected for update."
-        return 1
+        return 2 # 2 means user cancelled, no state change
     fi
 
     local -a models_to_update=()
@@ -197,8 +197,8 @@ update_models_interactive() {
     if [[ ${#models_to_update[@]} -eq 0 ]]; then
         # This case should ideally not be reached if the menu function returns 0,
         # but it's a good safeguard.
-        printWarnMsg "No models were selected for update."
-        return 1
+        printInfoMsg "No models were selected for update."
+        return 2 # No models selected is a form of cancellation
     fi
 
     # Update the selected models
@@ -227,7 +227,7 @@ delete_models_interactive() {
 
     if [[ $exit_code -ne 0 ]]; then
         printInfoMsg "No models selected for deletion."
-        return 1
+        return 2 # 2 means user cancelled, no state change
     fi
 
     local -a models_to_delete
@@ -624,13 +624,22 @@ main() {
             u|U)
                 # These clear the screen themselves, so no pre-clearing needed.
                 update_models_interactive "$cached_models_json"
-                refresh_model_cache
+                local exit_code=$?
+                # Don't refresh if the user cancelled the operation (exit code 2)
+                if [[ $exit_code -ne 2 ]]; then
+                    refresh_model_cache
+                fi
                 ;; 
             d|D)
                 delete_models_interactive "$cached_models_json"
-                refresh_model_cache
+                local exit_code=$?
+                # Don't refresh if the user cancelled the operation (exit code 2)
+                if [[ $exit_code -ne 2 ]]; then
+                    refresh_model_cache
+                fi
                 ;; 
-            q|Q|"${KEY_ESC}") # Quit
+            q|Q|"${KEY_ESC}")
+                # Quit
                 clear_lines_up 2
                 printOkMsg "Goodbye!"
                 break
