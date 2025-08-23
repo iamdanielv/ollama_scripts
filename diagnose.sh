@@ -278,16 +278,19 @@ run_diagnostics() {
                 printMsg "\n  ${C_L_CYAN}Project Root .env:${T_RESET} ${C_GRAY}Not found.${T_RESET}"
             fi
 
-            if [[ -n "$compose_cmd" ]]; then # compose_cmd is defined in "Dependency Versions"
+            # Get the compose command. It's defined as a local var in _check_dependency_versions
+            # so it's out of scope here. We need it to decide whether to run compose-related checks.
+            local compose_cmd
+            compose_cmd=$(get_docker_compose_cmd 2>/dev/null)
+            if [[ -n "$compose_cmd" ]]; then
                 printMsgNoNewline "\n  ${C_L_CYAN}Container Status:${T_RESET}"
-                local container_status
-                container_status=$(run_webui_compose ps 2>&1)
-                # Check if output is empty or just a header line
-                if [[ -z "$container_status" || $(echo "$container_status" | wc -l) -le 1 ]]; then
-                    echo -e "\n    ${C_L_YELLOW}No running containers found.${T_RESET}"
-                else
-                    echo
-                    echo "$container_status" | sed 's/^/    /'
+                local ps_output
+                ps_output=$(run_webui_compose ps 2>&1)
+                echo # Add a newline after the header
+                _print_indented_output "$ps_output"
+
+                if [[ -z "$ps_output" || $(echo "$ps_output" | wc -l) -le 1 ]]; then
+                    printMsg "    ${C_L_YELLOW}No OpenWebUI containers found.${T_RESET}"
                 fi
 
                 printMsg "\n  ${C_L_CYAN}OpenWebUI Logs (last 20 lines):${T_RESET}"
@@ -301,7 +304,7 @@ run_diagnostics() {
 
                 # Active connectivity check from WebUI container to Ollama
                 printMsg "\n  ${C_L_CYAN}Connectivity from WebUI to Ollama:${T_RESET}"
-                if ! run_webui_compose ps --filter "status=running" --services 2>/dev/null | grep -q "open-webui"; then
+                if ! check_openwebui_container_running; then
                     printMsg "    ${C_L_YELLOW}Skipped (OpenWebUI container is not running).${T_RESET}"
                 else
                     local ollama_port=${OLLAMA_PORT:-11434}

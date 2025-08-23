@@ -28,15 +28,6 @@ show_help() {
     printMsg "  ${C_L_BLUE}-t, --test${T_RESET}      Runs internal self-tests for script functions."
 }
 
-# Exit handler for this script to show logs if the restart fails.
-show_docker_logs_and_exit() {
-    local message="$1"
-    printErrMsg "$message"
-    printMsg "    ${T_INFO_ICON} Showing last 20 lines of container logs:"
-    run_webui_compose logs --tail=20 | sed 's/^/    /'
-    exit 1
-}
-
 run_tests() {
     printBanner "Running Self-Tests for update-openwebui.sh"
     initialize_test_suite
@@ -45,8 +36,8 @@ run_tests() {
     check_docker_prerequisites() { :; }
     prompt_yes_no() { return "${MOCK_PROMPT_RETURN_CODE:-0}"; } # Default to 'yes'
     poll_service() { return "${MOCK_POLL_RETURN_CODE:-0}"; } # Default to success
-    # Override the real exit function to just set a flag and return
-    show_docker_logs_and_exit() { MOCK_SHOW_LOGS_CALLED=true; return 1; }
+    # Override the real exit function to just set a flag and return. Use the new name.
+    show_webui_logs_and_exit() { MOCK_SHOW_LOGS_CALLED=true; return 1; }
 
     # The most complex mock is run_with_spinner
     run_with_spinner() {
@@ -64,7 +55,7 @@ run_tests() {
         fi
         return 0 # Fallback for any other unexpected spinner call
     }
-    export -f check_docker_prerequisites prompt_yes_no poll_service show_docker_logs_and_exit run_with_spinner
+    export -f check_docker_prerequisites prompt_yes_no poll_service show_webui_logs_and_exit run_with_spinner
 
     # --- Test Cases ---
     printTestSectionHeader "Scenario: No update available"
@@ -110,7 +101,7 @@ run_tests() {
     _run_test "[[ $exit_code_poll_fail -eq 1 ]]" 1 "Fails when polling fails after restart"
     _run_string_test "$MOCK_SHOW_LOGS_CALLED" "true" "Calls log helper when polling fails"
 
-    print_test_summary "check_docker_prerequisites" "prompt_yes_no" "poll_service" "show_docker_logs_and_exit" "run_with_spinner"
+    print_test_summary "check_docker_prerequisites" "prompt_yes_no" "poll_service" "show_webui_logs_and_exit" "run_with_spinner"
 }
 
 update_logic() {
@@ -146,11 +137,11 @@ update_logic() {
     fi
 
     # Verify that the service is responsive after the restart.
-    local webui_port=${OPEN_WEBUI_PORT:-3000}
-    local webui_url="http://localhost:${webui_port}"
+    local webui_url
+    webui_url=$(get_openwebui_url)
 
     if ! poll_service "$webui_url" "OpenWebUI UI" 60; then
-        show_docker_logs_and_exit "OpenWebUI containers restarted, but the UI is not responding at ${webui_url}."
+        show_webui_logs_and_exit "OpenWebUI containers restarted, but the UI is not responding at ${webui_url}."
     fi
 
     printOkMsg "OpenWebUI has been successfully updated and restarted!"

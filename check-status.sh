@@ -214,18 +214,17 @@ check_openwebui_status() {
     fi
 
     # 1. Check container status
-    # Use the shared helper to run docker compose. It will find the webui dir.
-    # We pipe the output to grep, and check the status of the pipe.
-    if run_webui_compose ps --filter "status=running" --services 2>/dev/null | grep -q "open-webui"; then
+    if check_openwebui_container_running; then
         printOkMsg "Container: ${C_GREEN}Running${T_RESET}"
     else
         printErrMsg "Container: ${C_RED}Not Running${T_RESET}"
     fi
 
     # 2. Check UI responsiveness
-    local webui_port=${OPEN_WEBUI_PORT:-3000}
-    local webui_url="http://localhost:${webui_port}"
-    if check_endpoint_status "$webui_url" 5; then
+    # Use the new helper function to get the URL
+    local webui_url
+    webui_url=$(get_openwebui_url)
+    if check_endpoint_status "$webui_url" 5; then # 5-second timeout
         printOkMsg "UI:        ${C_GREEN}Responsive${T_RESET} at ${C_L_BLUE}${webui_url}${T_RESET}"
     else
         printErrMsg "UI:        ${C_RED}Not Responding${T_RESET} at ${C_L_BLUE}${webui_url}${T_RESET}"

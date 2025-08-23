@@ -29,14 +29,6 @@ show_help() {
     printMsg "  ${C_L_BLUE}-h, --help${T_RESET}      Show this help message."
 }
 
-show_docker_logs_and_exit() {
-    local message="$1"
-    printErrMsg "$message"
-    printMsg "    ${T_INFO_ICON} Showing last 20 lines of container logs:"
-    run_webui_compose logs --tail=20 | sed 's/^/    /'
-    exit 1
-}
-
 main() {
     if [[ -n "$1" ]]; then
         case "$1" in
@@ -96,11 +88,11 @@ main() {
         exit 1
     fi
 
-    local webui_port=${OPEN_WEBUI_PORT:-3000}
-    local webui_url="http://localhost:${webui_port}"
+    local webui_url
+    webui_url=$(get_openwebui_url)
 
     if ! poll_service "$webui_url" "OpenWebUI UI" 60; then
-        show_docker_logs_and_exit "OpenWebUI containers are running, but the UI is not responding at ${webui_url}."
+        show_webui_logs_and_exit "OpenWebUI containers are running, but the UI is not responding at ${webui_url}."
     fi
 
     printOkMsg "OpenWebUI started successfully!"

@@ -974,6 +974,44 @@ wait_for_pids_with_spinner() {
     return $exit_code
 }
 
+# --- OpenWebUI Helpers ---
+
+# Gets the full URL for the OpenWebUI service.
+# It respects the OPEN_WEBUI_PORT environment variable.
+# Usage:
+#   local webui_url
+#   webui_url=$(get_openwebui_url)
+get_openwebui_url() {
+    local webui_port=${OPEN_WEBUI_PORT:-3000}
+    echo "http://localhost:${webui_port}"
+}
+
+# Checks if the OpenWebUI container is running.
+# Returns 0 if running, 1 otherwise.
+check_openwebui_container_running() {
+    # Use the shared helper to run docker compose. It will find the webui dir.
+    # We pipe the output to grep, and check the status of the pipe.
+    # Redirect stderr to /dev/null to hide "no such service" errors if compose file is bad.
+    if run_webui_compose ps --filter "status=running" --services 2>/dev/null | grep -q "open-webui"; then
+        return 0 # Running
+    else
+        return 1 # Not running
+    fi
+}
+
+# Helper to show OpenWebUI logs and exit on failure.
+show_webui_logs_and_exit() {
+    local message="$1"
+    printErrMsg "$message"
+    # Check if run_webui_compose is available before trying to use it.
+    if command -v run_webui_compose &>/dev/null; then
+        printMsg "    ${T_INFO_ICON} Preview of container logs:"
+        # Indent the logs for readability
+        run_webui_compose logs --tail=20 | sed 's/^/    /'
+    fi
+    exit 1
+}
+
 # --- Test Framework ---
 # These are not 'local' so the helper functions can access them.
 test_count=0 # Global test counter
