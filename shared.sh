@@ -163,8 +163,11 @@ move_cursor_up() {
 # It reads from stdin and takes an optional indent prefix as an argument.
 # Usage:
 #   echo -e "HEADER1\tHEADER2\nValue1\tValue2" | format_tsv_as_table "  "
+# To right-align column 2:
+#   ... | format_tsv_as_table "  " "2"
 format_tsv_as_table() {
     local indent="${1:-}" # Optional indent prefix
+    local right_align_cols="${2:-}" # Optional string of column numbers to right-align, e.g., "2 3"
     local padding=4      # Spaces between columns
 
     # Use a two-pass awk script for perfect alignment.
@@ -172,7 +175,7 @@ format_tsv_as_table() {
     # 2. The second pass prints each cell, followed by the required padding.
     # This approach is necessary to correctly handle ANSI color codes, which have
     # a non-zero character length but zero visible width.
-    awk -v indent="$indent" -v padding="$padding" '
+    awk -v indent="$indent" -v padding="$padding" -v right_align_str="$right_align_cols" '
         # Function to calculate the visible length of a string by removing ANSI codes.
         # temp_s is declared as a parameter to make it a local variable,
         # which is the portable way to do this in awk.
@@ -182,7 +185,12 @@ format_tsv_as_table() {
             return length(temp_s)
         }
 
-        BEGIN { FS="\t" }
+        BEGIN {
+            FS="\t"
+            # Parse the right_align_str into an associative array for quick lookups.
+            split(right_align_str, col_map, " ")
+            for (i in col_map) { right_align[col_map[i]] = 1 }
+        }
 
         # First pass: Read all data and calculate max visible width for each column.
         {
@@ -201,9 +209,22 @@ format_tsv_as_table() {
                 # Skip processing for lines that are completely empty. This handles trailing newlines from echo.
                 if (num_fields == 1 && fields[1] == "") { continue }
                 for(col=1; col<=num_fields; col++) {
-                    printf "%s", fields[col] # Print the cell content (with colors).
-                    pad_count = max_width[col] - visible_length(fields[col]) + padding
-                    for (p=0; p<pad_count; p++) { printf " " } # Print padding.
+                    align_pad = max_width[col] - visible_length(fields[col])
+
+                    if (right_align[col]) {
+                        # Right-align: alignment padding, then content.
+                        for (p=0; p<align_pad; p++) { printf " " }
+                        printf "%s", fields[col]
+                    } else {
+                        # Left-align: content, then alignment padding.
+                        printf "%s", fields[col]
+                        for (p=0; p<align_pad; p++) { printf " " }
+                    }
+
+                    # Print inter-column padding, but not for the last column.
+                    if (col < num_fields) {
+                        for (p=0; p<padding; p++) { printf " " }
+                    }
                 }
                 printf "\n"
             }
