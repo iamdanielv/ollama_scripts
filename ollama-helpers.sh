@@ -256,9 +256,19 @@ print_ollama_models_table() {
     done <<< "$models_tsv" # Use a "here string" for cleaner input to loop
 
     # --- Print table ---
+    # First, format the entire table in memory to get consistent column widths.
+    local formatted_table
+    formatted_table=$(echo -e "${full_tsv}" | format_tsv_as_table "  " "1 3")
+
+    # Then, split the formatted output into header and body to insert a divider.
+    local formatted_header
+    formatted_header=$(echo "$formatted_table" | head -n 1)
+    local formatted_body
+    formatted_body=$(echo "$formatted_table" | tail -n +2)
+
+    printMsg "${formatted_header}"
     printMsg "${C_BLUE}${DIV}${T_RESET}"
-    # Pipe the generated TSV to the new formatter with an indent.
-    echo -e "${full_tsv}" | format_tsv_as_table "  "
+    printMsgNoNewline "${formatted_body}"
     printMsg "${C_BLUE}${DIV}${T_RESET}"
 }
 
@@ -298,7 +308,7 @@ display_installed_models() {
         return 1
     fi
 
-    clear_lines_up 2 # remove "Fetching model..." and banner footer from output
+    clear_lines_up 1 # remove "Fetching model..."
 
     # 3. Display table
     print_ollama_models_table "$models_json"
