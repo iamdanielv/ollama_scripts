@@ -81,13 +81,8 @@ _format_ps_output() {
     if [[ -z "$tsv_output" || $(echo "$tsv_output" | wc -l) -lt 2 ]]; then
          echo "   ${C_L_YELLOW}No models are currently loaded.${T_RESET}"
     else
-        # Format the TSV from jq into a clean, aligned table using a two-pass awk script.
-        # This is more robust than `column -t` as it gives us full control over formatting.
-        # The BEGIN block sets the field separator to a tab and defines padding.
-        # The first block reads all data and finds the max width for each column.
-        # The END block prints the formatted data, left-aligned, with padding.
-        # shellcheck disable=SC2094 # The awk script is intended to read from the pipe.
-        echo -e "$tsv_output" | awk 'BEGIN { FS="\t"; PADDING=4 } { for(i=1; i<=NF; i++) { if(length($i) > width[i]) { width[i] = length($i) } } data[NR] = $0 } END { for(row=1; row<=NR; row++) { split(data[row], fields, FS); for(col=1; col<=NF; col++) { printf "%-" (width[col] + PADDING) "s", fields[col] } printf "\n" } }'
+        # Use the shared TSV formatter, which handles alignment automatically.
+        echo -e "$tsv_output" | format_tsv_as_table
     fi
 }
 
