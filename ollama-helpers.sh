@@ -228,11 +228,12 @@ print_ollama_models_table() {
         return 0
     fi
 
-    # --- Table Header ---
-    printf "  %-5s %-40s %10s  %-15s\n" "#" "NAME" "SIZE" "MODIFIED"
-    printMsg "${C_BLUE}${DIV}${T_RESET}"
+    # --- Build TSV with header and colors ---
+    local full_tsv=""
+    # Header
+    full_tsv+="#\tNAME\tSIZE\tMODIFIED\n"
 
-    # --- Table Body ---
+    # Body
     local i=1
     # iterate over TSV data
     while IFS=$'\t' read -r name size_gb modified; do
@@ -241,18 +242,23 @@ print_ollama_models_table() {
         local size_bg_color="${C_GREEN}" # Default to Small
         local size_gb_int=${size_gb%.*}
 
-        if [[ "$size_gb_int" -ge 9 ]]; then
-            size_bg_color="${C_RED}"      # Extra Large
-        elif [[ "$size_gb_int" -ge 6 ]]; then
-            size_bg_color="${C_YELLOW}"   # Large
-        elif [[ "$size_gb_int" -ge 3 ]]; then
-            size_bg_color="${C_BLUE}"     # Medium
+        if [[ "$size_gb_int" -ge 9 ]]; then size_bg_color="${C_RED}";        # Extra Large
+        elif [[ "$size_gb_int" -ge 6 ]]; then size_bg_color="${C_YELLOW}";   # Large
+        elif [[ "$size_gb_int" -ge 3 ]]; then size_bg_color="${C_BLUE}";     # Medium
         fi
 
-        printf "  %-5s ${C_L_CYAN}%-40s${T_RESET} ${T_BOLD}${size_bg_color}%10s${T_RESET}  ${C_MAGENTA}%-15s${T_RESET}\n" "$i" "$name" "${size_gb} GB" "$modified"
+        local colored_name="${C_L_CYAN}${name}${T_RESET}"
+        local colored_size="${T_BOLD}${size_bg_color}${size_gb} GB${T_RESET}"
+        local colored_modified="${C_MAGENTA}${modified}${T_RESET}"
+
+        full_tsv+="${i}\t${colored_name}\t${colored_size}\t${colored_modified}\n"
         ((i++))
     done <<< "$models_tsv" # Use a "here string" for cleaner input to loop
 
+    # --- Print table ---
+    printMsg "${C_BLUE}${DIV}${T_RESET}"
+    # Pipe the generated TSV to the new formatter with an indent.
+    echo -e "${full_tsv}" | format_tsv_as_table "  "
     printMsg "${C_BLUE}${DIV}${T_RESET}"
 }
 
@@ -292,7 +298,7 @@ display_installed_models() {
         return 1
     fi
 
-    clear_lines_up 1 # remove "Fetching model..." from output
+    clear_lines_up 2 # remove "Fetching model..." and banner footer from output
 
     # 3. Display table
     print_ollama_models_table "$models_json"
