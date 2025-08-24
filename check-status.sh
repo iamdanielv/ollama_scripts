@@ -431,8 +431,8 @@ main() {
 
     if [[ -n "$1" ]]; then
         case "$1" in
-            -m|--models) display_installed_models; exit 0;; 
-            -w|--watch)  watch_ollama_ps; exit 0;; 
+            -m|--models) clear; display_installed_models; exit 0;; 
+            -w|--watch)  clear; watch_ollama_ps; exit 0;; 
             -h|--help)   show_help; exit 0;; 
             -t|--test)   run_tests; exit 0;; 
             *)
