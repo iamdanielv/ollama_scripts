@@ -371,13 +371,7 @@ _render_model_list_table() {
     fi
 
     # --- Banner ---
-    # Replicating printBanner logic to build a string instead of printing directly.
-    if [[ "$SHLVL" -gt "$SCRIPT_EXEC_ENTRY_SHLVL" ]]; then
-        output+="${C_BLUE}${T_BOLD}--- ${prompt} ---${T_RESET}\n"
-    else
-        output+="${C_L_BLUE}+ ${prompt}\n"
-        output+="${DIV}${T_RESET}\n"
-    fi
+    output+="$(generate_banner_string "$prompt")\n"
 
     # --- Header ---
     # Adjust header padding based on mode
