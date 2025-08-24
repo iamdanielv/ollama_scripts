@@ -117,7 +117,8 @@ run_model_logic() {
         return 0
     fi
 
-    clear_lines_up 1 # remove "Fetching model..." from output
+    # clear the entire screen so we start with a clean slate
+    clear
 
     # --- Select model ---
     local model_to_run
