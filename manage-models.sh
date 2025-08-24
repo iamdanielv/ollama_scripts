@@ -105,6 +105,11 @@ _perform_model_updates() {
     fi
 
     printInfoMsg "The following models will be updated: ${C_L_BLUE}${models_to_update[*]}${T_RESET}"
+    if ! prompt_yes_no "Are you sure you want to update these ${#models_to_update[@]} model(s)?" "n"; then
+        printInfoMsg "Update cancelled."
+        return 2 # 2 means user cancelled, no state change
+    fi
+
     local -a failed_model_names=()
     for model_name in "${models_to_update[@]}"; do
         printMsg "\n${C_BLUE}${DIV}${T_RESET}"
@@ -364,22 +369,28 @@ test_perform_model_updates() {
             return 0
         fi
     }
-    export -f ollama
+    # Mock the user confirmation prompt.
+    prompt_yes_no() {
+        # Default to 'yes' by returning 0 unless MOCK_PROMPT_RETURN_CODE is set.
+        return "${MOCK_PROMPT_RETURN_CODE:-0}"
+    }
+    export -f ollama prompt_yes_no
 
     # --- Test Cases ---
 
-    # Scenario 1: Successfully updates multiple models. We run the function directly
-    # to capture its exit code and check the side-effect on the mock counter.
+    # Scenario 1: Successfully updates multiple models, user confirms.
     MOCK_OLLAMA_CALL_COUNT=0
     export MOCK_OLLAMA_FAIL_ON=""
+    export MOCK_PROMPT_RETURN_CODE=0 # User says 'yes'
     _perform_model_updates "model1" "model2" &>/dev/null
     local exit_code_success=$?
     _run_string_test "$exit_code_success" "0" "Succeeds when all updates work"
     _run_string_test "$MOCK_OLLAMA_CALL_COUNT" "2" "Calls ollama for each model"
 
-    # Scenario 2: Fails if one of the model updates fails.
+    # Scenario 2: Fails if one of the model updates fails, user confirms.
     MOCK_OLLAMA_CALL_COUNT=0
     export MOCK_OLLAMA_FAIL_ON="model2"
+    export MOCK_PROMPT_RETURN_CODE=0 # User says 'yes'
     _perform_model_updates "model1" "model2" &>/dev/null
     local exit_code_fail=$?
     _run_string_test "$exit_code_fail" "1" "Fails when one update fails"
@@ -387,12 +398,22 @@ test_perform_model_updates() {
 
     # Scenario 3: Handles being called with no models.
     MOCK_OLLAMA_CALL_COUNT=0
+    # No prompt is shown if no models are passed, so no need to set MOCK_PROMPT_RETURN_CODE
     _perform_model_updates &>/dev/null
     _run_string_test "$?" "0" "Handles being called with no models"
     _run_string_test "$MOCK_OLLAMA_CALL_COUNT" "0" "Does not call ollama if no models are given"
 
+    # Scenario 4: User cancels the update.
+    MOCK_OLLAMA_CALL_COUNT=0
+    export MOCK_PROMPT_RETURN_CODE=1 # User says 'no'
+    _perform_model_updates "model1" "model2" &>/dev/null
+    local exit_code_cancel=$?
+    _run_string_test "$exit_code_cancel" "2" "Returns 2 when user cancels"
+    _run_string_test "$MOCK_OLLAMA_CALL_COUNT" "0" "Does not call ollama when user cancels"
+    export MOCK_PROMPT_RETURN_CODE=0 # Reset for other tests
+
     # --- Cleanup ---
-    unset -f ollama
+    unset -f ollama prompt_yes_no
 }
 
 test_delete_model() {
