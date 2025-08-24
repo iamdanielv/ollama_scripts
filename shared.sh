@@ -29,6 +29,10 @@ export C_BLACK='\e[30;1m'
 export T_RESET='\e[0m'
 export T_BOLD='\e[1m'
 export T_ULINE='\e[4m'
+export T_REVERSE='\e[7m'
+export T_CLEAR_LINE='\e[K'
+export T_CURSOR_HIDE='\e[?25l'
+export T_CURSOR_SHOW='\e[?25h'
 
 export T_ERR="${T_BOLD}\e[31;1m"
 export T_ERR_ICON="[${T_BOLD}${C_RED}✗${T_RESET}]"
@@ -419,22 +423,23 @@ interactive_multi_select_menu() {
     fi
 
     # State variables
-    local current_option=0
+    local current_option=0 # The currently highlighted option index
     local -a selected_options=()
     for ((i=0; i<num_options; i++)); do
         selected_options[i]=0
     done
 
     # If the first option is "All", enable special select/deselect all behavior.
-    local has_all_option=0
+    local has_all_option=false
     if [[ "${options[0]}" == "All" ]]; then
-        has_all_option=1
+        has_all_option=true
     fi
 
-    # Helper function to print the menu
-    _print_menu() {
-        printMsg "${T_QST_ICON} ${prompt}" >/dev/tty
-        printMsg "    ${C_WHITE}(Use ${C_L_CYAN}↑ ↓${C_WHITE} to navigate, ${C_L_CYAN}space${C_WHITE} to select, ${C_L_GREEN}enter${C_WHITE} to confirm, ${C_L_YELLOW}q/esc${C_WHITE} to cancel)${T_RESET}" >&2
+    # Helper function to build the menu as a single string for faster rendering.
+    _build_menu_output() {
+        local output=""
+        output+="${T_QST_ICON} ${prompt}\n"
+        output+="    ${C_WHITE}(Use ${C_L_CYAN}↑ ↓${C_WHITE} to navigate, ${C_L_CYAN}space${C_WHITE} to select, ${C_L_GREEN}enter${C_WHITE} to confirm, ${C_L_YELLOW}q/esc${C_WHITE} to cancel)${T_RESET}\n"
         for i in "${!options[@]}"; do
             local pointer=" "
             local checkbox="[ ]"
@@ -442,34 +447,34 @@ interactive_multi_select_menu() {
             local highlight_end=""
 
             if [[ ${selected_options[i]} -eq 1 ]]; then
-                checkbox="${C_GREEN}${T_BOLD}[✓]"
+                checkbox="${C_GREEN}${T_BOLD}[✓]${T_RESET}"
             fi
 
             if [[ $i -eq $current_option ]]; then
                 pointer="${T_BOLD}${C_L_MAGENTA}❯${T_RESET}"
-                highlight_start="$(tput rev)" # reverse video
-                highlight_end="$(tput sgr0)"  # reset attributes
+                highlight_start="${T_REVERSE}"
+                highlight_end="${T_RESET}"
             fi
 
-            # `tput el` clears to the end of the line to prevent artifacts from varying line lengths.
-            printMsg "  ${pointer} ${highlight_start}${checkbox} ${options[i]} ${highlight_end} ${T_RESET}$(tput el)" >/dev/tty
+            output+="  ${pointer} ${highlight_start}${checkbox} ${options[i]}${highlight_end}${T_RESET}${T_CLEAR_LINE}\n"
         done
+        echo -e "$output"
     }
 
     # Hide cursor and set a trap to restore it on exit
-    tput civis >/dev/tty
-    # The EXIT trap will run on any exit, including from the INT trap in shared.sh
-    trap 'tput cnorm >/dev/tty' EXIT
+    printMsgNoNewline "${T_CURSOR_HIDE}" >/dev/tty
+    trap 'printMsgNoNewline "${T_CURSOR_SHOW}" >/dev/tty' EXIT
 
     # Initial draw of the menu
-    _print_menu
+    local menu_output
+    menu_output=$(_build_menu_output)
+    echo -ne "$menu_output" >/dev/tty
 
     local key
     local menu_height=$((num_options + 2)) # +2 for prompt and help line
 
     while true; do
-        # Move cursor up to the start of the menu, so we can overwrite it.
-        tput cuu "${menu_height}" >/dev/tty
+        printf "\e[${menu_height}A" >/dev/tty
 
         # Read from the controlling terminal, not stdin which might be redirected
         key=$(read_single_char </dev/tty)
@@ -480,8 +485,7 @@ interactive_multi_select_menu() {
             ' '|"h"|"l") 
                 selected_options[current_option]=$(( 1 - selected_options[current_option] ))
 
-                # Handle "Select All" / "Deselect All" logic if "All" option exists
-                if [[ $has_all_option -eq 1 ]]; then
+                if [[ "$has_all_option" == "true" ]]; then
                     if [[ $current_option -eq 0 ]]; then
                         # "All" was toggled, so set all other options to its state
                         local all_state=${selected_options[0]}
@@ -504,13 +508,14 @@ interactive_multi_select_menu() {
                 ;;
             "$KEY_ENTER"|"$KEY_ESC"|"q")
                 # Before exiting, clear the menu from the screen.
-                # The cursor is at the top of the menu area.
+                # The cursor is already at the top of the menu area.
                 for ((i=0; i < menu_height; i++)); do
-                    tput el >/dev/tty # Clear the line
-                    tput cud1 >/dev/tty # Move down to the next line
+                    echo -ne "${T_CLEAR_LINE}\n" >/dev/tty
                 done
                 # Move cursor back to the starting line.
-                tput cuu "${menu_height}" >/dev/tty
+                if (( menu_height > 0 )); then
+                    printf "\e[${menu_height}A" >/dev/tty
+                fi
 
                 if [[ "$key" == "$KEY_ENTER" ]]; then
                     break
@@ -520,7 +525,8 @@ interactive_multi_select_menu() {
                 ;;
         esac
         # Redraw the menu with updated state
-        _print_menu
+        menu_output=$(_build_menu_output)
+        echo -ne "$menu_output" >/dev/tty
     done
 
     local has_selection=0

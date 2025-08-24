@@ -357,25 +357,34 @@ _render_model_list_table() {
     # The 'selected' array is only passed in multi-select mode.
     local -a _dummy_selected_ref=() # Dummy array for single-select mode
     local -n selected_ref="${8:-_dummy_selected_ref}"
+    local output=""
 
     local with_all_option=false
     if [[ "$mode" == "multi" && "${names_ref[0]}" == "All" ]]; then
         with_all_option=true
     fi
 
-    printBanner "${prompt}" >/dev/tty
-    # Adjust header padding based on mode
-    if [[ "$mode" == "multi" ]]; then
-        printf " %-3s %-40s %10s  %-15s\n" "" "NAME" "SIZE" "MODIFIED" >/dev/tty
+    # --- Banner ---
+    # Replicating printBanner logic to build a string instead of printing directly.
+    if [[ "$SHLVL" -gt "$SCRIPT_EXEC_ENTRY_SHLVL" ]]; then
+        output+="${C_BLUE}${T_BOLD}--- ${prompt} ---${T_RESET}\n"
     else
-        printf " %-1s %-40s %10s  %-15s\n" "" "NAME" "SIZE" "MODIFIED" >/dev/tty
+        output+="${C_L_BLUE}+ ${prompt}\n"
+        output+="${DIV}${T_RESET}\n"
     fi
-    printMsg "${C_BLUE}${DIV}${T_RESET}" >/dev/tty
 
+    # --- Header ---
+    # Adjust header padding based on mode
+    local header_padding="%-1s"
+    if [[ "$mode" == "multi" ]]; then header_padding="%-3s"; fi
+    output+=$(printf " ${header_padding} %-40s %10s  %-15s" "" "NAME" "SIZE" "MODIFIED")
+    output+="\n${C_BLUE}${DIV}${T_RESET}\n"
+
+    # --- Body ---
     for i in "${!names_ref[@]}"; do
         local pointer=" "; local highlight_start=""; local highlight_end=""
         if [[ $i -eq $current_option ]]; then
-            pointer="${T_BOLD}${C_L_MAGENTA}❯${T_RESET}"; highlight_start="$(tput rev)"; highlight_end="${T_RESET}";
+            pointer="${T_BOLD}${C_L_MAGENTA}❯${T_RESET}"; highlight_start="${T_REVERSE}"; highlight_end="${T_RESET}";
         fi
 
         local line_prefix=""
@@ -405,9 +414,11 @@ _render_model_list_table() {
             modified_format="${C_MAGENTA}%-15s${T_RESET}"
         fi
         line_body=$(printf "%-40s ${size_format}  ${modified_format}" "$name" "$formatted_size" "$modified")
-        printMsg "${pointer}${line_prefix}${highlight_start}${line_body}${highlight_end}$(tput el)" >/dev/tty
+        output+="${pointer}${line_prefix}${highlight_start}${line_body}${highlight_end}${T_CLEAR_LINE}\n"
     done
-    printMsg "${C_BLUE}${DIV}${T_RESET}" >/dev/tty
+
+    # --- Footer ---
+    output+="${C_BLUE}${DIV}${T_RESET}\n"
     local help_text="  ${C_L_MAGENTA}↑↓${C_WHITE}(Move)"
     if [[ "$mode" == "multi" ]]; then
         help_text+=" | ${C_L_MAGENTA}SPACE${C_WHITE}(Select)"
@@ -416,8 +427,11 @@ _render_model_list_table() {
         help_text+=" | ${C_L_GREEN}(A)ll${C_WHITE}(Toggle)"
     fi
     help_text+=" | ${C_L_MAGENTA}ENTER${C_WHITE}(Confirm) | ${C_L_YELLOW}Q/ESC${C_WHITE}(Cancel)${T_RESET}"
-    printMsg "${help_text}" >/dev/tty
-    printMsg "${C_BLUE}${DIV}${T_RESET}" >/dev/tty
+    output+="${help_text}\n"
+    output+="${C_BLUE}${DIV}${T_RESET}\n"
+
+    # Final combined print
+    echo -ne "$output" >/dev/tty
 }
 
 # Private helper to handle the logic of toggling an item in the multi-select menu.
@@ -516,11 +530,13 @@ _interactive_list_models() {
 
     # 3. Set up interactive environment
     stty -echo
-    tput civis >/dev/tty; trap 'tput cnorm >/dev/tty; stty echo' EXIT
+    printMsgNoNewline "${T_CURSOR_HIDE}" >/dev/tty
+    trap 'printMsgNoNewline "${T_CURSOR_SHOW}" >/dev/tty; stty echo' EXIT
 
-    local menu_height=$((num_options + 7)) # Banner(2), header(1), div(1), N lines, div(1), help(1), div(1)
-    _render_model_list_table "$prompt" "$mode" "$current_option" model_names \
-        model_dates formatted_sizes bg_colors selected_options
+    # Calculate menu height for cursor control. It's the number of options plus the surrounding chrome.
+    # Banner(1-2) + Header(1) + Div(1) + N lines + Div(1) + Help(1) + Div(1) = N + 6 or N + 7
+    local menu_height=$((num_options + 7)) # Using 7 is safe for both banner types.
+    _render_model_list_table "$prompt" "$mode" "$current_option" model_names model_dates formatted_sizes bg_colors selected_options
 
     # 4. Main interactive loop
     local key
@@ -561,14 +577,13 @@ _interactive_list_models() {
                 ;;
         esac
         if [[ "$state_changed" == "true" ]]; then
-            tput cuu "${menu_height}" >/dev/tty
-            _render_model_list_table "$prompt" "$mode" "$current_option" model_names \
-                model_dates formatted_sizes bg_colors selected_options
+            printf "\e[${menu_height}A" >/dev/tty
+            _render_model_list_table "$prompt" "$mode" "$current_option" model_names model_dates formatted_sizes bg_colors selected_options
         fi
     done
 
     # 5. Clean up screen and process output
-    clear_lines_up "$menu_height" >/dev/tty
+    clear_lines_up "$menu_height" >/dev/tty # This already uses ANSI codes
 
     if [[ "$mode" == "multi" ]]; then
         _process_multi_select_output "$with_all_option" model_names selected_options
