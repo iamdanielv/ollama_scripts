@@ -685,10 +685,10 @@ load_project_env() {
 
 	# If there are variables to source, print the message and source them.
 	if [[ ${#valid_vars[@]} -gt 0 ]]; then
-		printInfoMsg "Sourcing environment variables from ${C_L_BLUE}${env_file_path}${T_RESET}"
-		local pretty_vars
-		pretty_vars=$(printf ", %s" "${valid_vars[@]}")
-		printMsg "    Found: ${C_L_CYAN}${pretty_vars:2}${T_RESET}"
+		# printInfoMsg "Sourcing environment variables from ${C_L_BLUE}${env_file_path}${T_RESET}"
+		# local pretty_vars
+		# pretty_vars=$(printf ", %s" "${valid_vars[@]}")
+		# printMsg "    Found: ${C_L_CYAN}${pretty_vars:2}${T_RESET}"
 
 		set -a
 		# shellcheck source=/dev/null
