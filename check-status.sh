@@ -82,7 +82,7 @@ _format_ps_output() {
          echo "   ${C_L_YELLOW}No models are currently loaded.${T_RESET}"
     else
         # Use the shared TSV formatter, which handles alignment automatically.
-        echo -e "$tsv_output" | format_tsv_as_table
+        echo -e "$tsv_output" | format_tsv_as_table "" "2 4"
     fi
 }
 
