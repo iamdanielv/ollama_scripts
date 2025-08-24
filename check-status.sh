@@ -240,7 +240,7 @@ test_format_ps_output() {
     }'
     # Use $'...' to interpret escape sequences like \n.
     # The awk script adds 4 spaces of padding.
-    local expected_two_models_output=$'NAME             SIZE      PROCESSOR    CONTEXT    \ngemma:2b         2.9 GB    CPU          4096       \nllama3:latest    8.0 GB    GPU          8192       '
+    local expected_two_models_output=$'NAME               SIZE    PROCESSOR    CONTEXT\ngemma:2b         2.9 GB    CPU             4096\nllama3:latest    8.0 GB    GPU             8192'
     local actual_two_models_output
     actual_two_models_output="$(_format_ps_output "$two_models_json")"
     _run_string_test "$actual_two_models_output" "$expected_two_models_output" "Formats multiple loaded models correctly"
