@@ -159,6 +159,59 @@ move_cursor_up() {
     echo -ne "\r" # Move cursor to the beginning of the line
 }
 
+# Formats Tab-Separated Value (TSV) data into a clean, aligned table.
+# This function correctly handles cells that contain ANSI color codes.
+# It reads from stdin and takes an optional indent prefix as an argument.
+# Usage:
+#   echo -e "HEADER1\tHEADER2\nValue1\tValue2" | format_tsv_as_table "  "
+format_tsv_as_table() {
+    local indent="${1:-}" # Optional indent prefix
+    local padding=4      # Spaces between columns
+
+    # Use a two-pass awk script for perfect alignment.
+    # 1. The first pass calculates the maximum *visible* width of each column.
+    # 2. The second pass prints each cell, followed by the required padding.
+    # This approach is necessary to correctly handle ANSI color codes, which have
+    # a non-zero character length but zero visible width.
+    awk -v indent="$indent" -v padding="$padding" '
+        # Function to calculate the visible length of a string by removing ANSI codes.
+        # temp_s is declared as a parameter to make it a local variable,
+        # which is the portable way to do this in awk.
+        function visible_length(s, temp_s) {
+            temp_s = s # Copy the string to a local variable.
+            gsub(/\x1b\[[0-9;?]*[a-zA-Z]/, "", temp_s)
+            return length(temp_s)
+        }
+
+        BEGIN { FS="\t" }
+
+        # First pass: Read all data and calculate max visible width for each column.
+        {
+            for(i=1; i<=NF; i++) {
+                len = visible_length($i)
+                if(len > max_width[i]) { max_width[i] = len }
+            }
+            data[NR] = $0 # Store the original line with colors.
+        }
+
+        # Second pass: Print the formatted table.
+        END {
+            for(row=1; row<=NR; row++) {
+                printf "%s", indent
+                num_fields = split(data[row], fields, FS) # Split the original line to preserve colors.
+                # Skip processing for lines that are completely empty. This handles trailing newlines from echo.
+                if (num_fields == 1 && fields[1] == "") { continue }
+                for(col=1; col<=num_fields; col++) {
+                    printf "%s", fields[col] # Print the cell content (with colors).
+                    pad_count = max_width[col] - visible_length(fields[col]) + padding
+                    for (p=0; p<pad_count; p++) { printf " " } # Print padding.
+                }
+                printf "\n"
+            }
+        }
+    '
+}
+
 # Reads a single character from stdin without needing Enter.
 # It correctly handles the ESC key, distinguishing it from arrow key escape sequences.
 # It also explicitly identifies the Enter key.
