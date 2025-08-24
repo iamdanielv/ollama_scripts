@@ -142,6 +142,19 @@ clear_lines_up() {
     echo -ne "\r" # Move cursor to the beginning of the line
 }
 
+# Moves the cursor up a specified number of lines without clearing them.
+# This is used for flicker-free updates of multi-line content.
+# Usage: move_cursor_up [number_of_lines]
+move_cursor_up() {
+    local lines=${1:-1}
+    if (( lines > 0 )); then
+        # Using a loop of "up 1" can be more reliable in some terminals
+        # than a single "up N" command, which helps prevent screen tearing.
+        for ((i=0; i<lines; i++)); do echo -ne "\e[1A"; done
+    fi
+    echo -ne "\r" # Move cursor to the beginning of the line
+}
+
 # Reads a single character from stdin without needing Enter.
 # It correctly handles the ESC key, distinguishing it from arrow key escape sequences.
 # It also explicitly identifies the Enter key.
