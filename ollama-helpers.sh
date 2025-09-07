@@ -268,7 +268,7 @@ print_ollama_models_table() {
 
     printMsg "${formatted_header}"
     printMsg "${C_BLUE}${DIV}${T_RESET}"
-    printMsgNoNewline "${formatted_body}"
+    printMsg "${formatted_body}"
     printMsg "${C_BLUE}${DIV}${T_RESET}"
 }
 
@@ -442,7 +442,7 @@ interactive_model_manager() {
     local models_json="$1"
 
     # --- State Variables ---
-    local -a model_names model_sizes model_dates formatted_sizes bg_colors
+    local -a model_names model_sizes model_dates formatted_sizes bg_colors pre_rendered_lines
     local -a selected_options=()
     local current_option=0
     local num_options=0
@@ -457,10 +457,11 @@ interactive_model_manager() {
         model_dates=()
         formatted_sizes=()
         bg_colors=()
+        pre_rendered_lines=()
 
         # Use the existing helper to parse the data into our local arrays
-        if ! _parse_model_data_for_menu "$json_data" "false" model_names \
-            model_sizes model_dates formatted_sizes bg_colors; then
+        if ! _parse_model_data_for_menu "$json_data" "false" model_names model_sizes \
+            model_dates formatted_sizes bg_colors pre_rendered_lines; then
             num_options=0
             return 1 # No models found
         fi
@@ -485,7 +486,7 @@ interactive_model_manager() {
         else
             # Use the existing table renderer, but in multi-select mode to show checkboxes
             _render_model_list_table "Local Models" "multi" "$current_option" \
-                model_names model_dates formatted_sizes bg_colors selected_options
+                model_names model_dates formatted_sizes bg_colors selected_options pre_rendered_lines
         fi
 
         local help_nav="  ${C_L_GRAY}Navigation:${T_RESET} ${C_L_MAGENTA}↑↓${C_WHITE} Move | ${C_L_MAGENTA}SPACE${C_WHITE} Select | ${C_L_YELLOW}(Q)uit${T_RESET}"
@@ -693,6 +694,7 @@ interactive_model_manager() {
 # Private helper to parse model JSON for interactive menus.
 # Populates the provided nameref arrays.
 # Usage: _parse_model_data_for_menu "$models_json" "$with_all" names_ref sizes_ref dates_ref formatted_sizes_ref bg_colors_ref
+# NEW: pre_rendered_lines_ref
 _parse_model_data_for_menu() {
     local models_json="$1"
     local with_all_option="$2"
@@ -701,6 +703,7 @@ _parse_model_data_for_menu() {
     local -n dates_ref="$5"
     local -n formatted_sizes_ref="$6"
     local -n bg_colors_ref="$7"
+    local -n pre_rendered_lines_ref="$8"
     
     # Parse models into arrays. Sorting is done by jq.
     mapfile -t names_ref < <(echo "$models_json" | jq -r '.models | sort_by(.name)[] | .name')
@@ -718,6 +721,16 @@ _parse_model_data_for_menu() {
         else bg_colors_ref+=("${C_GREEN}"); fi
     done
 
+    # Pre-render the static part of each line for performance.
+    for i in "${!names_ref[@]}"; do
+        local name="${names_ref[i]}"
+        local formatted_size="${formatted_sizes_ref[i]}"
+        local modified="${dates_ref[i]}"
+        local size_format="${bg_colors_ref[i]}%10s${T_RESET}"
+        local modified_format="${C_MAGENTA}%-15s${T_RESET}"
+        pre_rendered_lines_ref+=("$(printf "%-40s ${size_format}  ${modified_format}" "$name" "$formatted_size" "$modified")")
+    done
+
     if [[ ${#names_ref[@]} -eq 0 ]]; then
         return 1
     fi
@@ -729,24 +742,28 @@ _parse_model_data_for_menu() {
         dates_ref=("" "${dates_ref[@]}")
         formatted_sizes_ref=("" "${formatted_sizes_ref[@]}")
         bg_colors_ref=("" "${bg_colors_ref[@]}")
+        # Pre-render the "All" line
+        local all_line; all_line=$(printf "%-40s %10s  %-15s" "${T_BOLD}All${T_RESET}" "" "")
+        pre_rendered_lines_ref=("$all_line" "${pre_rendered_lines_ref[@]}")
     fi
     return 0
 }
 
 # Private helper to render the interactive model selection table.
 # This is a pure display function that handles both single and multi-select modes.
-# Usage: _render_model_list_table "Prompt" mode current_opt_idx names_ref dates_ref formatted_sizes_ref bg_colors_ref [selected_ref]
+# Usage: _render_model_list_table "Prompt" mode current_opt_idx names_ref dates_ref formatted_sizes_ref bg_colors_ref [selected_ref] pre_rendered_lines_ref
 _render_model_list_table() {
     local prompt="$1"
     local mode="$2"
     local current_option="$3"
     local -n names_ref="$4"
-    local -n dates_ref="$5"
-    local -n formatted_sizes_ref="$6"
-    local -n bg_colors_ref="$7"
+    local -n _dates_ref="$5" # No longer used directly, but keep for arg position
+    local -n _formatted_sizes_ref="$6" # No longer used directly
+    local -n _bg_colors_ref="$7" # No longer used directly
     # The 'selected' array is only passed in multi-select mode.
-    local -a _dummy_selected_ref=() # Dummy array for single-select mode
-    local -n selected_ref="${8:-_dummy_selected_ref}"
+    local -a _dummy_selected_ref=()
+    local -n selected_ref="${8:-_dummy_selected_ref}" # For multi-select
+    local -n pre_rendered_lines_ref="$9" # The new pre-rendered lines
     local output=""
 
     local with_all_option=false
@@ -777,24 +794,7 @@ _render_model_list_table() {
             line_prefix="  " # Two spaces for alignment with multi-select's pointer
         fi
 
-        local line_body name modified formatted_size
-        local size_format modified_format
-
-        if [[ "$with_all_option" == "true" && $i -eq 0 ]]; then
-            # handle the "All" entry
-            name="${T_BOLD}${names_ref[i]}"
-            modified=""
-            formatted_size=""
-            size_format="%10s"
-            modified_format="%-15s${T_RESET}"
-        else
-            name="${names_ref[i]}"
-            modified="${dates_ref[i]}"
-            formatted_size="${formatted_sizes_ref[i]}"
-            size_format="${bg_colors_ref[i]}%10s${T_RESET}"
-            modified_format="${C_MAGENTA}%-15s${T_RESET}"
-        fi
-        line_body=$(printf "%-40s ${size_format}  ${modified_format}" "$name" "$formatted_size" "$modified")
+        local line_body="${pre_rendered_lines_ref[i]}"
         output+="${pointer}${line_prefix}${highlight_start}${line_body}${highlight_end}${T_CLEAR_LINE}\n"
     done
 
@@ -885,9 +885,9 @@ _interactive_list_models() {
     fi
 
     # 1. Parse model data from JSON into arrays
-    local -a model_names model_sizes model_dates formatted_sizes bg_colors
-    if ! _parse_model_data_for_menu "$models_json" "$with_all_option" model_names \
-        model_sizes model_dates formatted_sizes bg_colors; then
+    local -a model_names model_sizes model_dates formatted_sizes bg_colors pre_rendered_lines
+    if ! _parse_model_data_for_menu "$models_json" "$with_all_option" model_names model_sizes \
+        model_dates formatted_sizes bg_colors pre_rendered_lines; then
         return 1 # No models found
     fi
     local num_options=${#model_names[@]}
@@ -925,7 +925,7 @@ _interactive_list_models() {
     local menu_height=$((num_options + 7)) # Using 7 is safe for both banner types.
     printBanner "$prompt" >/dev/tty
     # The prompt argument to _render_model_list_table is now unused, but harmless to keep.
-    _render_model_list_table "$prompt" "$mode" "$current_option" model_names model_dates formatted_sizes bg_colors selected_options
+    _render_model_list_table "$prompt" "$mode" "$current_option" model_names model_dates formatted_sizes bg_colors selected_options pre_rendered_lines
     _print_footer
 
     # 4. Main interactive loop
@@ -969,7 +969,7 @@ _interactive_list_models() {
         if [[ "$state_changed" == "true" ]]; then
             move_cursor_up "$menu_height" >/dev/tty
             printBanner "$prompt" >/dev/tty
-            _render_model_list_table "$prompt" "$mode" "$current_option" model_names model_dates formatted_sizes bg_colors selected_options
+            _render_model_list_table "$prompt" "$mode" "$current_option" model_names model_dates formatted_sizes bg_colors selected_options pre_rendered_lines
             _print_footer
         fi
     done
