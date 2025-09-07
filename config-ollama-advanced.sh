@@ -242,7 +242,7 @@ configure_context_length() {
 }
 
 #
-# Interactive prompt to configure Number of Parallel Requests.
+# Interactive menu to configure Number of Parallel Requests.
 #
 configure_num_parallel() {
     clear
@@ -252,15 +252,46 @@ configure_num_parallel() {
     printInfoMsg "Current ${NUM_PARALLEL_VAR} is set to: ${C_L_BLUE}${current_parallel:-'(default)'}${T_RESET}"
     printMsg "\nSets the number of parallel requests that can be processed at once."
     printMsg "Increasing this can improve throughput but significantly increases VRAM usage. Default is 1."
-    printMsg "\nEnter a new number (e.g., 2), or press ${C_L_YELLOW}Enter${T_RESET} to unset and use the default."
-    read -r -p "$(echo -e "${T_QST_ICON} New value: ")" num
 
+    printMsg "\n${T_ULINE}Choose a value or enter a custom one:${T_RESET}"
+    printMsg " ${T_BOLD}1)${T_RESET} 1 (Default)"
+    printMsg " ${T_BOLD}2)${T_RESET} 2"
+    printMsg " ${T_BOLD}3)${T_RESET} 3"
+    printMsg " ${T_BOLD}4)${T_RESET} 4"
+    printMsg " ${T_BOLD}c)${T_RESET} Enter a ${C_L_CYAN}(c)ustom${T_RESET} value"
+    printMsg " ${T_BOLD}r)${T_RESET} ${C_L_YELLOW}(R)emove${T_RESET} setting (use Ollama default)"
+    printMsg " ${T_BOLD}b)${T_RESET} Back to main menu (or press ${C_L_YELLOW}ESC${T_RESET})\n"
+    printMsgNoNewline " ${T_QST_ICON} Your choice: "
+
+    local choice
+    choice=$(read_single_char)
+    clear_current_line
+
+    local num=""
+    case $choice in
+        1) num="1" ;;
+        2) num="2" ;;
+        3) num="3" ;;
+        4) num="4" ;;
+        c|C)
+            clear_lines_up 9
+            read -r -p "$(echo -e "${T_QST_ICON} Enter custom number of parallel requests: ")" num
+            if [[ -z "$num" ]]; then
+                printWarnMsg "No value entered. No changes made."
+                sleep 1
+                return 2
+            fi
+            ;;
+        r|R) num="" ;;
+        b|B|"$KEY_ESC") return 2 ;;
+        *) printWarnMsg "Invalid choice." && sleep 1; return 2 ;;
+    esac
+    
     if [[ -n "$num" && ! "$num" =~ ^[0-9]+$ ]]; then
         printErrMsg "Invalid input. Please enter a positive number."
         sleep 2
         return 2
     fi
-
     set_env_var "$NUM_PARALLEL_VAR" "$num" "$OLLAMA_ADVANCED_CONF"
     local exit_code=$?
     [[ $exit_code -ne 2 ]] && return 0 || return 2
