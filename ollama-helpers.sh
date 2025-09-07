@@ -554,8 +554,9 @@ interactive_model_manager() {
         fi
 
         # Call the core pull logic. It will print its own status messages.
+        # If the pull fails, pause so the user can see the error message.
         if ! _execute_pull "$model_name"; then
-            read -n 1 -s -r -p "$(echo -e "\n${T_INFO_ICON} Press any key to continue...")"
+            prompt_to_continue
         fi
         return 0 # Indicates an action was attempted.
     }
@@ -567,8 +568,8 @@ interactive_model_manager() {
             models_json="$new_json"
             _parse_model_data "$models_json"
         else
-            # On failure, pause so user can see the error from the spinner
-            read -n 1 -s -r -p "$(echo -e "\n${T_INFO_ICON} Press any key to continue...")"
+            # On failure, pause so user can see the error from the spinner.
+            prompt_to_continue
         fi
     }
 

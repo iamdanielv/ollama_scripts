@@ -398,6 +398,7 @@ get_docker_compose_cmd() {
 # Returns:
 #   0 (success) if the user answers Yes (or default is 'y' and user presses Enter).
 #   1 (failure) if the user answers No (or default is 'n' and user presses Enter).
+#   2 if the user cancels (ESC or 'q').
 prompt_yes_no() {
     local question="$1"
     local default_answer="${2:-}" # Optional second argument
@@ -431,6 +432,11 @@ prompt_yes_no() {
                 clear_current_line
                 return 1 # Failure (No)
                 ;;
+            "$KEY_ESC"|"q")
+                clear_current_line
+                printMsg "${T_QST_ICON} ${question} ${prompt_suffix}\n ${C_L_YELLOW}-- cancelled --${T_RESET}"
+                return 2 # Cancelled
+                ;;
             *)
                 clear_current_line
                 printErrMsg "Invalid input. Please enter 'y' or 'n'."
@@ -440,6 +446,19 @@ prompt_yes_no() {
     done
 }
 
+# Prompts the user to press any key to continue, then clears the prompt.
+# This is a blocking call that waits for a single keypress, making for a
+# clean user experience by pausing the script and then removing the message.
+# Usage:
+#   prompt_to_continue
+prompt_to_continue() {
+    printInfoMsg "Press any key to continue..." >/dev/tty
+    # -s: silent, -n 1: read 1 char, -r: raw
+    # We redirect to /dev/tty to ensure it works even if stdout is captured.
+    read -rsn1 </dev/tty
+    # Clear the "Press any key..." message.
+    clear_lines_up 1
+}
 
 ##
 # Displays an interactive multi-select menu.
