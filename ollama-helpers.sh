@@ -686,7 +686,7 @@ interactive_model_manager() {
     tput cnorm
     trap - INT TERM
     clear
-    printOkMsg "Exited Model Manager."
+    printOkMsg "Goodbye!"
 }
 
 # --- Interactive Model Helpers ---
