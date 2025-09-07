@@ -478,22 +478,21 @@ interactive_model_manager() {
 
     # --- Helper: Redraw the entire screen ---
     _redraw_screen() {
-        clear
-        printBanner "Ollama Interactive Model Manager"
+        # This function now just prints the content. The caller handles clearing and cursor position.
+        printBanner "Ollama Interactive Model Manager" >/dev/tty
         if [[ $num_options -eq 0 ]]; then
-            printWarnMsg "No local models found."
+            printWarnMsg "No local models found." >/dev/tty
         else
             # Use the existing table renderer, but in multi-select mode to show checkboxes
             _render_model_list_table "Local Models" "multi" "$current_option" \
                 model_names model_dates formatted_sizes bg_colors selected_options
         fi
 
-        # Custom help footer for this manager
         local help_nav="  ${C_L_GRAY}Navigation:${T_RESET} ${C_L_MAGENTA}↑↓${C_WHITE} Move | ${C_L_MAGENTA}SPACE${C_WHITE} Select | ${C_L_YELLOW}(Q)uit${T_RESET}"
         local help_actions="  ${C_L_GRAY}Actions:${T_RESET}    ${C_L_GREEN}(N)ew Model${C_WHITE} | ${C_L_RED}(D)elete${C_WHITE} | ${C_MAGENTA}(U)pdate/Pull${T_RESET}"
-        printMsg "${help_nav}"
-        printMsg "${help_actions}"
-        printMsg "${C_BLUE}${DIV}${T_RESET}"
+        printMsg "${help_nav}" >/dev/tty
+        printMsg "${help_actions}" >/dev/tty
+        printMsg "${C_BLUE}${DIV}${T_RESET}" >/dev/tty
     }
 
     # --- Helper: A special version of pull_model for this UI ---
@@ -577,34 +576,52 @@ interactive_model_manager() {
     _parse_model_data "$models_json"
 
     # --- Main Interactive Loop ---
-    tput civis
+    tput civis # Hide cursor
     trap 'tput cnorm; script_interrupt_handler' INT TERM
 
-    while true; do
-        _redraw_screen
+    # Helper to calculate menu height for flicker-free redrawing.
+    _get_menu_height() {
+        # Banner(2) + Table(N+3) + Help(3) = N+8
+        # Or for no models: Banner(2) + Warn(1) + Help(3) = 6
+        if (( num_options > 0 )); then
+            echo $(( num_options + 8 ))
+        else
+            echo 6
+        fi
+    }
 
+    # Initial draw
+    clear
+    _redraw_screen
+
+    while true; do
         local key
         key=$(read_single_char </dev/tty)
+        local state_changed=false
 
         case "$key" in
             "$KEY_UP"|"k")
                 if (( num_options > 0 )); then
                     current_option=$(( (current_option - 1 + num_options) % num_options ))
+                    state_changed=true
                 fi
                 ;;
             "$KEY_DOWN"|"j")
                 if (( num_options > 0 )); then
                     current_option=$(( (current_option + 1) % num_options ))
+                    state_changed=true
                 fi
                 ;;
             ' ')
                 if (( num_options > 0 )); then
                     selected_options[current_option]=$(( 1 - selected_options[current_option] ))
+                    state_changed=true
                 fi
                 ;;
             'n'|'N')
                 _interactive_pull_model_inline
                 _refresh_models
+                clear && _redraw_screen # Redraw after action
                 ;;
             'd'|'D')
                 local -a to_delete=()
@@ -613,18 +630,18 @@ interactive_model_manager() {
                         to_delete+=("${model_names[i]}")
                     fi
                 done
-                # If no models are selected via checkbox, use the currently highlighted one.
                 if [[ ${#to_delete[@]} -eq 0 && $num_options -gt 0 ]]; then
                     to_delete=("${model_names[current_option]}")
                 fi
 
                 if [[ ${#to_delete[@]} -gt 0 ]]; then
-                    clear
+                    clear # Clear screen for the confirmation prompt
                     printInfoMsg "The following models will be deleted: ${C_L_RED}${to_delete[*]}${T_RESET}"
                     if prompt_yes_no "Are you sure you want to delete these ${#to_delete[@]} models?" "n"; then
                         _perform_model_deletions "${to_delete[@]}"
                         _refresh_models
                     fi
+                    clear && _redraw_screen # Redraw after action
                 else
                     printWarnMsg "No models to delete." && sleep 1
                 fi
@@ -641,18 +658,26 @@ interactive_model_manager() {
                 fi
 
                 if [[ ${#to_update[@]} -gt 0 ]]; then
-                    clear
-                    # The update function has its own prompt, so we call it directly.
+                    clear # Clear screen for the confirmation prompt
                     _perform_model_updates "${to_update[@]}"
                     _refresh_models
+                    clear && _redraw_screen # Redraw after action
                 else
                     printWarnMsg "No models to update." && sleep 1
                 fi
                 ;;
             'q'|'Q'|"$KEY_ESC")
+                clear # Clean up screen on exit
                 break
                 ;;
+            *)
+                continue # Ignore other keys, no need to redraw
+                ;;
         esac
+        if [[ "$state_changed" == "true" ]]; then
+            move_cursor_up "$(_get_menu_height)" >/dev/tty
+            _redraw_screen
+        fi
     done
 
     # --- Cleanup ---
