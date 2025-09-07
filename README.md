@@ -19,9 +19,8 @@ These scripts provide a user-friendly way to:
 .
 ├── shared.sh                 # 🛠️ Common utility functions, colors, and error handling  
 ├── ollama-helpers.sh         # 🤖 Helper functions specific to Ollama (API, service checks)
-├── install-ollama.sh         # 📦 Installs or updates Ollama with version checking  
-├── config-ollama-advanced.sh # ⚙️ Configures advanced Ollama settings (e.g., KV cache)
-├── config-ollama-net.sh      # 🌐 Configures network access (localhost vs public)  
+├── install-ollama.sh         # 📦 Installs or updates Ollama with version checking
+├── config-ollama.sh          # ⚙️ Unified script to configure network and advanced settings
 ├── restart-ollama.sh         # 🔄 Restarts Ollama service after system wake/sleep issues  
 ├── manage-models.sh          # ⚙️ Interactively pull, delete, and manage models
 ├── run-model.sh              # ▶️ Interactively select and run a local model
@@ -101,8 +100,7 @@ After it starts, open the link provided (usually `http://localhost:3000`) and fo
 | `./logs-ollama.sh` | 📜 A convenient wrapper to view the Ollama service logs using `journalctl`. |
 | `./restart-ollama.sh` | 🔄 Sometimes on wake from sleep, the `ollama` service will go into an inconsistent state. This script stops, resets GPU state (if applicable), and restarts the Ollama service using `systemd`. |
 | `./stop-ollama.sh` | 🛑 Stops the Ollama service. |
-| `./config-ollama-net.sh` | 🌐 Configures Ollama network access. Can be run interactively or with flags (`--expose`, `--restrict`, `--view`). |
-| `./config-ollama-advanced.sh` | ⚙️ An interactive script to configure advanced Ollama settings, such as the KV cache type, to fine-tune performance. |
+| `./config-ollama.sh` | ⚙️ A unified, interactive script to configure network access, KV cache, models directory, and other advanced Ollama settings. Can also be run non-interactively with flags. |
 
 ### 🌐 OpenWebUI Management Scripts
 
@@ -217,48 +215,21 @@ The `install-ollama.sh` script will detect if this is needed and prompt you to a
 
 ### 🌐 Changing Ollama Network Configuration
 
-If you need to change the network setting after the initial installation, you can use the dedicated configuration script:
+If you need to change any setting after the initial installation, you can use the unified configuration script:
 
-#### `./config-ollama-net.sh` Interactive Menu
+#### `./config-ollama.sh`
 
-This script provides an interactive menu to switch between exposing Ollama to the network or restricting it to localhost.
+This script provides an interactive menu to manage all settings in one place.
 
 ```bash
-./config-ollama-net.sh
+./config-ollama.sh
 ```
 
-#### `./config-ollama-net.sh` Available Flags
-
-It can also be run non-interactively with the following flags:
-
-| Flag | Alias | Description |
-|---|---|---|
-| `--expose` | `-e` | Exposes Ollama to the network. |
-| `--restrict` | `-r` | Restricts Ollama to localhost. |
-| `--view` | `-v` | Displays the current network configuration. |
-| `--help` | `-h` | Shows the help message. |
-
-This script requires `sudo` for modifications and will prompt for it if necessary.
+It can also be run non-interactively with flags like `--expose`, `--restrict`, `--kv-cache`, `--models-dir`, etc. Run `./config-ollama.sh --help` for a full list of options.
 
 ### ⚙️ Advanced Ollama Configuration
 
-For users who want to fine-tune Ollama's performance, the `config-ollama-advanced.sh` script provides an interactive way to manage advanced settings.
-
-#### `./config-ollama-advanced.sh` Interactive Menu
-
-Run the script to open a menu where you can configure settings like the KV cache type.
-
-```bash
-./config-ollama-advanced.sh
-```
-
-The script will detect your current configuration and allow you to change it.
-
-#### `./config-ollama-advanced.sh` Available Flags
-
-| Flag | Alias | Description |
-|---|---|---|
-| `--test` | `-t` | Runs internal self-tests for script functions. |
+The unified `./config-ollama.sh` script handles all advanced settings. Run it without flags for an interactive menu, or use flags like `--kv-cache q8_0` for non-interactive changes.
 
 ## 🔄 Restarting Ollama
 
@@ -445,10 +416,10 @@ You can then share the contents of `report.txt` when creating a bug report or as
   - **Solution:** Run the network configuration script and choose to expose Ollama to the network:
 
     ```bash
-    ./config-ollama-net.sh
+    ./config-ollama.sh
     ```
 
-  - This script configures Ollama to listen on all network interfaces, which is required for Docker to connect.  
+  - This script can configure Ollama to listen on all network interfaces, which is required for Docker to connect.  
   - Alternatively, re-running the installer (`./install-ollama.sh`) will also detect this and prompt you to fix it.  
   - **Also check:** Ensure your firewall is not blocking traffic on port `11434` (or your custom `OLLAMA_PORT`). For example, on Ubuntu, you might run `sudo ufw allow 11434`.
 
