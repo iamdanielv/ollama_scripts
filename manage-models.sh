@@ -111,9 +111,104 @@ delete_model() {
 run_tests() {
     printBanner "Running Self-Tests for manage-models.sh"
     initialize_test_suite
+
+    # --- Mock dependencies ---
+    # These will be mocked globally for all tests in this suite.
+    # We use environment variables to control the behavior of some mocks.
+    printErrMsg() { :; } # Suppress error messages for tests
+    get_ollama_models_json() {
+        if [[ "${MOCK_API_FAIL:-false}" == "true" ]]; then
+            return 1
+        else
+            # The jq sort_by(.name) will order this as gemma, llama2, llama3
+            echo '{"models": [{"name": "llama3:latest"}, {"name": "gemma:2b"}, {"name": "llama2:latest"}]}'
+        fi
+    }
+    _perform_model_deletions() { MOCK_DELETE_CALLED_WITH="$*"; return 0; }
+    _perform_model_updates() { MOCK_UPDATE_CALLED_WITH="$*"; return 0; }
+    prompt_yes_no() { [[ "${MOCK_PROMPT_ANSWER}" == "y" ]]; }
+    display_installed_models() { MOCK_LIST_CALLED=true; }
+    pull_model() { MOCK_PULL_CALLED_WITH="$1"; return 0; }
+    show_help() { MOCK_HELP_CALLED=true; }
+    fetch_models_with_spinner() { [[ "${MOCK_FETCH_FAIL:-false}" == "true" ]] && return 1 || echo "{}"; }
+    interactive_model_manager() { MOCK_INTERACTIVE_CALLED=true; }
+
+    # --- Test Cases for delete_model ---
+    # This section tests the real `delete_model` function, but with its dependencies mocked.
+    printTestSectionHeader "Testing delete_model function"
     
+    # Helper to reset mock state for delete_model tests
+    reset_delete_mocks() {
+        MOCK_DELETE_CALLED_WITH=""
+        export MOCK_PROMPT_ANSWER="y"
+        export MOCK_API_FAIL="false"
+    }
+
+    reset_delete_mocks
+    delete_model "llama3:latest" &>/dev/null
+    _run_string_test "$MOCK_DELETE_CALLED_WITH" "llama3:latest" "Deletes correct model by name"
+
+    reset_delete_mocks; export MOCK_PROMPT_ANSWER="n"
+    delete_model "llama3:latest" &>/dev/null
+    _run_string_test "$MOCK_DELETE_CALLED_WITH" "" "Does not delete if user cancels"
+
+    # Sorted models: gemma:2b (1), llama2:latest (2), llama3:latest (3)
+    reset_delete_mocks
+    delete_model "2" &>/dev/null
+    _run_string_test "$MOCK_DELETE_CALLED_WITH" "llama2:latest" "Deletes correct model by number"
+
+    reset_delete_mocks
+    _run_test 'delete_model "99" &>/dev/null' 1 "Fails with an invalid model number"
+    _run_string_test "$MOCK_DELETE_CALLED_WITH" "" "Does not call delete with invalid number"
+
+    reset_delete_mocks
+    _run_test 'delete_model "" &>/dev/null' 1 "Fails when no model name is provided"
+
+    reset_delete_mocks; export MOCK_API_FAIL="true"
+    _run_test 'delete_model "1" &>/dev/null' 1 "Fails if model list fetch fails for number resolution"
+
+    # --- Test Cases for _main_logic (argument parsing) ---
+    # For this section, we mock the `delete_model` function itself to test that it's called correctly.
+    delete_model() { MOCK_DELETE_FN_CALLED_WITH="$1"; return 0; }
+    export -f printErrMsg get_ollama_models_json _perform_model_deletions _perform_model_updates \
+        prompt_yes_no display_installed_models pull_model delete_model show_help \
+        fetch_models_with_spinner interactive_model_manager
+
+    printTestSectionHeader "Testing argument parsing in _main_logic"
+    
+    # Helper to reset mock state for _main_logic tests
+    reset_main_mocks() {
+        MOCK_LIST_CALLED=false
+        MOCK_PULL_CALLED_WITH=""
+        MOCK_UPDATE_CALLED_WITH=""
+        MOCK_DELETE_FN_CALLED_WITH=""
+        MOCK_HELP_CALLED=false
+        MOCK_INTERACTIVE_CALLED=false
+        export MOCK_FETCH_FAIL="false"
+    }
+
+    reset_main_mocks; _main_logic --list &>/dev/null
+    _run_string_test "$MOCK_LIST_CALLED" "true" "--list calls display_installed_models"
+
+    reset_main_mocks; _main_logic --pull llama3 &>/dev/null
+    _run_string_test "$MOCK_PULL_CALLED_WITH" "llama3" "--pull calls pull_model with argument"
+
+    reset_main_mocks; _main_logic --update llama3 &>/dev/null
+    _run_string_test "$MOCK_UPDATE_CALLED_WITH" "llama3" "--update calls _perform_model_updates with argument"
+
+    reset_main_mocks; _main_logic --update-all &>/dev/null
+    _run_string_test "$MOCK_UPDATE_CALLED_WITH" "gemma:2b llama2:latest llama3:latest" "--update-all calls _perform_model_updates with all models"
+
+    reset_main_mocks; _main_logic --delete llama2 &>/dev/null
+    _run_string_test "$MOCK_DELETE_FN_CALLED_WITH" "llama2" "--delete calls delete_model with argument"
+
+    reset_main_mocks; _main_logic &>/dev/null
+    _run_string_test "$MOCK_INTERACTIVE_CALLED" "true" "No-args call enters interactive mode"
+
     print_test_summary \
-        # No mocks to unset as tests are removed.
+        "printErrMsg" "get_ollama_models_json" "_perform_model_deletions" "_perform_model_updates" \
+        "prompt_yes_no" "display_installed_models" "pull_model" "delete_model" "show_help" \
+        "fetch_models_with_spinner" "interactive_model_manager"
 }
 
 main() {
@@ -124,63 +219,68 @@ main() {
     check_jq_installed --silent
     verify_ollama_api_responsive
 
+    _main_logic "$@"
+    exit $?
+}
+
+_main_logic() {
     # Non-interactive mode
     if [[ -n "$1" ]]; then
         case "$1" in
             -l | --list)
                 display_installed_models
-                exit 0
+                return 0
                 ;; 
             -p | --pull)
                 pull_model "$2"
-                exit $?
+                return $?
                 ;; 
             -u | --update)
                 local model_name="$2"
                 if [[ -z "$model_name" || "$model_name" =~ ^- ]]; then
                     printErrMsg "The --update flag requires a model name."
-                    exit 1
+                    return 1
                 fi
                 _perform_model_updates "$model_name"
-                exit $?
+                return $?
                 ;; 
             -ua | --update-all)
                 printInfoMsg "Fetching list of all local models to update..."
                 local models_json
                 if ! models_json=$(get_ollama_models_json); then
                     printErrMsg "Failed to get model list from Ollama API. Cannot update."
-                    exit 1
+                    return 1
                 fi
                 local -a all_models
-                mapfile -t all_models < <(echo "$models_json" | jq -r '.models[].name')
+                mapfile -t all_models < <(echo "$models_json" | jq -r '.models | sort_by(.name)[] | .name')
                 if [[ ${#all_models[@]} -eq 0 ]]; then
                     printOkMsg "No local models found to update."
-                    exit 0
+                    return 0
                 fi
                 _perform_model_updates "${all_models[@]}"
-                exit $?
+                return $?
                 ;; 
             -d | --delete)
                 local model_name="$2"
                 if [[ -z "$model_name" || "$model_name" =~ ^- ]]; then
                     printErrMsg "The --delete flag requires a model name."
-                    exit 1
+                    return 1
                 fi
                 delete_model "$model_name"
-                exit $?
+                return $?
                 ;; 
             -h | --help)
                 show_help
-                exit 0
+                return 0
                 ;; 
             -t | --test)
                 run_tests
-                exit 0
+                return 0
                 ;; 
             *)
                 show_help
                 printMsg "\n${T_ERR}Invalid option: $1${T_RESET}"
-                exit 1
+                return 1
                 ;; 
         esac
     fi
@@ -190,11 +290,12 @@ main() {
     local cached_models_json
     if ! cached_models_json=$(fetch_models_with_spinner "Fetching model list..."); then
         printInfoMsg "Could not connect to Ollama API to start model manager."
-        exit 1
+        return 1
     fi
 
     # Hand off control to the full-screen interactive manager
     interactive_model_manager "$cached_models_json"
+    return $?
 }
 
 # --- Script Execution ---
