@@ -79,6 +79,50 @@ _print_status_line() {
     # The %b format specifier interprets backslash escapes from the value_display string (e.g., color codes).
     printf "  %-20s : %b\n" "$label" "$value_display"
 }
+
+# (Private) Gets a formatted display string for a given setting value.
+# This centralizes the logic for how raw values are presented to the user.
+# Usage: local display_str=$(_get_setting_display "kv_cache" "q8_0")
+_get_setting_display() {
+    local setting_type="$1"
+    local value="$2"
+
+    case "$setting_type" in
+        "network")
+            if [[ "$value" == "$STATUS_NETWORK" ]]; then echo "${C_L_YELLOW}EXPOSED${T_RESET}"; else echo "${C_L_BLUE}RESTRICTED${T_RESET}"; fi
+            ;;
+        "kv_cache")
+            if [[ -n "$value" ]]; then echo "${KV_CACHE_DISPLAY[${value}]:-${value}}"; else echo "${C_GRAY}(default)${T_RESET}"; fi
+            ;;
+        "context"|"parallel")
+            if [[ -n "$value" ]]; then echo "${C_L_BLUE}${value}${T_RESET}"; else echo "${C_GRAY}(default)${T_RESET}"; fi
+            ;;
+        "models_dir")
+            if [[ -n "$value" ]]; then echo "${C_L_CYAN}${value}${T_RESET}"; else echo "${C_GRAY}(default)${T_RESET}"; fi
+            ;;
+        *) # Fallback for unknown types
+            if [[ -n "$value" ]]; then echo "$value"; else echo "${C_GRAY}(default)${T_RESET}"; fi
+            ;;
+    esac
+}
+
+# (Private) Gets a display string showing current and pending states if they differ.
+# Used by the interactive menu to show pending changes with a "→" arrow.
+# Usage: local display=$(_get_combined_display "kv_cache" "$current_val" "$pending_val")
+_get_combined_display() {
+    local setting_type="$1"
+    local current_val="$2"
+    local pending_val="$3"
+
+    local pending_display=$(_get_setting_display "$setting_type" "$pending_val")
+
+    if [[ "$current_val" != "$pending_val" ]]; then
+        local current_display=$(_get_setting_display "$setting_type" "$current_val")
+        echo "${current_display} ${C_WHITE}→${T_RESET} ${pending_display}"
+    else
+        echo "$pending_display"
+    fi
+}
 # --- Function Definitions ---
 
 show_help() {
@@ -117,48 +161,29 @@ show_help() {
 
 print_all_status() {
     # Fetch all current settings
-    local network_status
+    local network_status_full
     if check_network_exposure; then
-        network_status="${C_L_YELLOW}EXPOSED to network (0.0.0.0)${T_RESET}"
+        network_status_full="${C_L_YELLOW}EXPOSED to network (0.0.0.0)${T_RESET}"
     else
-        network_status="${C_L_BLUE}RESTRICTED to localhost (127.0.0.1)${T_RESET}"
+        network_status_full="${C_L_BLUE}RESTRICTED to localhost (127.0.0.1)${T_RESET}"
     fi
 
     local current_kv_type=$(get_env_var "$KV_CACHE_VAR" "$OLLAMA_ADVANCED_CONF")
-    local kv_display
-    if [[ -n "$current_kv_type" ]]; then
-        kv_display="${KV_CACHE_DISPLAY[${current_kv_type}]:-${current_kv_type}}"
-    else
-        kv_display="${C_GRAY}(default)${T_RESET}"
-    fi
-
     local current_models_dir=$(get_env_var "$OLLAMA_MODELS_VAR" "$OLLAMA_ADVANCED_CONF")
-    local models_dir_display
-    if [[ -n "$current_models_dir" ]]; then
-        models_dir_display="${C_L_CYAN}${current_models_dir}${T_RESET}"
-    else
-        models_dir_display="${C_GRAY}(default: ~/.ollama/models)${T_RESET}"
-    fi
-
     local current_context_length=$(get_env_var "$CONTEXT_LENGTH_VAR" "$OLLAMA_ADVANCED_CONF")
-    local context_display
-    if [[ -n "$current_context_length" ]]; then
-        context_display="${C_L_BLUE}${current_context_length}${T_RESET}"
-    else
-        context_display="${C_GRAY}(default)${T_RESET}"
-    fi
-
     local current_num_parallel=$(get_env_var "$NUM_PARALLEL_VAR" "$OLLAMA_ADVANCED_CONF")
-    local parallel_display
-    if [[ -n "$current_num_parallel" ]]; then
-        parallel_display="${C_L_BLUE}${current_num_parallel}${T_RESET}"
-    else
-        parallel_display="${C_GRAY}(default)${T_RESET}"
-    fi
+
+    # Get display strings using the new helper
+    local kv_display=$(_get_setting_display "kv_cache" "$current_kv_type")
+    local models_dir_display=$(_get_setting_display "models_dir" "$current_models_dir")
+    # Special case for the more descriptive default text in status view
+    if [[ -z "$current_models_dir" ]]; then models_dir_display="${C_GRAY}(default: ~/.ollama/models)${T_RESET}"; fi
+    local context_display=$(_get_setting_display "context" "$current_context_length")
+    local parallel_display=$(_get_setting_display "parallel" "$current_num_parallel")
 
     # Display
     printMsg "${T_ULINE}Current Configuration:${T_RESET}"
-    _print_status_line "Network Exposure" "$network_status"
+    _print_status_line "Network Exposure" "$network_status_full"
     _print_status_line "KV Cache Type" "$kv_display"
     _print_status_line "Models Directory" "$models_dir_display"
     _print_status_line "Context Length" "$context_display"
@@ -595,45 +620,11 @@ run_interactive_menu() {
         printBanner "Ollama Interactive Configuration"
 
         # --- Display Logic ---
-        local network_display
-        if [[ "$pending_network_status" == "$STATUS_NETWORK" ]]; then network_display="${C_L_YELLOW}EXPOSED${T_RESET}"; else network_display="${C_L_BLUE}RESTRICTED${T_RESET}"; fi
-        if [[ "$current_network_status" != "$pending_network_status" ]]; then
-            local current_net_display
-            if [[ "$current_network_status" == "$STATUS_NETWORK" ]]; then current_net_display="${C_L_YELLOW}EXPOSED${T_RESET}"; else current_net_display="${C_L_BLUE}RESTRICTED${T_RESET}"; fi
-            network_display="${current_net_display} ${C_WHITE}→${T_RESET} ${network_display}"
-        fi
-
-        local kv_display
-        if [[ -n "$pending_kv_type" ]]; then kv_display="${KV_CACHE_DISPLAY[${pending_kv_type}]:-${pending_kv_type}}"; else kv_display="${C_GRAY}(default)${T_RESET}"; fi
-        if [[ "$current_kv_type" != "$pending_kv_type" ]]; then
-            local current_kv_display
-            if [[ -n "$current_kv_type" ]]; then current_kv_display="${KV_CACHE_DISPLAY[${current_kv_type}]:-${current_kv_type}}"; else current_kv_display="${C_GRAY}(default)${T_RESET}"; fi
-            kv_display="${current_kv_display} ${C_WHITE}→${T_RESET} ${kv_display}"
-        fi
-
-        local context_display
-        if [[ -n "$pending_context_length" ]]; then context_display="${C_L_BLUE}${pending_context_length}${T_RESET}"; else context_display="${C_GRAY}(default)${T_RESET}"; fi
-        if [[ "$current_context_length" != "$pending_context_length" ]]; then
-            local current_ctx_display
-            if [[ -n "$current_context_length" ]]; then current_ctx_display="${C_L_BLUE}${current_context_length}${T_RESET}"; else current_ctx_display="${C_GRAY}(default)${T_RESET}"; fi
-            context_display="${current_ctx_display} ${C_WHITE}→${T_RESET} ${context_display}"
-        fi
-
-        local parallel_display
-        if [[ -n "$pending_num_parallel" ]]; then parallel_display="${C_L_BLUE}${pending_num_parallel}${T_RESET}"; else parallel_display="${C_GRAY}(default)${T_RESET}"; fi
-        if [[ "$current_num_parallel" != "$pending_num_parallel" ]]; then
-            local current_par_display
-            if [[ -n "$current_num_parallel" ]]; then current_par_display="${C_L_BLUE}${current_num_parallel}${T_RESET}"; else current_par_display="${C_GRAY}(default)${T_RESET}"; fi
-            parallel_display="${current_par_display} ${C_WHITE}→${T_RESET} ${parallel_display}"
-        fi
-
-        local models_dir_display
-        if [[ -n "$pending_models_dir" ]]; then models_dir_display="${C_L_CYAN}${pending_models_dir}${T_RESET}"; else models_dir_display="${C_GRAY}(default)${T_RESET}"; fi
-        if [[ "$current_models_dir" != "$pending_models_dir" ]]; then
-            local current_dir_display
-            if [[ -n "$current_models_dir" ]]; then current_dir_display="${C_L_CYAN}${current_models_dir}${T_RESET}"; else current_dir_display="${C_GRAY}(default)${T_RESET}"; fi
-            models_dir_display="${current_dir_display} ${C_WHITE}→${T_RESET} ${models_dir_display}"
-        fi
+        local network_display=$(_get_combined_display "network" "$current_network_status" "$pending_network_status")
+        local kv_display=$(_get_combined_display "kv_cache" "$current_kv_type" "$pending_kv_type")
+        local context_display=$(_get_combined_display "context" "$current_context_length" "$pending_context_length")
+        local parallel_display=$(_get_combined_display "parallel" "$current_num_parallel" "$pending_num_parallel")
+        local models_dir_display=$(_get_combined_display "models_dir" "$current_models_dir" "$pending_models_dir")
 
         # --- Display Menu ---
         printMsg "${T_ULINE}Choose an option to configure:${T_RESET}"
