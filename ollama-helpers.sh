@@ -14,22 +14,18 @@
 # Unset by default, can be "true" or "false" after the first run.
 _OLLAMA_IS_INSTALLED=""
 
-# Checks if ollama.service is known to systemd
+# Checks if ollama.service is known to systemd by calling the generic helper.
 _is_ollama_service_known() {
-    # 'systemctl cat' is a direct way to check if a service exists
-    # It will return a non-zero exit code if the service doesn't exist.
-    # We redirect stdout and stderr to /dev/null to suppress all output.
-    if systemctl cat ollama.service &>/dev/null; then
-        return 0 # Found
-    else
-        return 1 # Not found
-    fi
+    _is_systemd_service_known "ollama.service"
 }
 
 # Public-facing check if 'ollama.service' systemd service exists.
 # Returns 0 if it exists, 1 otherwise.
 check_ollama_systemd_service_exists() {
-    check_systemd_service_exists "ollama.service"
+    if ! _is_systemd_system || ! _is_ollama_service_known; then
+        return 1
+    fi
+    return 0
 }
 
 # Checks if the Ollama CLI is installed and exits if it's not.
