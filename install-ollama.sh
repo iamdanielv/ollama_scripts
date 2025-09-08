@@ -102,7 +102,7 @@ manage_network_exposure() {
     printInfoMsg "To allow network access (e.g., from Docker),"
     printInfoMsg "Ollama can be configured to listen on all network interfaces."
     printInfoMsg "This creates a systemd override file at:\n    ${C_L_BLUE}${override_file}${T_RESET}"
-    printInfoMsg "You can change this setting later by running: ${C_L_BLUE}./config-ollama-net.sh${T_RESET}"
+    printInfoMsg "You can change this setting later by running: ${C_L_BLUE}./config-ollama.sh${T_RESET}"
     if ! prompt_yes_no "Expose Ollama to the network now?" "n"; then
         printInfoMsg "Skipping network exposure. Ollama will only be accessible from localhost."
         return
@@ -383,7 +383,7 @@ main() {
     # Final message after install/update
     printOkMsg "Ollama installation/update process complete."
     printInfoMsg "    You can manage network settings at any time by running:"
-    printInfoMsg "    ${C_L_BLUE}./config-ollama-net.sh${T_RESET}"
+    printInfoMsg "    ${C_L_BLUE}./config-ollama.sh${T_RESET}"
 }
 
 # Run the main script logic

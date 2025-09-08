@@ -355,7 +355,7 @@ run_diagnostics() {
                     else
                         printMsg "${C_RED}Failed${T_RESET}"
                         printMsg "      ${C_GRAY}This is a common issue. It can mean Ollama is not configured for network access"
-                        printMsg "      ${C_GRAY}or a firewall is blocking the connection. Try running: ${C_L_BLUE}./config-ollama-net.sh --expose${T_RESET}"
+                        printMsg "      ${C_GRAY}or a firewall is blocking the connection. Try running: ${C_L_BLUE}./config-ollama.sh --expose${T_RESET}"
                     fi
                 fi
             fi
