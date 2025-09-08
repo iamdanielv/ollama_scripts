@@ -384,6 +384,110 @@ test_run_with_spinner() {
     unset -f tput mktemp
 }
 
+test_parse_model_data_for_menu() {
+    printTestSectionHeader "Testing _parse_model_data_for_menu function"
+
+    local models_json='{
+        "models": [
+            { "name": "llama3:8b", "size": 4700000000, "modified_at": "2024-04-24T10:00:00.0Z" },
+            { "name": "gemma:2b", "size": 2900000000, "modified_at": "2024-03-15T12:00:00.0Z" }
+        ]
+    }'
+    local -a names sizes dates formatted_sizes bg_colors pre_rendered
+    
+    # Test case 1: Basic parsing without "All"
+    _parse_model_data_for_menu "$models_json" "false" names sizes dates formatted_sizes bg_colors pre_rendered
+    
+    _run_string_test "${names[0]}" "gemma:2b" "Parses first model name correctly (sorted)"
+    _run_string_test "${names[1]}" "llama3:8b" "Parses second model name correctly (sorted)"
+    _run_string_test "${sizes[0]}" "2900000000" "Parses first model size correctly"
+    _run_string_test "${dates[1]}" "2024-04-24" "Parses second model date correctly"
+    _run_string_test "${formatted_sizes[0]}" "2.90 GB" "Calculates formatted size correctly"
+    _run_string_test "${bg_colors[0]}" "${C_GREEN}" "Assigns correct BG color (small)"
+    _run_string_test "${bg_colors[1]}" "${C_BLUE}" "Assigns correct BG color (medium)"
+    _run_test "[[ ${#names[@]} -eq 2 ]]" 0 "Parses correct number of models"
+
+    # Test case 2: Parsing with "All" option
+    _parse_model_data_for_menu "$models_json" "true" names sizes dates formatted_sizes bg_colors pre_rendered
+
+    _run_string_test "${names[0]}" "All" "Adds 'All' option when requested"
+    _run_string_test "${names[1]}" "gemma:2b" "Keeps original models after 'All'"
+    _run_test "[[ ${#names[@]} -eq 3 ]]" 0 "Has correct count with 'All' option"
+
+    # Test case 3: Empty model list
+    _parse_model_data_for_menu '{"models":[]}' "false" names sizes dates formatted_sizes bg_colors pre_rendered
+    local exit_code=$?
+    _run_test "[[ $exit_code -eq 1 ]]" 0 "Returns 1 for empty model list"
+    _run_test "[[ ${#names[@]} -eq 0 ]]" 0 "Produces empty arrays for empty model list"
+}
+
+test_handle_multi_select_toggle() {
+    printTestSectionHeader "Testing _handle_multi_select_toggle function"
+    local -a selected
+    
+    # --- Test without "All" option ---
+    selected=(0 0 0)
+    _handle_multi_select_toggle "false" 1 3 selected
+    _run_string_test "${selected[*]}" "0 1 0" "Toggles a single item from off to on"
+    _handle_multi_select_toggle "false" 1 3 selected
+    _run_string_test "${selected[*]}" "0 0 0" "Toggles a single item from on to off"
+
+    # --- Test with "All" option ---
+    # Scenario: Toggle "All" on
+    selected=(0 0 0 0)
+    _handle_multi_select_toggle "true" 0 4 selected
+    _run_string_test "${selected[*]}" "1 1 1 1" "Toggling 'All' on selects all items"
+
+    # Scenario: Toggle "All" off
+    selected=(1 1 1 1)
+    _handle_multi_select_toggle "true" 0 4 selected
+    _run_string_test "${selected[*]}" "0 0 0 0" "Toggling 'All' off deselects all items"
+
+    # Scenario: Deselect one item, "All" should turn off
+    selected=(1 1 1 1)
+    _handle_multi_select_toggle "true" 2 4 selected
+    _run_string_test "${selected[*]}" "0 1 0 1" "Deselecting an item deselects 'All'"
+
+    # Scenario: Select the last item, "All" should turn on
+    selected=(0 1 1 0)
+    _handle_multi_select_toggle "true" 3 4 selected
+    _run_string_test "${selected[*]}" "1 1 1 1" "Selecting the last item selects 'All'"
+}
+
+test_process_multi_select_output() {
+    printTestSectionHeader "Testing _process_multi_select_output function"
+    local -a names=("All" "gemma" "llama3")
+    local -a selected
+    local output
+    
+    # Scenario 1: Select specific items
+    selected=(0 1 1)
+    output=$(_process_multi_select_output "true" names selected)
+    local exit_code=$?
+    _run_string_test "$output" $'gemma\nllama3' "Outputs selected items correctly"
+    _run_test "[[ $exit_code -eq 0 ]]" 0 "Returns 0 on successful selection"
+
+    # Scenario 2: Select "All"
+    selected=(1 1 1)
+    output=$(_process_multi_select_output "true" names selected)
+    _run_string_test "$output" $'gemma\nllama3' "Outputs all items when 'All' is selected"
+
+    # Scenario 3: No items selected
+    selected=(0 0 0)
+    output=$(_process_multi_select_output "true" names selected)
+    exit_code=$?
+    _run_string_test "$output" "" "Outputs nothing when no items are selected"
+    _run_test "[[ $exit_code -eq 1 ]]" 0 "Returns 1 when no items are selected"
+
+    # Scenario 4: Without "All" option
+    local -a names_no_all=("gemma" "llama3")
+    selected=(1 0)
+    output=$(_process_multi_select_output "false" names_no_all selected)
+    exit_code=$?
+    _run_string_test "$output" "gemma" "Works correctly without 'All' option"
+    _run_test "[[ $exit_code -eq 0 ]]" 0 "Returns 0 on success without 'All' option"
+}
+
 # --- Main Test Runner ---
 
 main() {
@@ -409,6 +513,10 @@ main() {
     test_check_ollama_installed
 	test_validate_env_file
     test_run_with_spinner
+
+    test_parse_model_data_for_menu
+    test_handle_multi_select_toggle
+    test_process_multi_select_output
 
     # --- Test Summary ---
     printTestSectionHeader "Test Summary:"
