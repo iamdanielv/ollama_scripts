@@ -228,14 +228,14 @@ configure_network_exposure() {
 
     case "$choice" in
         1|e|E)
-            if [[ "$pending_network_ref" != "network" ]]; then
-                pending_network_ref="network"
+            if [[ "$pending_network_ref" != "$STATUS_NETWORK" ]]; then
+                pending_network_ref="$STATUS_NETWORK"
                 return 0 # changed
             fi
             ;;
         2|r|R)
-            if [[ "$pending_network_ref" != "localhost" ]]; then
-                pending_network_ref="localhost"
+            if [[ "$pending_network_ref" != "$STATUS_LOCALHOST" ]]; then
+                pending_network_ref="$STATUS_LOCALHOST"
                 return 0 # changed
             fi
             ;;
@@ -538,7 +538,7 @@ run_interactive_menu() {
 
     # --- Helper to load all current states from the system ---
     _load_current_states() {
-        if check_network_exposure; then current_network_status="network"; else current_network_status="localhost"; fi
+        if check_network_exposure; then current_network_status="$STATUS_NETWORK"; else current_network_status="$STATUS_LOCALHOST"; fi
         current_kv_type=$(get_env_var "$KV_CACHE_VAR" "$OLLAMA_ADVANCED_CONF")
         current_flash_attention=$(get_env_var "OLLAMA_FLASH_ATTENTION" "$OLLAMA_ADVANCED_CONF")
         current_context_length=$(get_env_var "$CONTEXT_LENGTH_VAR" "$OLLAMA_ADVANCED_CONF")
@@ -588,10 +588,10 @@ run_interactive_menu() {
 
         # --- Display Logic ---
         local network_display
-        if [[ "$pending_network_status" == "network" ]]; then network_display="${C_L_YELLOW}EXPOSED${T_RESET}"; else network_display="${C_L_BLUE}RESTRICTED${T_RESET}"; fi
+        if [[ "$pending_network_status" == "$STATUS_NETWORK" ]]; then network_display="${C_L_YELLOW}EXPOSED${T_RESET}"; else network_display="${C_L_BLUE}RESTRICTED${T_RESET}"; fi
         if [[ "$current_network_status" != "$pending_network_status" ]]; then
             local current_net_display
-            if [[ "$current_network_status" == "network" ]]; then current_net_display="${C_L_YELLOW}EXPOSED${T_RESET}"; else current_net_display="${C_L_BLUE}RESTRICTED${T_RESET}"; fi
+            if [[ "$current_network_status" == "$STATUS_NETWORK" ]]; then current_net_display="${C_L_YELLOW}EXPOSED${T_RESET}"; else current_net_display="${C_L_BLUE}RESTRICTED${T_RESET}"; fi
             network_display="${current_net_display} ${C_WHITE}→${T_RESET} ${network_display}"
         fi
 
@@ -775,12 +775,12 @@ apply_staged_changes() {
 
     # --- Check Network Change ---
     local current_network
-    if check_network_exposure; then current_network="network"; else current_network="localhost"; fi
+    if check_network_exposure; then current_network="$STATUS_NETWORK"; else current_network="$STATUS_LOCALHOST"; fi
     if [[ "$current_network" != "$p_network" ]]; then
         printInfoMsg "Applying network configuration..."
         local override_dir="/etc/systemd/system/ollama.service.d"
         local override_file="${override_dir}/10-expose-network.conf"
-        if [[ "$p_network" == "network" ]]; then
+        if [[ "$p_network" == "$STATUS_NETWORK" ]]; then
             sudo mkdir -p "$override_dir"
             echo -e '[Service]\nEnvironment="OLLAMA_HOST=0.0.0.0"' | sudo tee "$override_file" >/dev/null
         else # restrict
@@ -855,7 +855,7 @@ _main_logic() {
     local pending_network_status pending_kv_type pending_flash_attention
     local pending_context_length pending_num_parallel pending_models_dir
 
-    if check_network_exposure; then pending_network_status="network"; else pending_network_status="localhost"; fi
+    if check_network_exposure; then pending_network_status="$STATUS_NETWORK"; else pending_network_status="$STATUS_LOCALHOST"; fi
     pending_kv_type=$(get_env_var "$KV_CACHE_VAR" "$OLLAMA_ADVANCED_CONF")
     pending_flash_attention=$(get_env_var "OLLAMA_FLASH_ATTENTION" "$OLLAMA_ADVANCED_CONF")
     pending_context_length=$(get_env_var "$CONTEXT_LENGTH_VAR" "$OLLAMA_ADVANCED_CONF")
@@ -875,11 +875,11 @@ _main_logic() {
                 return 0
                 ;;
             -e|--expose)
-                pending_network_status="network"
+                pending_network_status="$STATUS_NETWORK"
                 shift
                 ;;
             -r|--restrict)
-                pending_network_status="localhost"
+                pending_network_status="$STATUS_LOCALHOST"
                 shift
                 ;;
             --kv-cache)
