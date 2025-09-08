@@ -607,16 +607,16 @@ run_interactive_menu() {
 
         # --- Display Menu ---
         printMsg "${T_ULINE}Choose an option to configure:${T_RESET}"
-        printf " ${T_BOLD}1)${T_RESET} %-25s - %b${T_CLEAR_LINE}\n" "Network Exposure" "$network_display"
-        printf " ${T_BOLD}2)${T_RESET} %-25s - %b${T_CLEAR_LINE}\n" "KV Cache Type" "$kv_display"
-        printf " ${T_BOLD}3)${T_RESET} %-25s - %b${T_CLEAR_LINE}\n" "Context Length" "$context_display"
-        printf " ${T_BOLD}4)${T_RESET} %-25s - %b${T_CLEAR_LINE}\n" "Parallel Requests" "$parallel_display"
-        printf " ${T_BOLD}5)${T_RESET} %-25s - %b${T_CLEAR_LINE}\n" "Models Directory" "$models_dir_display"
+        printf " ${T_BOLD}1)${T_RESET} %-20s - %b${T_CLEAR_LINE}\n" "Network Exposure" "$network_display"
+        printf " ${T_BOLD}2)${T_RESET} %-20s - %b${T_CLEAR_LINE}\n" "KV Cache Type" "$kv_display"
+        printf " ${T_BOLD}3)${T_RESET} %-20s - %b${T_CLEAR_LINE}\n" "Context Length" "$context_display"
+        printf " ${T_BOLD}4)${T_RESET} %-20s - %b${T_CLEAR_LINE}\n" "Parallel Requests" "$parallel_display"
+        printf " ${T_BOLD}5)${T_RESET} %-20s - %b${T_CLEAR_LINE}\n" "Models Directory" "$models_dir_display"
         printMsg ""
-        printMsg " ${T_BOLD}r)${T_RESET} Reset all advanced settings to default"
-        printMsg " ${T_BOLD}c)${T_RESET} ${C_L_YELLOW}Cancel/Discard${T_RESET} all pending changes"
-        printMsg " ${T_BOLD}s)${T_RESET} ${C_L_GREEN}Save changes and Quit${T_RESET}"
-        printMsg " ${T_BOLD}q)${T_RESET} Quit without saving (or press ${C_L_YELLOW}ESC${T_RESET})\n"
+        printMsg " ${T_BOLD}r)${T_RESET} ${C_L_BLUE}(R)eset${T_RESET} all advanced settings to default"
+        printMsg " ${T_BOLD}c)${T_RESET} ${C_L_YELLOW}(C)ancel/(D)iscard${T_RESET} all pending changes"
+        printMsg " ${T_BOLD}s)${T_RESET} ${C_L_GREEN}(S)ave changes and Quit${T_RESET}"
+        printMsg " ${T_BOLD}q)${T_RESET} ${C_L_YELLOW}(Q)uit${T_RESET} without saving (or press ${C_L_YELLOW}ESC${T_RESET})\n"
         printMsgNoNewline " ${T_QST_ICON} Your choice: "
 
         local choice
@@ -652,7 +652,7 @@ run_interactive_menu() {
                 pending_num_parallel=""
                 pending_models_dir=""
                 ;;
-            c|C)
+            c|C|d|D)
                 printInfoMsg "Discarding pending changes..."
                 _reset_pending_states # Discard changes by resetting pending values to match the original state.
                 sleep 1
@@ -678,6 +678,7 @@ run_interactive_menu() {
                         redraw_full_menu=true
                     fi
                 else
+                    clear_lines_up 6
                     printInfoMsg "Quitting without saving changes."
                     break # Exit the loop
                 fi
