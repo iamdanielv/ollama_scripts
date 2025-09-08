@@ -524,6 +524,10 @@ main() {
 }
 
 run_interactive_menu() {
+    # Ensure we have root privileges before entering the interactive menu,
+    # as saving changes will require them. This avoids state loss on sudo re-execution.
+    ensure_root "Root privileges are required to save configuration changes." "$@"
+
     # --- State Variables ---
     local current_network_status pending_network_status
     local current_kv_type pending_kv_type
@@ -773,7 +777,6 @@ apply_staged_changes() {
     local current_network
     if check_network_exposure; then current_network="network"; else current_network="localhost"; fi
     if [[ "$current_network" != "$p_network" ]]; then
-        #ensure_root "Root privileges are required to modify systemd configuration."
         printInfoMsg "Applying network configuration..."
         local override_dir="/etc/systemd/system/ollama.service.d"
         local override_file="${override_dir}/10-expose-network.conf"
@@ -798,7 +801,6 @@ apply_staged_changes() {
           "$current_context" != "$p_context" || \
           "$current_parallel" != "$p_parallel" || \
           "$current_models_dir" != "$p_models_dir" ]]; then
-        #ensure_root "Root privileges are required to modify systemd configuration."
         printInfoMsg "Applying advanced configuration..."
         _write_advanced_config "$p_kv_type" "$p_flash" "$p_context" "$p_parallel" "$p_models_dir"
         any_change_made=true
@@ -809,6 +811,25 @@ apply_staged_changes() {
 
 _main_logic() {
     prereq_checks "sudo" "systemctl" "grep" "sed" "awk"
+
+    # --- Root Check for Non-Interactive Mode ---
+    # For non-interactive mode, check if any arguments require root access.
+    # If so, call ensure_root at the beginning to avoid losing state later.
+    if [[ $# -gt 0 ]]; then
+        local needs_root=false
+        for arg in "$@"; do
+            case "$arg" in
+                -e|--expose|-r|--restrict|--kv-cache|--context-length|--num-parallel|--models-dir|--reset-advanced|--restart)
+                    needs_root=true
+                    break
+                    ;;
+            esac
+        done
+
+        if [[ "$needs_root" == "true" ]]; then
+            ensure_root "Root privileges are required to modify systemd configuration." "$@"
+        fi
+    fi
 
     # --- Migration from old config file ---
     local old_conf_file="${OLLAMA_OVERRIDE_DIR}/20-kv-cache.conf"
