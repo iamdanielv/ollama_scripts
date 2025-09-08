@@ -114,10 +114,12 @@ _get_combined_display() {
     local current_val="$2"
     local pending_val="$3"
 
-    local pending_display=$(_get_setting_display "$setting_type" "$pending_val")
+    local pending_display
+    pending_display=$(_get_setting_display "$setting_type" "$pending_val")
 
     if [[ "$current_val" != "$pending_val" ]]; then
-        local current_display=$(_get_setting_display "$setting_type" "$current_val")
+        local current_display
+        current_display=$(_get_setting_display "$setting_type" "$current_val")
         echo "${current_display} ${C_WHITE}→${T_RESET} ${pending_display}"
     else
         echo "$pending_display"
@@ -168,18 +170,26 @@ print_all_status() {
         network_status_full="${C_L_BLUE}RESTRICTED to localhost (127.0.0.1)${T_RESET}"
     fi
 
-    local current_kv_type=$(get_env_var "$KV_CACHE_VAR" "$OLLAMA_ADVANCED_CONF")
-    local current_models_dir=$(get_env_var "$OLLAMA_MODELS_VAR" "$OLLAMA_ADVANCED_CONF")
-    local current_context_length=$(get_env_var "$CONTEXT_LENGTH_VAR" "$OLLAMA_ADVANCED_CONF")
-    local current_num_parallel=$(get_env_var "$NUM_PARALLEL_VAR" "$OLLAMA_ADVANCED_CONF")
+    local current_kv_type
+    current_kv_type=$(get_env_var "$KV_CACHE_VAR" "$OLLAMA_ADVANCED_CONF")
+    local current_models_dir
+    current_models_dir=$(get_env_var "$OLLAMA_MODELS_VAR" "$OLLAMA_ADVANCED_CONF")
+    local current_context_length
+    current_context_length=$(get_env_var "$CONTEXT_LENGTH_VAR" "$OLLAMA_ADVANCED_CONF")
+    local current_num_parallel
+    current_num_parallel=$(get_env_var "$NUM_PARALLEL_VAR" "$OLLAMA_ADVANCED_CONF")
 
     # Get display strings using the new helper
-    local kv_display=$(_get_setting_display "kv_cache" "$current_kv_type")
-    local models_dir_display=$(_get_setting_display "models_dir" "$current_models_dir")
+    local kv_display
+    kv_display=$(_get_setting_display "kv_cache" "$current_kv_type")
+    local models_dir_display
+    models_dir_display=$(_get_setting_display "models_dir" "$current_models_dir")
     # Special case for the more descriptive default text in status view
     if [[ -z "$current_models_dir" ]]; then models_dir_display="${C_GRAY}(default: ~/.ollama/models)${T_RESET}"; fi
-    local context_display=$(_get_setting_display "context" "$current_context_length")
-    local parallel_display=$(_get_setting_display "parallel" "$current_num_parallel")
+    local context_display
+    context_display=$(_get_setting_display "context" "$current_context_length")
+    local parallel_display
+    parallel_display=$(_get_setting_display "parallel" "$current_num_parallel")
 
     # Display
     printMsg "${T_ULINE}Current Configuration:${T_RESET}"
@@ -789,11 +799,16 @@ apply_staged_changes() {
     fi
 
     # --- Check Advanced Settings Change ---
-    local current_kv_type=$(get_env_var "$KV_CACHE_VAR" "$OLLAMA_ADVANCED_CONF")
-    local current_flash=$(get_env_var "OLLAMA_FLASH_ATTENTION" "$OLLAMA_ADVANCED_CONF")
-    local current_context=$(get_env_var "$CONTEXT_LENGTH_VAR" "$OLLAMA_ADVANCED_CONF")
-    local current_parallel=$(get_env_var "$NUM_PARALLEL_VAR" "$OLLAMA_ADVANCED_CONF")
-    local current_models_dir=$(get_env_var "$OLLAMA_MODELS_VAR" "$OLLAMA_ADVANCED_CONF")
+    local current_kv_type
+    current_kv_type=$(get_env_var "$KV_CACHE_VAR" "$OLLAMA_ADVANCED_CONF")
+    local current_flash
+    current_flash=$(get_env_var "OLLAMA_FLASH_ATTENTION" "$OLLAMA_ADVANCED_CONF")
+    local current_context
+    current_context=$(get_env_var "$CONTEXT_LENGTH_VAR" "$OLLAMA_ADVANCED_CONF")
+    local current_parallel
+    current_parallel=$(get_env_var "$NUM_PARALLEL_VAR" "$OLLAMA_ADVANCED_CONF")
+    local current_models_dir
+    current_models_dir=$(get_env_var "$OLLAMA_MODELS_VAR" "$OLLAMA_ADVANCED_CONF")
 
     if [[ "$current_kv_type" != "$p_kv_type" || \
           "$current_flash" != "$p_flash" || \

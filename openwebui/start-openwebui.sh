@@ -89,6 +89,7 @@ main() {
     fi
 
     local webui_url
+    # Declare separately to avoid masking the command's exit code.
     webui_url=$(get_openwebui_url)
 
     if ! poll_service "$webui_url" "OpenWebUI UI" 60; then

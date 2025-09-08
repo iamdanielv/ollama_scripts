@@ -119,8 +119,9 @@ watch_ollama_ps() {
         fi
 
         # Add a timestamped footer to the output
-        local footer
-        footer="$(getPrettyDate) ${C_WHITE}Watching for loaded models...${T_RESET}"
+        local footer_date
+        footer_date=$(getPrettyDate)
+        local footer="${footer_date} ${C_WHITE}Watching for loaded models...${T_RESET}"
         local full_output="${new_output}\n${footer}"
 
         # Only redraw the screen if the output has actually changed
@@ -218,6 +219,7 @@ check_openwebui_status() {
     # 2. Check UI responsiveness
     # Use the new helper function to get the URL
     local webui_url
+    # Declare separately to avoid masking the command's exit code.
     webui_url=$(get_openwebui_url)
     if check_endpoint_status "$webui_url" 5; then # 5-second timeout
         printOkMsg "UI:        ${C_GREEN}Responsive${T_RESET} at ${C_L_BLUE}${webui_url}${T_RESET}"

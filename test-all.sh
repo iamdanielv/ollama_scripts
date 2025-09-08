@@ -50,6 +50,7 @@ run_tests() {
 
     # Create a temporary directory for our test files
     local temp_dir
+    # Declare separately to avoid masking mktemp's exit code.
     temp_dir=$(mktemp -d)
     # Ensure cleanup on exit
     trap 'rm -rf "$temp_dir"' EXIT
@@ -191,6 +192,7 @@ main() {
 
   # Create a temporary directory to store test results
   local results_dir
+  # Declare separately to avoid masking mktemp's exit code.
   results_dir=$(mktemp -d)
   trap 'rm -rf "$results_dir"' EXIT
 

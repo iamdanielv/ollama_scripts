@@ -973,6 +973,7 @@ _run_with_spinner_interactive() {
 
     while ps -p $pid > /dev/null; do
         echo -ne "\r\e[2K" >&2 # Clear the current line
+        # Declare separately to avoid masking the command's exit code.
         local current_output_line
         current_output_line=$(tail -n 1 "$temp_output_file" 2>/dev/null | tr -d '\r' || true)
         echo -ne " ${C_L_BLUE}${spinner_chars:$i:1}${T_RESET}  ${desc}" >&2

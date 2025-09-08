@@ -331,6 +331,7 @@ main() {
     fi
 
     local installer_script
+    # Declare separately to avoid masking mktemp's exit code with `local`.
     installer_script=$(mktemp)
 
     # Download the installer script using the spinner
@@ -354,6 +355,7 @@ main() {
     # Clear the shell's command lookup cache to find the new executable.
     hash -r
     local post_install_version
+    # Declare separately to avoid masking the command's exit code.
     post_install_version=$(get_ollama_version)
 
     if [[ -z "$post_install_version" ]]; then

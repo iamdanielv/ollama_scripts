@@ -122,7 +122,8 @@ run_model_logic() {
 
     # --- Select model ---
     local model_to_run
-    # Use the new single-select menu.
+    # Use the new single-select menu. Declare and assign separately
+    # to avoid masking the exit code of the command substitution.
     model_to_run=$(interactive_single_select_list_models "Select a model to RUN:" "$models_json")
     local exit_code=$?
 

@@ -712,7 +712,8 @@ _parse_model_data_for_menu() {
 
     # Pre-calculate formatted sizes and colors to avoid doing it in the render loop
     for size_bytes in "${sizes_ref[@]}"; do
-        local size_gb; size_gb=$(awk -v size="$size_bytes" 'BEGIN { printf "%.2f GB", size / 1e9 }')
+        local size_gb
+        size_gb=$(awk -v size="$size_bytes" 'BEGIN { printf "%.2f GB", size / 1e9 }')
         formatted_sizes_ref+=("$size_gb")
         local size_gb_int=${size_gb%.*}
         if [[ "$size_gb_int" -ge 9 ]]; then bg_colors_ref+=("${C_RED}");
@@ -743,7 +744,8 @@ _parse_model_data_for_menu() {
         formatted_sizes_ref=("" "${formatted_sizes_ref[@]}")
         bg_colors_ref=("" "${bg_colors_ref[@]}")
         # Pre-render the "All" line
-        local all_line; all_line=$(printf "%-40s %10s  %-15s" "${T_BOLD}All${T_RESET}" "" "")
+        local all_line
+        all_line=$(printf "%-40s %10s  %-15s" "${T_BOLD}All${T_RESET}" "" "")
         pre_rendered_lines_ref=("$all_line" "${pre_rendered_lines_ref[@]}")
     fi
     return 0
