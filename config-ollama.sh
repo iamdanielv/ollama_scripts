@@ -53,6 +53,24 @@ KV_CACHE_DISPLAY=(
     [q4_0]="${C_L_BLUE}q4_0${T_RESET}"
 )
 
+# (Private) Helper to print a formatted menu option line.
+# Usage: _print_menu_option "1" "Network Exposure" "$network_display"
+_print_menu_option() {
+    local number="$1"
+    local label="$2"
+    local value_display="$3"
+    # The %b format specifier interprets backslash escapes from the value_display string (e.g., color codes).
+    printf " ${T_BOLD}${number})${T_RESET} %-20s - %b${T_CLEAR_LINE}\n" "$label" "$value_display"
+}
+
+# (Private) Helper to print a formatted menu action line.
+# Usage: _print_menu_action "r" "${C_L_BLUE}(R)eset${T_RESET} all advanced settings to default"
+_print_menu_action() {
+    local key="$1"
+    local description="$2"
+    printMsg " ${T_BOLD}${key})${T_RESET} ${description}${T_CLEAR_LINE}"
+}
+
 # --- Function Definitions ---
 
 show_help() {
@@ -607,16 +625,17 @@ run_interactive_menu() {
 
         # --- Display Menu ---
         printMsg "${T_ULINE}Choose an option to configure:${T_RESET}"
-        printf " ${T_BOLD}1)${T_RESET} %-20s - %b${T_CLEAR_LINE}\n" "Network Exposure" "$network_display"
-        printf " ${T_BOLD}2)${T_RESET} %-20s - %b${T_CLEAR_LINE}\n" "KV Cache Type" "$kv_display"
-        printf " ${T_BOLD}3)${T_RESET} %-20s - %b${T_CLEAR_LINE}\n" "Context Length" "$context_display"
-        printf " ${T_BOLD}4)${T_RESET} %-20s - %b${T_CLEAR_LINE}\n" "Parallel Requests" "$parallel_display"
-        printf " ${T_BOLD}5)${T_RESET} %-20s - %b${T_CLEAR_LINE}\n" "Models Directory" "$models_dir_display"
+        _print_menu_option "1" "Network Exposure" "$network_display"
+        _print_menu_option "2" "KV Cache Type" "$kv_display"
+        _print_menu_option "3" "Context Length" "$context_display"
+        _print_menu_option "4" "Parallel Requests" "$parallel_display"
+        _print_menu_option "5" "Models Directory" "$models_dir_display"
         printMsg ""
-        printMsg " ${T_BOLD}r)${T_RESET} ${C_L_BLUE}(R)eset${T_RESET} all advanced settings to default"
-        printMsg " ${T_BOLD}c)${T_RESET} ${C_L_YELLOW}(C)ancel/(D)iscard${T_RESET} all pending changes"
-        printMsg " ${T_BOLD}s)${T_RESET} ${C_L_GREEN}(S)ave changes and Quit${T_RESET}"
-        printMsg " ${T_BOLD}q)${T_RESET} ${C_L_YELLOW}(Q)uit${T_RESET} without saving (or press ${C_L_YELLOW}ESC${T_RESET})\n"
+        _print_menu_action "r" "${C_L_BLUE}(R)eset${T_RESET} all advanced settings to default"
+        _print_menu_action "c" "${C_L_YELLOW}(C)ancel/(D)iscard${T_RESET} all pending changes"
+        _print_menu_action "s" "${C_L_GREEN}(S)ave changes and Quit${T_RESET}"
+        _print_menu_action "q" "${C_L_YELLOW}(Q)uit${T_RESET} without saving (or press ${C_L_YELLOW}ESC${T_RESET})"
+        printMsg "" # Add blank line before prompt.
         printMsgNoNewline " ${T_QST_ICON} Your choice: "
 
         local choice
@@ -754,7 +773,7 @@ apply_staged_changes() {
     local current_network
     if check_network_exposure; then current_network="network"; else current_network="localhost"; fi
     if [[ "$current_network" != "$p_network" ]]; then
-        ensure_root "Root privileges are required to modify systemd configuration."
+        #ensure_root "Root privileges are required to modify systemd configuration."
         printInfoMsg "Applying network configuration..."
         local override_dir="/etc/systemd/system/ollama.service.d"
         local override_file="${override_dir}/10-expose-network.conf"
@@ -779,7 +798,7 @@ apply_staged_changes() {
           "$current_context" != "$p_context" || \
           "$current_parallel" != "$p_parallel" || \
           "$current_models_dir" != "$p_models_dir" ]]; then
-        ensure_root "Root privileges are required to modify systemd configuration."
+        #ensure_root "Root privileges are required to modify systemd configuration."
         printInfoMsg "Applying advanced configuration..."
         _write_advanced_config "$p_kv_type" "$p_flash" "$p_context" "$p_parallel" "$p_models_dir"
         any_change_made=true
@@ -938,7 +957,7 @@ finalize_changes() {
         fi
     else
         # If we're not restarting, give the user the next step.
-        printInfoMsg "\nRun './restart-ollama.sh' or 'sudo systemctl restart ollama' to apply changes."
+        printInfoMsg "Run './restart-ollama.sh' or 'sudo systemctl restart ollama' to apply changes."
     fi
 }
 
