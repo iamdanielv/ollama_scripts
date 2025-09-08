@@ -160,8 +160,29 @@ run_diagnostics() {
     _run_and_print "Memory Usage" "free" "-h"
     _run_and_print "Disk Usage" "df" "-h"
 
+    # --- Security Modules ---
+    _print_diag_header "Security Modules"
+    _run_and_print "SELinux Status" "sestatus"
+    _run_and_print "AppArmor Status" "sudo" "aa-status"
+
     # --- Dependency Versions ---
     _check_dependency_versions
+
+    # --- Environment Variables ---
+    _print_diag_header "Relevant Environment Variables (Current Shell)"
+    local relevant_vars=("OLLAMA_HOST" "OLLAMA_PORT" "OLLAMA_MODELS" "OPEN_WEBUI_PORT" "DOCKER_HOST")
+    local output=""
+    for var in "${relevant_vars[@]}"; do
+        if [[ -n "${!var}" ]]; then # Using indirect expansion to get var value
+            output+="\n  ${C_L_CYAN}$(printf '%-20s' "$var"):${T_RESET} ${!var}"
+        fi
+    done
+
+    if [[ -z "$output" ]]; then
+        printMsg "\n    ${C_L_GRAY}(No relevant environment variables set in this shell)${T_RESET}"
+    else
+        printMsg "$output"
+    fi
 
     # --- GPU Information ---
     _print_diag_header "GPU Information"
@@ -179,6 +200,23 @@ run_diagnostics() {
         printMsg "  ${C_L_YELLOW}Ollama command not found. Skipping Ollama diagnostics.${T_RESET}"
     else
         _run_and_print "Ollama Version" "ollama" "--version"
+
+        # API Responsiveness Check
+        printMsgNoNewline "\n  ${C_L_CYAN}API Responsiveness:${T_RESET} "
+        local ollama_port=${OLLAMA_PORT:-11434}
+        local ollama_url="http://localhost:${ollama_port}"
+        if check_endpoint_status "$ollama_url"; then
+            local ollama_api_version
+            # Use jq to be safe, but fallback to grep/sed if not available
+            if _check_command_exists "jq"; then
+                ollama_api_version=$(curl -s "${ollama_url}/api/version" | jq -r .version)
+            else
+                ollama_api_version=$(curl -s "${ollama_url}/api/version" | grep -o '"version":"[^"]*"' | cut -d'"' -f4)
+            fi
+            printMsg "${C_GREEN}Reachable${T_RESET} (API Version: ${C_L_BLUE}${ollama_api_version:-N/A}${T_RESET})"
+        else
+            printMsg "${C_RED}Not Reachable at ${ollama_url}${T_RESET}"
+        fi
         
         # Check service status
         if ! _is_systemd_system; then
@@ -240,6 +278,7 @@ run_diagnostics() {
 
             printMsg "    Path: ${C_L_BLUE}${models_dir}${T_RESET} ${source_msg}"
             if [[ -d "$models_dir" ]]; then
+                _run_and_print "    Permissions" "ls" "-ld" "$models_dir"
                 _run_and_print "    Size" "du" "-sh" "$models_dir"
             else
                 printMsg "    ${C_L_YELLOW}Directory not found.${T_RESET}"
