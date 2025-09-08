@@ -261,9 +261,10 @@ configure_network_exposure() {
     fi
 
     printMsg "\n${T_ULINE}Choose an option:${T_RESET}"
-    printMsg "  ${T_BOLD}1, e)${T_RESET} ${C_L_YELLOW}(E)xpose to Network${T_RESET} (allow connections from other devices/containers)"
-    printMsg "  ${T_BOLD}2, r)${T_RESET} ${C_L_BLUE}(R)estrict to Localhost${T_RESET} (default, more secure)"
-    printMsg "     ${T_BOLD}b)${T_RESET} Back to main menu (or press ${C_L_YELLOW}ESC${T_RESET})\n"
+    _print_menu_action "1, e" "${C_L_YELLOW}(E)xpose to Network${T_RESET} (allow connections from other devices/containers)"
+    _print_menu_action "2, r" "${C_L_BLUE}(R)estrict to Localhost${T_RESET} (default, more secure)"
+    _print_menu_action "b"    "Back to main menu (or press ${C_L_YELLOW}ESC${T_RESET})"
+    printMsg ""
     printMsgNoNewline " ${T_QST_ICON} Your choice: "
     local choice
     choice=$(read_single_char)
@@ -271,16 +272,12 @@ configure_network_exposure() {
 
     case "$choice" in
         1|e|E)
-            if [[ "$pending_network_ref" != "$STATUS_NETWORK" ]]; then
-                pending_network_ref="$STATUS_NETWORK"
-                return 0 # changed
-            fi
+            pending_network_ref="$STATUS_NETWORK"
+            return 0 # changed
             ;;
         2|r|R)
-            if [[ "$pending_network_ref" != "$STATUS_LOCALHOST" ]]; then
-                pending_network_ref="$STATUS_LOCALHOST"
-                return 0 # changed
-            fi
+            pending_network_ref="$STATUS_LOCALHOST"
+            return 0 # changed
             ;;
         b|B|"$KEY_ESC")
             return 2
@@ -289,7 +286,9 @@ configure_network_exposure() {
             printWarnMsg "Invalid choice." && sleep 1
             ;;
     esac
-    return 2
+    # If we reach here, it means the choice was valid but resulted in no change.
+    # Or it was invalid. In either case, we can signal no state was modified.
+    return 2 # no change
 }
 
 #
@@ -312,11 +311,12 @@ configure_kv_cache() {
     printInfoMsg "Current ${KV_CACHE_VAR} is set to: ${display_value:-${C_GRAY}(default)${T_RESET}}"
 
     printMsg "\n${T_ULINE}Choose a KV_CACHE_TYPE:${T_RESET}"
-    printMsg " ${T_BOLD}1)${T_RESET} ${KV_CACHE_DISPLAY[q8_0]} (recommended for most GPUs)"
-    printMsg " ${T_BOLD}2)${T_RESET} ${KV_CACHE_DISPLAY[f16]} (for high-end GPUs with ample VRAM)"
-    printMsg " ${T_BOLD}3)${T_RESET} ${KV_CACHE_DISPLAY[q4_0]} (for GPUs with limited VRAM)"
-    printMsg " ${T_BOLD}r)${T_RESET} Remove custom KV_CACHE_TYPE (use Ollama default)${T_RESET}"
-    printMsg " ${T_BOLD}b)${T_RESET} Back to main menu (or press ${C_L_YELLOW}ESC${T_RESET})\n"
+    _print_menu_action "1" "${KV_CACHE_DISPLAY[q8_0]} (recommended for most GPUs)"
+    _print_menu_action "2" "${KV_CACHE_DISPLAY[f16]} (for high-end GPUs with ample VRAM)"
+    _print_menu_action "3" "${KV_CACHE_DISPLAY[q4_0]} (for GPUs with limited VRAM)"
+    _print_menu_action "r" "Remove custom KV_CACHE_TYPE (use Ollama default)${T_RESET}"
+    _print_menu_action "b" "Back to main menu (or press ${C_L_YELLOW}ESC${T_RESET})"
+    printMsg ""
     printMsgNoNewline " ${T_QST_ICON} Your choice: "
 
     local choice
@@ -367,13 +367,14 @@ configure_context_length() {
     printMsg "A larger value requires more VRAM. Default is typically 2048."
 
     printMsg "\n${T_ULINE}Choose a common value or enter a custom one:${T_RESET}"
-    printMsg " ${T_BOLD}1)${T_RESET} 2048 (Default for many models)"
-    printMsg " ${T_BOLD}2)${T_RESET} 4096"
-    printMsg " ${T_BOLD}3)${T_RESET} 8192"
-    printMsg " ${T_BOLD}4)${T_RESET} 16384"
-    printMsg " ${T_BOLD}c)${T_RESET} Enter a ${C_L_CYAN}(c)ustom${T_RESET} value"
-    printMsg " ${T_BOLD}r)${T_RESET} ${C_L_YELLOW}(R)emove${T_RESET} setting (use Ollama default)"
-    printMsg " ${T_BOLD}b)${T_RESET} Back to main menu (or press ${C_L_YELLOW}ESC${T_RESET})\n"
+    _print_menu_action "1" "2048 (Default for many models)"
+    _print_menu_action "2" "4096"
+    _print_menu_action "3" "8192"
+    _print_menu_action "4" "16384"
+    _print_menu_action "c" "Enter a ${C_L_CYAN}(c)ustom${T_RESET} value"
+    _print_menu_action "r" "${C_L_YELLOW}(R)emove${T_RESET} setting (use Ollama default)"
+    _print_menu_action "b" "Back to main menu (or press ${C_L_YELLOW}ESC${T_RESET})"
+    printMsg ""
     printMsgNoNewline " ${T_QST_ICON} Your choice: "
 
     local choice
@@ -437,16 +438,17 @@ configure_num_parallel() {
     fi
     printInfoMsg "Current ${NUM_PARALLEL_VAR} is set to: ${parallel_display}"
     printMsg "\nSets the number of parallel requests that can be processed at once."
-    printMsg "Increasing this can improve throughput but significantly increases VRAM usage. Default is 1."
+    printMsg "Increasing this can improve throughput but significantly increases \nVRAM usage. Default is 1."
 
     printMsg "\n${T_ULINE}Choose a value or enter a custom one:${T_RESET}"
-    printMsg " ${T_BOLD}1)${T_RESET} 1 (Default)"
-    printMsg " ${T_BOLD}2)${T_RESET} 2"
-    printMsg " ${T_BOLD}3)${T_RESET} 3"
-    printMsg " ${T_BOLD}4)${T_RESET} 4"
-    printMsg " ${T_BOLD}c)${T_RESET} Enter a ${C_L_CYAN}(c)ustom${T_RESET} value"
-    printMsg " ${T_BOLD}r)${T_RESET} ${C_L_YELLOW}(R)emove${T_RESET} setting (use Ollama default)"
-    printMsg " ${T_BOLD}b)${T_RESET} Back to main menu (or press ${C_L_YELLOW}ESC${T_RESET})\n"
+    _print_menu_action "1" "1 (Default)"
+    _print_menu_action "2" "2"
+    _print_menu_action "3" "3"
+    _print_menu_action "4" "4"
+    _print_menu_action "c" "Enter a ${C_L_CYAN}(c)ustom${T_RESET} value"
+    _print_menu_action "r" "${C_L_YELLOW}(R)emove${T_RESET} setting (use Ollama default)"
+    _print_menu_action "b" "Back to main menu (or press ${C_L_YELLOW}ESC${T_RESET})"
+    printMsg ""
     printMsgNoNewline " ${T_QST_ICON} Your choice: "
 
     local choice
@@ -505,9 +507,10 @@ configure_models_dir() {
     printMsg "Useful for storing models on a separate, larger drive."
 
     printMsg "\n${T_ULINE}Choose an option:${T_RESET}"
-    printMsg " ${T_BOLD}c)${T_RESET} Enter a ${C_L_CYAN}(c)ustom${T_RESET} path"
-    printMsg " ${T_BOLD}r)${T_RESET} ${C_L_YELLOW}(R)emove${T_RESET} setting (use Ollama default)"
-    printMsg " ${T_BOLD}b)${T_RESET} Back to main menu (or press ${C_L_YELLOW}ESC${T_RESET})\n"
+    _print_menu_action "c" "Enter a ${C_L_CYAN}(c)ustom${T_RESET} path"
+    _print_menu_action "r" "${C_L_YELLOW}(R)emove${T_RESET} setting (use Ollama default)"
+    _print_menu_action "b" "Back to main menu (or press ${C_L_YELLOW}ESC${T_RESET})"
+    printMsg ""
     printMsgNoNewline " ${T_QST_ICON} Your choice: "
 
     local choice
