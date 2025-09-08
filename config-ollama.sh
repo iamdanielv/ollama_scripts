@@ -105,7 +105,12 @@ print_all_status() {
     current_num_parallel=$(get_env_var "$NUM_PARALLEL_VAR" "$OLLAMA_ADVANCED_CONF")
     local current_models_dir
     current_models_dir=$(get_env_var "$OLLAMA_MODELS_VAR" "$OLLAMA_ADVANCED_CONF")
-    local kv_display="${KV_CACHE_DISPLAY[${current_kv_type}]:-${current_kv_type}}"
+    local kv_display=""
+    if [[ -n "$current_kv_type" ]]; then
+        # If a value exists, look it up in the display map.
+        # Fallback to the value itself if not found in the map.
+        kv_display="${KV_CACHE_DISPLAY[${current_kv_type}]:-${current_kv_type}}"
+    fi
 
     # Display
     printMsg "${T_ULINE}Current Configuration:${T_RESET}"
@@ -122,13 +127,24 @@ print_all_status() {
 get_env_var() {
     local var_name="$1"
     local conf_file="$2"
-    local current_value=""
-    if [[ -f "${conf_file}" ]]; then
-        # This pipeline finds the line, extracts the value, and removes quotes.
-        # The sed command captures everything after the '=' that is not a quote. Handles optional quotes.
-        current_value=$(grep -E "Environment=.*${var_name}=" "${conf_file}" | sed -E "s/.*${var_name}=\"?([^\"]*)\"?.*/\1/" | tr -d '"'\''')
+
+    if [[ ! -f "$conf_file" ]]; then
+        # No file, no value. Echo empty string to maintain behavior.
+        echo ""
+        return
     fi
-    echo "${current_value}"
+
+    # Use awk to find the right line and extract the value.
+    # -F'[="]': Sets field separators to '=' or '"'.
+    # For a line like Environment="KEY=VALUE", the fields are:
+    # $1: Environment, $2: <empty>, $3: KEY, $4: VALUE
+    # We check for the exact key match and print the corresponding value.
+    awk -F'[="]' -v var="$var_name" '
+        $1 == "Environment" && $3 == var {
+            print $4
+            exit # Found it, stop processing.
+        }
+    ' "$conf_file"
 }
 
 #
@@ -194,6 +210,25 @@ reset_all_advanced_settings() {
     fi
 }
 
+# (Private) Helper to apply a change to an advanced setting.
+# It reloads the systemd daemon so that status checks reflect the new state.
+# It silences the spinner output for a cleaner interactive experience.
+#
+# Usage:
+#   set_env_var ...; local exit_code=$?
+#   _apply_advanced_change "$exit_code"
+#   return $?
+#
+_apply_advanced_change() {
+    local changed_code="$1"
+    # If the exit code is not 2 (no change), then a change was made.
+    if [[ "$changed_code" -ne 2 ]]; then
+        run_with_spinner "Reloading systemd daemon..." sudo systemctl daemon-reload &>/dev/null
+    fi
+    # Pass through the original exit code.
+    return "$changed_code"
+}
+
 #
 # Interactive menu to configure Network Exposure.
 #
@@ -255,7 +290,12 @@ configure_kv_cache() {
     printBanner "Configure KV Cache Type"
     local current_kv_type
     current_kv_type=$(get_env_var "$KV_CACHE_VAR" "$OLLAMA_ADVANCED_CONF")
-    local display_value="${KV_CACHE_DISPLAY[${current_kv_type}]:-${current_kv_type}}"
+    local display_value=""
+    if [[ -n "$current_kv_type" ]]; then
+        # If a value exists, look it up in the display map.
+        # Fallback to the value itself if not found in the map.
+        display_value="${KV_CACHE_DISPLAY[${current_kv_type}]:-${current_kv_type}}"
+    fi
     printInfoMsg "Current ${KV_CACHE_VAR} is set to: ${display_value:-'(default)'}"
 
     printMsg "\n${T_ULINE}Choose a KV_CACHE_TYPE:${T_RESET}"
@@ -269,27 +309,27 @@ configure_kv_cache() {
     local choice
     choice=$(read_single_char)
     clear_current_line
-
-    local changed=2 # 2 = no change
+ 
+    local exit_code=2 # 2 = no change
     case $choice in
         1)
             ensure_root "Root privileges are required to modify systemd configuration."
-            set_env_var "$KV_CACHE_VAR" "q8_0" "$OLLAMA_ADVANCED_CONF"; changed=$?
+            set_env_var "$KV_CACHE_VAR" "q8_0" "$OLLAMA_ADVANCED_CONF"; exit_code=$?
             set_env_var "OLLAMA_FLASH_ATTENTION" "1" "$OLLAMA_ADVANCED_CONF" >/dev/null # Also set flash attention
             ;;
         2)
             ensure_root "Root privileges are required to modify systemd configuration."
-            set_env_var "$KV_CACHE_VAR" "f16" "$OLLAMA_ADVANCED_CONF"; changed=$?
+            set_env_var "$KV_CACHE_VAR" "f16" "$OLLAMA_ADVANCED_CONF"; exit_code=$?
             set_env_var "OLLAMA_FLASH_ATTENTION" "1" "$OLLAMA_ADVANCED_CONF" >/dev/null
             ;;
         3)
             ensure_root "Root privileges are required to modify systemd configuration."
-            set_env_var "$KV_CACHE_VAR" "q4_0" "$OLLAMA_ADVANCED_CONF"; changed=$?
+            set_env_var "$KV_CACHE_VAR" "q4_0" "$OLLAMA_ADVANCED_CONF"; exit_code=$?
             set_env_var "OLLAMA_FLASH_ATTENTION" "1" "$OLLAMA_ADVANCED_CONF" >/dev/null
             ;;
         r|R)
             ensure_root "Root privileges are required to modify systemd configuration."
-            set_env_var "$KV_CACHE_VAR" "" "$OLLAMA_ADVANCED_CONF"; changed=$?
+            set_env_var "$KV_CACHE_VAR" "" "$OLLAMA_ADVANCED_CONF"; exit_code=$?
             set_env_var "OLLAMA_FLASH_ATTENTION" "" "$OLLAMA_ADVANCED_CONF" >/dev/null
             ;;
         b|B|"$KEY_ESC") return 2 ;;
@@ -297,7 +337,8 @@ configure_kv_cache() {
     esac
 
     # Return 0 if a change was made, 2 if not.
-    [[ $changed -ne 2 ]] && return 0 || return 2
+    _apply_advanced_change "$exit_code"
+    return $?
 }
 
 #
@@ -361,9 +402,8 @@ configure_context_length() {
 
     ensure_root "Root privileges are required to modify systemd configuration."
     set_env_var "$CONTEXT_LENGTH_VAR" "$length" "$OLLAMA_ADVANCED_CONF"
-    local exit_code=$?
-    # Return 0 if a change was made (exit code 0), 2 if not (exit code 2).
-    [[ $exit_code -ne 2 ]] && return 0 || return 2
+    _apply_advanced_change "$?"
+    return $?
 }
 
 #
@@ -419,8 +459,8 @@ configure_num_parallel() {
     fi
     ensure_root "Root privileges are required to modify systemd configuration."
     set_env_var "$NUM_PARALLEL_VAR" "$num" "$OLLAMA_ADVANCED_CONF"
-    local exit_code=$?
-    [[ $exit_code -ne 2 ]] && return 0 || return 2
+    _apply_advanced_change "$?"
+    return $?
 }
 
 #
@@ -481,7 +521,8 @@ configure_models_dir() {
 
     ensure_root "Root privileges are required to modify systemd configuration."
     set_env_var "$OLLAMA_MODELS_VAR" "$models_path" "$OLLAMA_ADVANCED_CONF"
-    [[ $? -ne 2 ]] && return 0 || return 2
+    _apply_advanced_change "$?"
+    return $?
 }
 
 # --- Main Logic ---
@@ -501,15 +542,42 @@ run_interactive_menu() {
         clear
         printBanner "Ollama Interactive Configuration"
 
-        print_all_status
+        # --- Fetch current values for display ---
+        local network_status
+        if check_network_exposure; then
+            network_status="${C_L_YELLOW}EXPOSED to network (0.0.0.0)${T_RESET}"
+        else
+            network_status="${C_L_BLUE}RESTRICTED to localhost${T_RESET}"
+        fi
+
+        local current_kv_type
+        current_kv_type=$(get_env_var "$KV_CACHE_VAR" "$OLLAMA_ADVANCED_CONF")
+        local kv_display
+        if [[ -n "$current_kv_type" ]]; then
+            kv_display="${KV_CACHE_DISPLAY[${current_kv_type}]:-${current_kv_type}}"
+        else
+            kv_display="${C_GRAY}(default)${T_RESET}"
+        fi
+
+        local current_context_length
+        current_context_length=$(get_env_var "$CONTEXT_LENGTH_VAR" "$OLLAMA_ADVANCED_CONF")
+        local context_display="${C_L_BLUE}${current_context_length:-'(default)'}${T_RESET}"
+
+        local current_num_parallel
+        current_num_parallel=$(get_env_var "$NUM_PARALLEL_VAR" "$OLLAMA_ADVANCED_CONF")
+        local parallel_display="${C_L_BLUE}${current_num_parallel:-'(default)'}${T_RESET}"
+
+        local current_models_dir
+        current_models_dir=$(get_env_var "$OLLAMA_MODELS_VAR" "$OLLAMA_ADVANCED_CONF")
+        local models_dir_display="${C_L_CYAN}${current_models_dir:-'(default)'}${T_RESET}"
 
         # --- Display Menu ---
         printMsg "\n${T_ULINE}Choose an option to configure:${T_RESET}"
-        printMsg " ${T_BOLD}1)${T_RESET} Network Exposure"
-        printMsg " ${T_BOLD}2)${T_RESET} KV Cache Type"
-        printMsg " ${T_BOLD}3)${T_RESET} Context Length"
-        printMsg " ${T_BOLD}4)${T_RESET} Parallel Requests"
-        printMsg " ${T_BOLD}5)${T_RESET} Models Directory"
+        printf " ${T_BOLD}1)${T_RESET} %-25s - %b\n" "Network Exposure" "$network_status"
+        printf " ${T_BOLD}2)${T_RESET} %-25s - %b\n" "KV Cache Type" "$kv_display"
+        printf " ${T_BOLD}3)${T_RESET} %-25s - %b\n" "Context Length" "$context_display"
+        printf " ${T_BOLD}4)${T_RESET} %-25s - %b\n" "Parallel Requests" "$parallel_display"
+        printf " ${T_BOLD}5)${T_RESET} %-25s - %b\n" "Models Directory" "$models_dir_display"
         printMsg " ${T_BOLD}r)${T_RESET} ${C_L_YELLOW}Reset all advanced settings to default${T_RESET}"
         printMsg " ${T_BOLD}q)${T_RESET} ${C_L_YELLOW}Save and Quit${T_RESET} (or press ${C_L_YELLOW}ESC${T_RESET})\n"
         printMsgNoNewline " ${T_QST_ICON} Your choice: "
@@ -542,7 +610,11 @@ run_interactive_menu() {
             r|R)
                 ensure_root "Root privileges are required to remove configuration files."
                 reset_all_advanced_settings
-                if [[ $? -eq 0 ]]; then changes_made=true; fi
+                local exit_code=$?
+                if [[ $exit_code -eq 0 ]]; then
+                    changes_made=true
+                    _apply_advanced_change "$exit_code" &>/dev/null
+                fi
                 sleep 1.5 # Give user time to see the message
                 ;;
             q|Q|"$KEY_ESC")
@@ -560,7 +632,7 @@ run_interactive_menu() {
 }
 
 _main_logic() {
-    prereq_checks "sudo" "systemctl" "grep" "sed"
+    prereq_checks "sudo" "systemctl" "grep" "sed" "awk"
 
     # --- Migration from old config file ---
     local old_conf_file="${OLLAMA_OVERRIDE_DIR}/20-kv-cache.conf"
@@ -675,13 +747,9 @@ finalize_changes() {
         return
     fi
 
-    printInfoMsg "Configuration changed. Reloading systemd daemon..."
-    run_with_spinner "Reloading systemd daemon..." sudo systemctl daemon-reload
-    printOkMsg "Daemon reloaded."
-
     local should_restart=false
     if [[ "$is_interactive" == "true" ]]; then
-        printInfoMsg "\nYou must restart the Ollama service for the new settings to apply."
+        printInfoMsg "You must restart the Ollama service for the new settings to apply."
         if prompt_yes_no "Do you want to restart the Ollama service now?" "y"; then
             clear_lines_up 1 # Clear the y/n prompt
             should_restart=true
