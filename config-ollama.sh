@@ -71,6 +71,14 @@ _print_menu_action() {
     printMsg " ${T_BOLD}${key})${T_RESET} ${description}${T_CLEAR_LINE}"
 }
 
+# (Private) Helper to print a formatted status line.
+# Usage: _print_status_line "Label" "$value_display"
+_print_status_line() {
+    local label="$1"
+    local value_display="$2"
+    # The %b format specifier interprets backslash escapes from the value_display string (e.g., color codes).
+    printf "  %-20s : %b\n" "$label" "$value_display"
+}
 # --- Function Definitions ---
 
 show_help() {
@@ -150,11 +158,11 @@ print_all_status() {
 
     # Display
     printMsg "${T_ULINE}Current Configuration:${T_RESET}"
-    printf "  %-20s : %b\n" "Network Exposure" "$network_status"
-    printf "  %-20s : %b\n" "KV Cache Type" "$kv_display"
-    printf "  %-20s : %b\n" "Models Directory" "$models_dir_display"
-    printf "  %-20s : %b\n" "Context Length" "$context_display"
-    printf "  %-20s : %b\n" "Parallel Requests" "$parallel_display"
+    _print_status_line "Network Exposure" "$network_status"
+    _print_status_line "KV Cache Type" "$kv_display"
+    _print_status_line "Models Directory" "$models_dir_display"
+    _print_status_line "Context Length" "$context_display"
+    _print_status_line "Parallel Requests" "$parallel_display"
 }
 
 #
