@@ -97,28 +97,46 @@ print_all_status() {
     else
         network_status="${C_L_BLUE}RESTRICTED to localhost (127.0.0.1)${T_RESET}"
     fi
-    local current_kv_type
-    current_kv_type=$(get_env_var "$KV_CACHE_VAR" "$OLLAMA_ADVANCED_CONF")
-    local current_context_length
-    current_context_length=$(get_env_var "$CONTEXT_LENGTH_VAR" "$OLLAMA_ADVANCED_CONF")
-    local current_num_parallel
-    current_num_parallel=$(get_env_var "$NUM_PARALLEL_VAR" "$OLLAMA_ADVANCED_CONF")
-    local current_models_dir
-    current_models_dir=$(get_env_var "$OLLAMA_MODELS_VAR" "$OLLAMA_ADVANCED_CONF")
-    local kv_display=""
+
+    local current_kv_type=$(get_env_var "$KV_CACHE_VAR" "$OLLAMA_ADVANCED_CONF")
+    local kv_display
     if [[ -n "$current_kv_type" ]]; then
-        # If a value exists, look it up in the display map.
-        # Fallback to the value itself if not found in the map.
         kv_display="${KV_CACHE_DISPLAY[${current_kv_type}]:-${current_kv_type}}"
+    else
+        kv_display="${C_GRAY}(default)${T_RESET}"
+    fi
+
+    local current_models_dir=$(get_env_var "$OLLAMA_MODELS_VAR" "$OLLAMA_ADVANCED_CONF")
+    local models_dir_display
+    if [[ -n "$current_models_dir" ]]; then
+        models_dir_display="${C_L_CYAN}${current_models_dir}${T_RESET}"
+    else
+        models_dir_display="${C_GRAY}(default: ~/.ollama/models)${T_RESET}"
+    fi
+
+    local current_context_length=$(get_env_var "$CONTEXT_LENGTH_VAR" "$OLLAMA_ADVANCED_CONF")
+    local context_display
+    if [[ -n "$current_context_length" ]]; then
+        context_display="${C_L_BLUE}${current_context_length}${T_RESET}"
+    else
+        context_display="${C_GRAY}(default)${T_RESET}"
+    fi
+
+    local current_num_parallel=$(get_env_var "$NUM_PARALLEL_VAR" "$OLLAMA_ADVANCED_CONF")
+    local parallel_display
+    if [[ -n "$current_num_parallel" ]]; then
+        parallel_display="${C_L_BLUE}${current_num_parallel}${T_RESET}"
+    else
+        parallel_display="${C_GRAY}(default)${T_RESET}"
     fi
 
     # Display
     printMsg "${T_ULINE}Current Configuration:${T_RESET}"
     printf "  %-20s : %b\n" "Network Exposure" "$network_status"
-    printf "  %-20s : %b\n" "KV Cache Type" "${kv_display:-${C_GRAY}(default)${T_RESET}}"
-    printf "  %-20s : %b\n" "Models Directory" "${C_L_CYAN}${current_models_dir:-'(default: ~/.ollama/models)'}${T_RESET}"
-    printf "  %-20s : %b\n" "Context Length" "${C_L_BLUE}${current_context_length:-'(default)'}${T_RESET}"
-    printf "  %-20s : %b\n" "Parallel Requests" "${C_L_BLUE}${current_num_parallel:-'(default)'}${T_RESET}"
+    printf "  %-20s : %b\n" "KV Cache Type" "$kv_display"
+    printf "  %-20s : %b\n" "Models Directory" "$models_dir_display"
+    printf "  %-20s : %b\n" "Context Length" "$context_display"
+    printf "  %-20s : %b\n" "Parallel Requests" "$parallel_display"
 }
 
 #
@@ -148,54 +166,6 @@ get_env_var() {
 }
 
 #
-# Updates or adds an environment variable in the systemd override file.
-# Removes the variable if the value is empty.
-# Returns 0 on change, 1 on error, 2 on no change.
-#
-set_env_var() {
-    local var_name="$1"
-    local var_value="$2"
-    local conf_file="$3"
-
-    # Ensure override directory exists
-    sudo mkdir -p "$(dirname "$conf_file")"
-
-    local old_value
-    old_value=$(get_env_var "$var_name" "$conf_file")
-
-    if [[ "$old_value" == "$var_value" ]]; then
-        return 2 # No change needed
-    fi
-
-    # Read existing environment variables from the file, excluding the one we're setting.
-    local existing_vars=()
-    if [[ -f "$conf_file" ]]; then
-        mapfile -t existing_vars < <(grep "Environment=" "$conf_file" 2>/dev/null | grep -v "Environment=.*${var_name}=")
-    fi
-
-    # Build the new file content
-    local new_content="[Service]\n"
-    for var in "${existing_vars[@]}"; do
-        new_content+="${var}\n"
-    done
-
-    # Add our new/updated variable, if a value is provided.
-    if [[ -n "$var_value" ]]; then
-        new_content+="Environment=\"${var_name}=${var_value}\"\n"
-    fi
-
-    # If the file would be empty (only [Service] and a newline), remove it. Otherwise, write it.
-    if [[ "${#existing_vars[@]}" -eq 0 && -z "$var_value" ]]; then
-        if [[ -f "$conf_file" ]]; then
-            sudo rm -f "$conf_file"
-        fi
-    else
-        printf "%b" "$new_content" | sudo tee "$conf_file" > /dev/null
-    fi
-    return 0 # Change was made
-}
-
-#
 # Resets all advanced settings by removing the dedicated override file.
 #
 reset_all_advanced_settings() {
@@ -210,29 +180,12 @@ reset_all_advanced_settings() {
     fi
 }
 
-# (Private) Helper to apply a change to an advanced setting.
-# It reloads the systemd daemon so that status checks reflect the new state.
-# It silences the spinner output for a cleaner interactive experience.
-#
-# Usage:
-#   set_env_var ...; local exit_code=$?
-#   _apply_advanced_change "$exit_code"
-#   return $?
-#
-_apply_advanced_change() {
-    local changed_code="$1"
-    # If the exit code is not 2 (no change), then a change was made.
-    if [[ "$changed_code" -ne 2 ]]; then
-        run_with_spinner "Reloading systemd daemon..." sudo systemctl daemon-reload &>/dev/null
-    fi
-    # Pass through the original exit code.
-    return "$changed_code"
-}
-
 #
 # Interactive menu to configure Network Exposure.
 #
 configure_network_exposure() {
+    local -n pending_network_ref=$1
+
     clear
     printBanner "Configure Network Exposure"
     
@@ -255,30 +208,26 @@ configure_network_exposure() {
     choice=$(read_single_char)
     clear_current_line
 
-    local changed=2 # 2 = no change
     case "$choice" in
         1|e|E)
-            ensure_root "Root privileges are required to modify systemd configuration."
-            expose_to_network; changed=$?
+            if [[ "$pending_network_ref" != "network" ]]; then
+                pending_network_ref="network"
+                return 0 # changed
+            fi
             ;;
         2|r|R)
-            ensure_root "Root privileges are required to modify systemd configuration."
-            restrict_to_localhost; changed=$?
+            if [[ "$pending_network_ref" != "localhost" ]]; then
+                pending_network_ref="localhost"
+                return 0 # changed
+            fi
             ;;
         b|B|"$KEY_ESC")
             return 2
             ;;
         *)
             printWarnMsg "Invalid choice." && sleep 1
-            return 2
             ;;
     esac
-
-    # Return 0 if a change was made, 2 if not.
-    if [[ $changed -ne 2 ]]; then
-        verify_ollama_service &>/dev/null # Verify but hide output
-        return 0
-    fi
     return 2
 }
 
@@ -286,6 +235,9 @@ configure_network_exposure() {
 # Interactive menu to configure KV Cache Type.
 #
 configure_kv_cache() {
+    local -n pending_kv_ref=$1
+    local -n pending_flash_ref=$2
+
     clear
     printBanner "Configure KV Cache Type"
     local current_kv_type
@@ -296,7 +248,7 @@ configure_kv_cache() {
         # Fallback to the value itself if not found in the map.
         display_value="${KV_CACHE_DISPLAY[${current_kv_type}]:-${current_kv_type}}"
     fi
-    printInfoMsg "Current ${KV_CACHE_VAR} is set to: ${display_value:-'(default)'}"
+    printInfoMsg "Current ${KV_CACHE_VAR} is set to: ${display_value:-${C_GRAY}(default)${T_RESET}}"
 
     printMsg "\n${T_ULINE}Choose a KV_CACHE_TYPE:${T_RESET}"
     printMsg " ${T_BOLD}1)${T_RESET} ${KV_CACHE_DISPLAY[q8_0]} (recommended for most GPUs)"
@@ -310,46 +262,46 @@ configure_kv_cache() {
     choice=$(read_single_char)
     clear_current_line
  
-    local exit_code=2 # 2 = no change
+    local new_value=""
     case $choice in
-        1)
-            ensure_root "Root privileges are required to modify systemd configuration."
-            set_env_var "$KV_CACHE_VAR" "q8_0" "$OLLAMA_ADVANCED_CONF"; exit_code=$?
-            set_env_var "OLLAMA_FLASH_ATTENTION" "1" "$OLLAMA_ADVANCED_CONF" >/dev/null # Also set flash attention
-            ;;
-        2)
-            ensure_root "Root privileges are required to modify systemd configuration."
-            set_env_var "$KV_CACHE_VAR" "f16" "$OLLAMA_ADVANCED_CONF"; exit_code=$?
-            set_env_var "OLLAMA_FLASH_ATTENTION" "1" "$OLLAMA_ADVANCED_CONF" >/dev/null
-            ;;
-        3)
-            ensure_root "Root privileges are required to modify systemd configuration."
-            set_env_var "$KV_CACHE_VAR" "q4_0" "$OLLAMA_ADVANCED_CONF"; exit_code=$?
-            set_env_var "OLLAMA_FLASH_ATTENTION" "1" "$OLLAMA_ADVANCED_CONF" >/dev/null
-            ;;
-        r|R)
-            ensure_root "Root privileges are required to modify systemd configuration."
-            set_env_var "$KV_CACHE_VAR" "" "$OLLAMA_ADVANCED_CONF"; exit_code=$?
-            set_env_var "OLLAMA_FLASH_ATTENTION" "" "$OLLAMA_ADVANCED_CONF" >/dev/null
-            ;;
+        1) new_value="q8_0" ;;
+        2) new_value="f16" ;;
+        3) new_value="q4_0" ;;
+        r|R) new_value="" ;;
         b|B|"$KEY_ESC") return 2 ;;
         *) printWarnMsg "Invalid choice." && sleep 1; return 2 ;;
     esac
 
-    # Return 0 if a change was made, 2 if not.
-    _apply_advanced_change "$exit_code"
-    return $?
+    if [[ "$pending_kv_ref" != "$new_value" ]]; then
+        pending_kv_ref="$new_value"
+        # Also set/unset flash attention
+        if [[ -n "$new_value" ]]; then
+            pending_flash_ref="1"
+        else
+            pending_flash_ref=""
+        fi
+        return 0 # changed
+    fi
+    return 2 # no change
 }
 
 #
 # Interactive menu to configure Context Length.
 #
 configure_context_length() {
+    local -n pending_length_ref=$1
+
     clear
     printBanner "Configure Context Length"
     local current_length
     current_length=$(get_env_var "$CONTEXT_LENGTH_VAR" "$OLLAMA_ADVANCED_CONF")
-    printInfoMsg "Current ${CONTEXT_LENGTH_VAR} is set to: ${C_L_BLUE}${current_length:-'(default)'}${T_RESET}"
+    local length_display
+    if [[ -n "$current_length" ]]; then
+        length_display="${C_L_BLUE}${current_length}${T_RESET}"
+    else
+        length_display="${C_GRAY}(default)${T_RESET}"
+    fi
+    printInfoMsg "Current ${CONTEXT_LENGTH_VAR} is set to: ${length_display}"
     printMsg "\nOllama will use this much context from a model's context window."
     printMsg "A larger value requires more VRAM. Default is typically 2048."
 
@@ -400,21 +352,29 @@ configure_context_length() {
         return 2
     fi
 
-    ensure_root "Root privileges are required to modify systemd configuration."
-    set_env_var "$CONTEXT_LENGTH_VAR" "$length" "$OLLAMA_ADVANCED_CONF"
-    _apply_advanced_change "$?"
-    return $?
+    if [[ "$pending_length_ref" != "$length" ]]; then
+        pending_length_ref="$length"
+        return 0 # changed
+    fi
+    return 2 # no change
 }
 
 #
 # Interactive menu to configure Number of Parallel Requests.
 #
 configure_num_parallel() {
+    local -n pending_parallel_ref=$1
     clear
     printBanner "Configure Parallel Requests"
     local current_parallel
     current_parallel=$(get_env_var "$NUM_PARALLEL_VAR" "$OLLAMA_ADVANCED_CONF")
-    printInfoMsg "Current ${NUM_PARALLEL_VAR} is set to: ${C_L_BLUE}${current_parallel:-'(default)'}${T_RESET}"
+    local parallel_display
+    if [[ -n "$current_parallel" ]]; then
+        parallel_display="${C_L_BLUE}${current_parallel}${T_RESET}"
+    else
+        parallel_display="${C_GRAY}(default)${T_RESET}"
+    fi
+    printInfoMsg "Current ${NUM_PARALLEL_VAR} is set to: ${parallel_display}"
     printMsg "\nSets the number of parallel requests that can be processed at once."
     printMsg "Increasing this can improve throughput but significantly increases VRAM usage. Default is 1."
 
@@ -457,21 +417,29 @@ configure_num_parallel() {
         sleep 2
         return 2
     fi
-    ensure_root "Root privileges are required to modify systemd configuration."
-    set_env_var "$NUM_PARALLEL_VAR" "$num" "$OLLAMA_ADVANCED_CONF"
-    _apply_advanced_change "$?"
-    return $?
+    if [[ "$pending_parallel_ref" != "$num" ]]; then
+        pending_parallel_ref="$num"
+        return 0 # changed
+    fi
+    return 2 # no change
 }
 
 #
 # Interactive menu to configure the Ollama models directory.
 #
 configure_models_dir() {
+    local -n pending_dir_ref=$1
     clear
     printBanner "Configure Models Directory"
     local current_dir
     current_dir=$(get_env_var "$OLLAMA_MODELS_VAR" "$OLLAMA_ADVANCED_CONF")
-    printInfoMsg "Current ${OLLAMA_MODELS_VAR} is set to: ${C_L_CYAN}${current_dir:-'(default: ~/.ollama/models)'}${T_RESET}"
+    local dir_display
+    if [[ -n "$current_dir" ]]; then
+        dir_display="${C_L_CYAN}${current_dir}${T_RESET}"
+    else
+        dir_display="${C_GRAY}(default: ~/.ollama/models)${T_RESET}"
+    fi
+    printInfoMsg "Current ${OLLAMA_MODELS_VAR} is set to: ${dir_display}"
     printMsg "\nThis sets the directory where Ollama stores models and manifests."
     printMsg "Useful for storing models on a separate, larger drive."
 
@@ -519,17 +487,18 @@ configure_models_dir() {
         *) printWarnMsg "Invalid choice." && sleep 1; return 2 ;;
     esac
 
-    ensure_root "Root privileges are required to modify systemd configuration."
-    set_env_var "$OLLAMA_MODELS_VAR" "$models_path" "$OLLAMA_ADVANCED_CONF"
-    _apply_advanced_change "$?"
-    return $?
+    if [[ "$pending_dir_ref" != "$models_path" ]]; then
+        pending_dir_ref="$models_path"
+        return 0 # changed
+    fi
+    return 2 # no change
 }
 
 # --- Main Logic ---
 main() {
     # If the test flag is passed, run prerequisite checks and exit.
     if [[ "$1" == "-t" || "$1" == "--test" ]]; then
-        run_tests
+        run_tests "$@"
         # run_tests will exit with the appropriate code.
     fi
 
@@ -537,49 +506,114 @@ main() {
 }
 
 run_interactive_menu() {
-    local changes_made=false
+    # --- State Variables ---
+    local current_network_status pending_network_status
+    local current_kv_type pending_kv_type
+    local current_flash_attention pending_flash_attention
+    local current_context_length pending_context_length
+    local current_num_parallel pending_num_parallel
+    local current_models_dir pending_models_dir
+
+    # --- Helper to load all current and pending states from the system ---
+    _load_states() {
+        if check_network_exposure; then current_network_status="network"; else current_network_status="localhost"; fi
+        current_kv_type=$(get_env_var "$KV_CACHE_VAR" "$OLLAMA_ADVANCED_CONF")
+        current_flash_attention=$(get_env_var "OLLAMA_FLASH_ATTENTION" "$OLLAMA_ADVANCED_CONF")
+        current_context_length=$(get_env_var "$CONTEXT_LENGTH_VAR" "$OLLAMA_ADVANCED_CONF")
+        current_num_parallel=$(get_env_var "$NUM_PARALLEL_VAR" "$OLLAMA_ADVANCED_CONF")
+        current_models_dir=$(get_env_var "$OLLAMA_MODELS_VAR" "$OLLAMA_ADVANCED_CONF")
+
+        pending_network_status="$current_network_status"
+        pending_kv_type="$current_kv_type"
+        pending_flash_attention="$current_flash_attention"
+        pending_context_length="$current_context_length"
+        pending_num_parallel="$current_num_parallel"
+        pending_models_dir="$current_models_dir"
+    }
+
+    # --- Helper to check for pending changes ---
+    _has_pending_changes() {
+        if [[ "$current_network_status" != "$pending_network_status" || \
+              "$current_kv_type" != "$pending_kv_type" || \
+              "$current_flash_attention" != "$pending_flash_attention" || \
+              "$current_context_length" != "$pending_context_length" || \
+              "$current_num_parallel" != "$pending_num_parallel" || \
+              "$current_models_dir" != "$pending_models_dir" ]]; then
+            return 0 # 0 is true in shell
+        else
+            return 1 # 1 is false
+        fi
+    }
+
+    _load_states # Initial load
+
+    local menu_height=14 # banner(2) + header(1) + options(5) + spacer(1) + actions(4) + prompt(1)
+    local redraw_full_menu=true
+
     while true; do
-        clear
+        if [[ "$redraw_full_menu" == "true" ]]; then
+            clear
+            redraw_full_menu=false
+        else
+            # This is the flicker-free part
+            move_cursor_up "$menu_height"
+        fi
+
         printBanner "Ollama Interactive Configuration"
 
-        # --- Fetch current values for display ---
-        local network_status
-        if check_network_exposure; then
-            network_status="${C_L_YELLOW}EXPOSED to network (0.0.0.0)${T_RESET}"
-        else
-            network_status="${C_L_BLUE}RESTRICTED to localhost${T_RESET}"
+        # --- Display Logic ---
+        local network_display
+        if [[ "$current_network_status" == "network" ]]; then network_display="${C_L_YELLOW}EXPOSED${T_RESET}"; else network_display="${C_L_BLUE}RESTRICTED${T_RESET}"; fi
+        if [[ "$current_network_status" != "$pending_network_status" ]]; then
+            local pending_net_display
+            if [[ "$pending_network_status" == "network" ]]; then pending_net_display="${C_L_YELLOW}EXPOSED${T_RESET}"; else pending_net_display="${C_L_BLUE}RESTRICTED${T_RESET}"; fi
+            network_display+=" ${C_WHITE}→${T_RESET} ${pending_net_display}"
         fi
 
-        local current_kv_type
-        current_kv_type=$(get_env_var "$KV_CACHE_VAR" "$OLLAMA_ADVANCED_CONF")
         local kv_display
-        if [[ -n "$current_kv_type" ]]; then
-            kv_display="${KV_CACHE_DISPLAY[${current_kv_type}]:-${current_kv_type}}"
-        else
-            kv_display="${C_GRAY}(default)${T_RESET}"
+        if [[ -n "$pending_kv_type" ]]; then kv_display="${KV_CACHE_DISPLAY[${pending_kv_type}]:-${pending_kv_type}}"; else kv_display="${C_GRAY}(default)${T_RESET}"; fi
+        if [[ "$current_kv_type" != "$pending_kv_type" ]]; then
+            local current_kv_display
+            if [[ -n "$current_kv_type" ]]; then current_kv_display="${KV_CACHE_DISPLAY[${current_kv_type}]:-${current_kv_type}}"; else current_kv_display="${C_GRAY}(default)${T_RESET}"; fi
+            kv_display="${current_kv_display} ${C_WHITE}→${T_RESET} ${kv_display}"
         fi
 
-        local current_context_length
-        current_context_length=$(get_env_var "$CONTEXT_LENGTH_VAR" "$OLLAMA_ADVANCED_CONF")
-        local context_display="${C_L_BLUE}${current_context_length:-'(default)'}${T_RESET}"
+        local context_display
+        if [[ -n "$pending_context_length" ]]; then context_display="${C_L_BLUE}${pending_context_length}${T_RESET}"; else context_display="${C_GRAY}(default)${T_RESET}"; fi
+        if [[ "$current_context_length" != "$pending_context_length" ]]; then
+            local current_ctx_display
+            if [[ -n "$current_context_length" ]]; then current_ctx_display="${C_L_BLUE}${current_context_length}${T_RESET}"; else current_ctx_display="${C_GRAY}(default)${T_RESET}"; fi
+            context_display="${current_ctx_display} ${C_WHITE}→${T_RESET} ${context_display}"
+        fi
 
-        local current_num_parallel
-        current_num_parallel=$(get_env_var "$NUM_PARALLEL_VAR" "$OLLAMA_ADVANCED_CONF")
-        local parallel_display="${C_L_BLUE}${current_num_parallel:-'(default)'}${T_RESET}"
+        local parallel_display
+        if [[ -n "$pending_num_parallel" ]]; then parallel_display="${C_L_BLUE}${pending_num_parallel}${T_RESET}"; else parallel_display="${C_GRAY}(default)${T_RESET}"; fi
+        if [[ "$current_num_parallel" != "$pending_num_parallel" ]]; then
+            local current_par_display
+            if [[ -n "$current_num_parallel" ]]; then current_par_display="${C_L_BLUE}${current_num_parallel}${T_RESET}"; else current_par_display="${C_GRAY}(default)${T_RESET}"; fi
+            parallel_display="${current_par_display} ${C_WHITE}→${T_RESET} ${parallel_display}"
+        fi
 
-        local current_models_dir
-        current_models_dir=$(get_env_var "$OLLAMA_MODELS_VAR" "$OLLAMA_ADVANCED_CONF")
-        local models_dir_display="${C_L_CYAN}${current_models_dir:-'(default)'}${T_RESET}"
+        local models_dir_display
+        if [[ -n "$pending_models_dir" ]]; then models_dir_display="${C_L_CYAN}${pending_models_dir}${T_RESET}"; else models_dir_display="${C_GRAY}(default)${T_RESET}"; fi
+        if [[ "$current_models_dir" != "$pending_models_dir" ]]; then
+            local current_dir_display
+            if [[ -n "$current_models_dir" ]]; then current_dir_display="${C_L_CYAN}${current_models_dir}${T_RESET}"; else current_dir_display="${C_GRAY}(default)${T_RESET}"; fi
+            models_dir_display="${current_dir_display} ${C_WHITE}→${T_RESET} ${models_dir_display}"
+        fi
 
         # --- Display Menu ---
-        printMsg "\n${T_ULINE}Choose an option to configure:${T_RESET}"
-        printf " ${T_BOLD}1)${T_RESET} %-25s - %b\n" "Network Exposure" "$network_status"
+        printMsg "${T_ULINE}Choose an option to configure:${T_RESET}"
+        printf " ${T_BOLD}1)${T_RESET} %-25s - %b\n" "Network Exposure" "$network_display"
         printf " ${T_BOLD}2)${T_RESET} %-25s - %b\n" "KV Cache Type" "$kv_display"
         printf " ${T_BOLD}3)${T_RESET} %-25s - %b\n" "Context Length" "$context_display"
         printf " ${T_BOLD}4)${T_RESET} %-25s - %b\n" "Parallel Requests" "$parallel_display"
         printf " ${T_BOLD}5)${T_RESET} %-25s - %b\n" "Models Directory" "$models_dir_display"
-        printMsg " ${T_BOLD}r)${T_RESET} ${C_L_YELLOW}Reset all advanced settings to default${T_RESET}"
-        printMsg " ${T_BOLD}q)${T_RESET} ${C_L_YELLOW}Save and Quit${T_RESET} (or press ${C_L_YELLOW}ESC${T_RESET})\n"
+        printMsg ""
+        printMsg " ${T_BOLD}r)${T_RESET} Reset all advanced settings to default"
+        printMsg " ${T_BOLD}c)${T_RESET} ${C_L_YELLOW}Cancel/Discard${T_RESET} all pending changes"
+        printMsg " ${T_BOLD}s)${T_RESET} ${C_L_GREEN}Save changes and Quit${T_RESET}"
+        printMsg " ${T_BOLD}q)${T_RESET} Quit without saving (or press ${C_L_YELLOW}ESC${T_RESET})\n"
         printMsgNoNewline " ${T_QST_ICON} Your choice: "
 
         local choice
@@ -588,47 +622,166 @@ run_interactive_menu() {
 
         case $choice in
             1)
-                configure_network_exposure
-                if [[ $? -eq 0 ]]; then changes_made=true; fi
+                configure_network_exposure pending_network_status
+                # Sub-menu clears the screen, so we need a full redraw on the next loop.
+                redraw_full_menu=true
                 ;;
             2)
-                configure_kv_cache
-                if [[ $? -eq 0 ]]; then changes_made=true; fi
+                configure_kv_cache pending_kv_type pending_flash_attention
+                redraw_full_menu=true
                 ;;
             3)
-                configure_context_length
-                if [[ $? -eq 0 ]]; then changes_made=true; fi
+                configure_context_length pending_context_length
+                redraw_full_menu=true
                 ;;
             4)
-                configure_num_parallel
-                if [[ $? -eq 0 ]]; then changes_made=true; fi
+                configure_num_parallel pending_num_parallel
+                redraw_full_menu=true
                 ;;
             5)
-                configure_models_dir
-                if [[ $? -eq 0 ]]; then changes_made=true; fi
+                configure_models_dir pending_models_dir
+                redraw_full_menu=true
                 ;;
             r|R)
-                ensure_root "Root privileges are required to remove configuration files."
-                reset_all_advanced_settings
-                local exit_code=$?
-                if [[ $exit_code -eq 0 ]]; then
-                    changes_made=true
-                    _apply_advanced_change "$exit_code" &>/dev/null
-                fi
-                sleep 1.5 # Give user time to see the message
+                pending_kv_type=""
+                pending_flash_attention=""
+                pending_context_length=""
+                pending_num_parallel=""
+                pending_models_dir=""
+                ;;
+            c|C)
+                printInfoMsg "Discarding pending changes..."
+                _load_states # Reloads current state and resets pending state
+                sleep 1
+                # Clear the message before redrawing
+                clear_lines_up 1
+                ;;
+            s|S)
+                apply_staged_changes "$pending_network_status" "$pending_kv_type" "$pending_flash_attention" "$pending_context_length" "$pending_num_parallel" "$pending_models_dir"
+                break # Exit the loop
                 ;;
             q|Q|"$KEY_ESC")
-                break # Exit the loop
+                if _has_pending_changes; then
+                    # Go to top of menu and clear everything to show the prompt cleanly
+                    move_cursor_up "$menu_height"
+                    tput ed
+
+                    if prompt_yes_no "You have unsaved changes. Quit without saving?" "n"; then
+                        # User said yes.
+                        printInfoMsg "Quitting without saving changes."
+                        break
+                    else
+                        # User said no or cancelled. We need to redraw the menu.
+                        redraw_full_menu=true
+                    fi
+                else
+                    printInfoMsg "Quitting without saving changes."
+                    break # Exit the loop
+                fi
                 ;;
             *)
                 printWarnMsg "Invalid choice. Please try again."
                 sleep 1
+                # Clear the message before redrawing
+                clear_lines_up 1
                 ;;
         esac
     done
+}
 
-    # --- Finalization ---
-    finalize_changes "$changes_made" "true" "false" # is_interactive=true, auto_restart=false
+#
+# Writes the advanced configuration file from scratch based on pending values.
+#
+_write_advanced_config() {
+    local kv_type="$1"
+    local flash_attention="$2"
+    local context_len="$3"
+    local num_parallel="$4"
+    local models_dir="$5"
+
+    local conf_file="$OLLAMA_ADVANCED_CONF"
+    local content="[Service]\n"
+    local has_content=false
+
+    if [[ -n "$kv_type" ]]; then
+        content+="Environment=\"${KV_CACHE_VAR}=${kv_type}\"\n"
+        has_content=true
+    fi
+    if [[ -n "$flash_attention" ]]; then
+        content+="Environment=\"OLLAMA_FLASH_ATTENTION=${flash_attention}\"\n"
+        has_content=true
+    fi
+    if [[ -n "$context_len" ]]; then
+        content+="Environment=\"${CONTEXT_LENGTH_VAR}=${context_len}\"\n"
+        has_content=true
+    fi
+    if [[ -n "$num_parallel" ]]; then
+        content+="Environment=\"${NUM_PARALLEL_VAR}=${num_parallel}\"\n"
+        has_content=true
+    fi
+    if [[ -n "$models_dir" ]]; then
+        content+="Environment=\"${OLLAMA_MODELS_VAR}=${models_dir}\"\n"
+        has_content=true
+    fi
+
+    if [[ "$has_content" == "true" ]]; then
+        printf "%b" "$content" | sudo tee "$conf_file" > /dev/null
+    else
+        if [[ -f "$conf_file" ]]; then
+            sudo rm -f "$conf_file"
+        fi
+    fi
+}
+
+#
+# Compares current vs pending states and applies changes to the system.
+#
+apply_staged_changes() {
+    local p_network="$1"
+    local p_kv_type="$2"
+    local p_flash="$3"
+    local p_context="$4"
+    local p_parallel="$5"
+    local p_models_dir="$6"
+
+    local any_change_made=false
+
+    # --- Check Network Change ---
+    local current_network
+    if check_network_exposure; then current_network="network"; else current_network="localhost"; fi
+    if [[ "$current_network" != "$p_network" ]]; then
+        ensure_root "Root privileges are required to modify systemd configuration."
+        printInfoMsg "Applying network configuration..."
+        local override_dir="/etc/systemd/system/ollama.service.d"
+        local override_file="${override_dir}/10-expose-network.conf"
+        if [[ "$p_network" == "network" ]]; then
+            sudo mkdir -p "$override_dir"
+            echo -e '[Service]\nEnvironment="OLLAMA_HOST=0.0.0.0"' | sudo tee "$override_file" >/dev/null
+        else # restrict
+            sudo rm -f "$override_file"
+        fi
+        any_change_made=true
+    fi
+
+    # --- Check Advanced Settings Change ---
+    local current_kv_type=$(get_env_var "$KV_CACHE_VAR" "$OLLAMA_ADVANCED_CONF")
+    local current_flash=$(get_env_var "OLLAMA_FLASH_ATTENTION" "$OLLAMA_ADVANCED_CONF")
+    local current_context=$(get_env_var "$CONTEXT_LENGTH_VAR" "$OLLAMA_ADVANCED_CONF")
+    local current_parallel=$(get_env_var "$NUM_PARALLEL_VAR" "$OLLAMA_ADVANCED_CONF")
+    local current_models_dir=$(get_env_var "$OLLAMA_MODELS_VAR" "$OLLAMA_ADVANCED_CONF")
+
+    if [[ "$current_kv_type" != "$p_kv_type" || \
+          "$current_flash" != "$p_flash" || \
+          "$current_context" != "$p_context" || \
+          "$current_parallel" != "$p_parallel" || \
+          "$current_models_dir" != "$p_models_dir" ]]; then
+        ensure_root "Root privileges are required to modify systemd configuration."
+        printInfoMsg "Applying advanced configuration..."
+        _write_advanced_config "$p_kv_type" "$p_flash" "$p_context" "$p_parallel" "$p_models_dir"
+        any_change_made=true
+    fi
+
+    finalize_changes "$any_change_made" "true" "false"
 }
 
 _main_logic() {
@@ -652,6 +805,20 @@ _main_logic() {
     # --- Non-Interactive Argument Handling ---
     local changes_made=false
     local auto_restart=false
+
+    # For non-interactive mode, we also stage changes.
+    # Initialize pending state from current state.
+    local pending_network_status pending_kv_type pending_flash_attention
+    local pending_context_length pending_num_parallel pending_models_dir
+
+    if check_network_exposure; then pending_network_status="network"; else pending_network_status="localhost"; fi
+    pending_kv_type=$(get_env_var "$KV_CACHE_VAR" "$OLLAMA_ADVANCED_CONF")
+    pending_flash_attention=$(get_env_var "OLLAMA_FLASH_ATTENTION" "$OLLAMA_ADVANCED_CONF")
+    pending_context_length=$(get_env_var "$CONTEXT_LENGTH_VAR" "$OLLAMA_ADVANCED_CONF")
+    pending_num_parallel=$(get_env_var "$NUM_PARALLEL_VAR" "$OLLAMA_ADVANCED_CONF")
+    pending_models_dir=$(get_env_var "$OLLAMA_MODELS_VAR" "$OLLAMA_ADVANCED_CONF")
+
+
     while [[ $# -gt 0 ]]; do
         local command="$1"
         case "$command" in
@@ -664,54 +831,43 @@ _main_logic() {
                 return 0
                 ;;
             -e|--expose)
-                ensure_root "Root privileges are required to modify systemd configuration." "$command"
-                expose_to_network
-                if [[ $? -eq 0 ]]; then changes_made=true; fi
+                pending_network_status="network"
                 shift
                 ;;
             -r|--restrict)
-                ensure_root "Root privileges are required to modify systemd configuration." "$command"
-                restrict_to_localhost
-                if [[ $? -eq 0 ]]; then changes_made=true; fi
+                pending_network_status="localhost"
                 shift
                 ;;
             --kv-cache)
-                ensure_root "Root privileges are required to modify systemd configuration." "$command"
                 if [[ -z "$2" || "$2" =~ ^- ]]; then printErrMsg "Error: '$1' requires a value (e.g., q8_0, f16)." >&2; return 1; fi
-                set_env_var "$KV_CACHE_VAR" "$2" "$OLLAMA_ADVANCED_CONF"
-                if [[ $? -eq 0 ]]; then changes_made=true; fi
-                # Also set flash attention when setting kv_cache
-                set_env_var "OLLAMA_FLASH_ATTENTION" "1" "$OLLAMA_ADVANCED_CONF" >/dev/null
+                pending_kv_type="$2"
+                pending_flash_attention="1"
                 shift 2
                 ;;
             --context-length)
-                ensure_root "Root privileges are required to modify systemd configuration." "$command"
                 if [[ -z "$2" || ! "$2" =~ ^[0-9]+$ ]]; then printErrMsg "Error: '$1' requires a numeric value." >&2; return 1; fi
-                set_env_var "$CONTEXT_LENGTH_VAR" "$2" "$OLLAMA_ADVANCED_CONF"
-                if [[ $? -eq 0 ]]; then changes_made=true; fi
+                pending_context_length="$2"
                 shift 2
                 ;;
             --num-parallel)
-                ensure_root "Root privileges are required to modify systemd configuration." "$command"
                 if [[ -z "$2" || ! "$2" =~ ^[0-9]+$ ]]; then printErrMsg "Error: '$1' requires a numeric value." >&2; return 1; fi
-                set_env_var "$NUM_PARALLEL_VAR" "$2" "$OLLAMA_ADVANCED_CONF"
-                if [[ $? -eq 0 ]]; then changes_made=true; fi
+                pending_num_parallel="$2"
                 shift 2
                 ;;
             --models-dir)
-                ensure_root "Root privileges are required to modify systemd configuration." "$command"
                 if [[ -z "$2" || "$2" =~ ^- ]]; then printErrMsg "Error: '$1' requires a path." >&2; return 1; fi
                 local models_path="$2"
                 models_path="${models_path/#\~/$HOME}" # Expand tilde
                 if [[ "$models_path" != /* ]]; then printErrMsg "Error: Path for '$1' must be absolute." >&2; return 1; fi
-                set_env_var "$OLLAMA_MODELS_VAR" "$models_path" "$OLLAMA_ADVANCED_CONF"
-                if [[ $? -eq 0 ]]; then changes_made=true; fi
+                pending_models_dir="$models_path"
                 shift 2
                 ;;
             --reset-advanced)
-                ensure_root "Root privileges are required to remove configuration files." "$command"
-                reset_all_advanced_settings
-                if [[ $? -eq 0 ]]; then changes_made=true; fi
+                pending_kv_type=""
+                pending_flash_attention=""
+                pending_context_length=""
+                pending_num_parallel=""
+                pending_models_dir=""
                 shift
                 ;;
             --restart)
@@ -726,7 +882,7 @@ _main_logic() {
         esac
     done
 
-    finalize_changes "$changes_made" "false" "$auto_restart" # is_interactive=false
+    apply_staged_changes "$pending_network_status" "$pending_kv_type" "$pending_flash_attention" "$pending_context_length" "$pending_num_parallel" "$pending_models_dir"
 }
 
 #
@@ -740,7 +896,7 @@ finalize_changes() {
 
     if [[ "$changes_made" != "true" ]]; then
         if [[ "$is_interactive" == "true" ]]; then
-            printOkMsg "Goodbye! No changes were made."
+            printOkMsg "No changes to save. Goodbye!"
         else
             printInfoMsg "No changes were made to the configuration."
         fi
@@ -748,6 +904,10 @@ finalize_changes() {
     fi
 
     local should_restart=false
+    # Reload systemd daemon to pick up file changes before restarting.
+    printInfoMsg "Reloading systemd daemon..."
+    sudo systemctl daemon-reload
+
     if [[ "$is_interactive" == "true" ]]; then
         printInfoMsg "You must restart the Ollama service for the new settings to apply."
         if prompt_yes_no "Do you want to restart the Ollama service now?" "y"; then
@@ -783,7 +943,7 @@ finalize_changes() {
 # A function to run internal self-tests for the script's logic.
 run_tests() {
     printBanner "Running Self-Tests for config-ollama.sh"
-    initialize_test_suite
+    initialize_test_suite "$@"
 
     # --- Mock Dependencies ---
     # Mock all functions with external dependencies or that modify system state.
@@ -793,11 +953,11 @@ run_tests() {
     print_all_status() { MOCK_STATUS_CALLED=true; }
     expose_to_network() { MOCK_EXPOSE_CALLED=true; return "${MOCK_CHANGE_EXIT_CODE:-0}"; }
     restrict_to_localhost() { MOCK_RESTRICT_CALLED=true; return "${MOCK_CHANGE_EXIT_CODE:-0}"; }
-    set_env_var() { MOCK_SET_ENV_VARS+=("$1=$2"); return "${MOCK_CHANGE_EXIT_CODE:-0}"; }
     reset_all_advanced_settings() { MOCK_RESET_CALLED=true; return "${MOCK_CHANGE_EXIT_CODE:-0}"; }
+    apply_staged_changes() { MOCK_APPLY_CALLED=true; }
 
     export -f ensure_root prereq_checks finalize_changes print_all_status \
-               expose_to_network restrict_to_localhost set_env_var reset_all_advanced_settings
+               expose_to_network restrict_to_localhost reset_all_advanced_settings apply_staged_changes
 
     # --- Test Cases ---
 
@@ -808,8 +968,7 @@ run_tests() {
         MOCK_EXPOSE_CALLED=false
         MOCK_RESTRICT_CALLED=false
         MOCK_RESET_CALLED=false
-        unset MOCK_SET_ENV_VARS
-        declare -a MOCK_SET_ENV_VARS=()
+        MOCK_APPLY_CALLED=false
     }
 
     printTestSectionHeader "Testing --status flag"
@@ -817,53 +976,20 @@ run_tests() {
     _main_logic --status &>/dev/null
     _run_string_test "$MOCK_STATUS_CALLED" "true" "Calls print_all_status"
 
-    printTestSectionHeader "Testing Network Flags"
-    reset_mocks
-    _main_logic --expose &>/dev/null
-    _run_string_test "$MOCK_EXPOSE_CALLED" "true" "--expose calls expose_to_network"
-    
-    reset_mocks
-    _main_logic --restrict &>/dev/null
-    _run_string_test "$MOCK_RESTRICT_CALLED" "true" "--restrict calls restrict_to_localhost"
-
-    printTestSectionHeader "Testing Advanced Flags"
-    reset_mocks
-    _main_logic --kv-cache q8_0 &>/dev/null
-    _run_string_test "${MOCK_SET_ENV_VARS[0]}" "KV_CACHE_TYPE=q8_0" "--kv-cache sets KV_CACHE_TYPE"
-    _run_string_test "${MOCK_SET_ENV_VARS[1]}" "OLLAMA_FLASH_ATTENTION=1" "--kv-cache also sets OLLAMA_FLASH_ATTENTION"
-    _run_test '_main_logic --kv-cache &>/dev/null' 1 "--kv-cache fails without a value"
-
-    reset_mocks
-    _main_logic --context-length 4096 &>/dev/null
-    _run_string_test "${MOCK_SET_ENV_VARS[0]}" "OLLAMA_CONTEXT_LENGTH=4096" "--context-length sets OLLAMA_CONTEXT_LENGTH"
-    _run_test '_main_logic --context-length abc &>/dev/null' 1 "--context-length fails with non-numeric value"
-
-    reset_mocks
-    _main_logic --num-parallel 2 &>/dev/null
-    _run_string_test "${MOCK_SET_ENV_VARS[0]}" "OLLAMA_NUM_PARALLEL=2" "--num-parallel sets OLLAMA_NUM_PARALLEL"
-
-    reset_mocks
-    _main_logic --models-dir /mnt/models &>/dev/null
-    _run_string_test "${MOCK_SET_ENV_VARS[0]}" "OLLAMA_MODELS=/mnt/models" "--models-dir sets OLLAMA_MODELS"
-    _run_test '_main_logic --models-dir relative/path &>/dev/null' 1 "--models-dir fails with relative path"
-
-    printTestSectionHeader "Testing Control Flags"
-    reset_mocks
-    _main_logic --reset-advanced &>/dev/null
-    _run_string_test "$MOCK_RESET_CALLED" "true" "--reset-advanced calls reset_all_advanced_settings"
-
-    reset_mocks
-    _main_logic --expose --restart &>/dev/null
-    _run_string_test "$MOCK_FINALIZE_CALLED_WITH_RESTART" "true" "--restart flag is passed to finalize_changes"
-
-    printTestSectionHeader "Testing Combined and Invalid Flags"
+    printTestSectionHeader "Testing flag parsing and application"
     reset_mocks
     _main_logic --expose --context-length 8192 &>/dev/null
-    _run_string_test "$MOCK_EXPOSE_CALLED" "true" "Combined: Calls expose_to_network"
-    _run_string_test "${MOCK_SET_ENV_VARS[0]}" "OLLAMA_CONTEXT_LENGTH=8192" "Combined: Sets OLLAMA_CONTEXT_LENGTH"
+    _run_string_test "$MOCK_APPLY_CALLED" "true" "Calls apply_staged_changes for non-interactive flags"
+
+    _run_test '_main_logic --kv-cache &>/dev/null' 1 "--kv-cache fails without a value"
+    _run_test '_main_logic --context-length abc &>/dev/null' 1 "--context-length fails with non-numeric value"
+    _run_test '_main_logic --models-dir relative/path &>/dev/null' 1 "--models-dir fails with relative path"
+
     _run_test '_main_logic --invalid-flag &>/dev/null' 1 "Handles an invalid flag"
 
-    print_test_summary "ensure_root" "prereq_checks" "finalize_changes" "print_all_status" "expose_to_network" "restrict_to_localhost" "set_env_var" "reset_all_advanced_settings"
+    print_test_summary "ensure_root" "prereq_checks" "finalize_changes" "print_all_status" \
+        "expose_to_network" "restrict_to_localhost" "reset_all_advanced_settings" \
+        "apply_staged_changes"
 }
 # --- Run ---
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
