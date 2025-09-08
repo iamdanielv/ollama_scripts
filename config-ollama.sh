@@ -53,22 +53,26 @@ KV_CACHE_DISPLAY=(
     [q4_0]="${C_L_BLUE}q4_0${T_RESET}"
 )
 
-# (Private) Helper to print a formatted menu option line.
-# Usage: _print_menu_option "1" "Network Exposure" "$network_display"
-_print_menu_option() {
-    local number="$1"
-    local label="$2"
-    local value_display="$3"
-    # The %b format specifier interprets backslash escapes from the value_display string (e.g., color codes).
-    printf " ${T_BOLD}${number})${T_RESET} %-20s - %b${T_CLEAR_LINE}\n" "$label" "$value_display"
-}
-
-# (Private) Helper to print a formatted menu action line.
-# Usage: _print_menu_action "r" "${C_L_BLUE}(R)eset${T_RESET} all advanced settings to default"
-_print_menu_action() {
+# (Private) Helper to print a formatted menu item.
+# Handles both options with a status value and simple actions.
+# Usage (option with value): _print_menu_item "1" "Network Exposure" "$network_display"
+# Usage (simple action):     _print_menu_item "r" "Reset all advanced settings"
+_print_menu_item() {
     local key="$1"
-    local description="$2"
-    printMsg " ${T_BOLD}${key})${T_RESET} ${description}${T_CLEAR_LINE}"
+    local text1="$2"
+    local text2="$3"
+
+    if [[ -n "$text2" ]]; then
+        # 3-argument form: An option with a label and a value.
+        # Renders as: " 1) Label                - Value"
+        # The %b format specifier interprets backslash escapes from the value string (e.g., color codes).
+        printf " ${T_BOLD}${key})${T_RESET} %-20s - %b${T_CLEAR_LINE}\n" "$text1" "$text2"
+    else
+        # 2-argument form: A simple action with a description.
+        # Renders as: " r) Description"
+        # Use %b to interpret color codes in the description.
+        printf " ${T_BOLD}${key})${T_RESET} %b${T_CLEAR_LINE}\n" "$text1"
+    fi
 }
 
 # (Private) Helper to print a formatted status line.
@@ -261,9 +265,9 @@ configure_network_exposure() {
     fi
 
     printMsg "\n${T_ULINE}Choose an option:${T_RESET}"
-    _print_menu_action "1, e" "${C_L_YELLOW}(E)xpose to Network${T_RESET} (allow connections from other devices/containers)"
-    _print_menu_action "2, r" "${C_L_BLUE}(R)estrict to Localhost${T_RESET} (default, more secure)"
-    _print_menu_action "b"    "Back to main menu (or press ${C_L_YELLOW}ESC${T_RESET})"
+    _print_menu_item "1, e" "${C_L_YELLOW}(E)xpose to Network${T_RESET} (allow connections from other devices/containers)"
+    _print_menu_item "2, r" "${C_L_BLUE}(R)estrict to Localhost${T_RESET} (default, more secure)"
+    _print_menu_item "b"    "Back to main menu (or press ${C_L_YELLOW}ESC${T_RESET})"
     printMsg ""
     printMsgNoNewline " ${T_QST_ICON} Your choice: "
     local choice
@@ -311,11 +315,11 @@ configure_kv_cache() {
     printInfoMsg "Current ${KV_CACHE_VAR} is set to: ${display_value:-${C_GRAY}(default)${T_RESET}}"
 
     printMsg "\n${T_ULINE}Choose a KV_CACHE_TYPE:${T_RESET}"
-    _print_menu_action "1" "${KV_CACHE_DISPLAY[q8_0]} (recommended for most GPUs)"
-    _print_menu_action "2" "${KV_CACHE_DISPLAY[f16]} (for high-end GPUs with ample VRAM)"
-    _print_menu_action "3" "${KV_CACHE_DISPLAY[q4_0]} (for GPUs with limited VRAM)"
-    _print_menu_action "r" "Remove custom KV_CACHE_TYPE (use Ollama default)${T_RESET}"
-    _print_menu_action "b" "Back to main menu (or press ${C_L_YELLOW}ESC${T_RESET})"
+    _print_menu_item "1" "${KV_CACHE_DISPLAY[q8_0]} (recommended for most GPUs)"
+    _print_menu_item "2" "${KV_CACHE_DISPLAY[f16]} (for high-end GPUs with ample VRAM)"
+    _print_menu_item "3" "${KV_CACHE_DISPLAY[q4_0]} (for GPUs with limited VRAM)"
+    _print_menu_item "r" "Remove custom KV_CACHE_TYPE (use Ollama default)${T_RESET}"
+    _print_menu_item "b" "Back to main menu (or press ${C_L_YELLOW}ESC${T_RESET})"
     printMsg ""
     printMsgNoNewline " ${T_QST_ICON} Your choice: "
 
@@ -367,13 +371,13 @@ configure_context_length() {
     printMsg "A larger value requires more VRAM. Default is typically 2048."
 
     printMsg "\n${T_ULINE}Choose a common value or enter a custom one:${T_RESET}"
-    _print_menu_action "1" "2048 (Default for many models)"
-    _print_menu_action "2" "4096"
-    _print_menu_action "3" "8192"
-    _print_menu_action "4" "16384"
-    _print_menu_action "c" "Enter a ${C_L_CYAN}(c)ustom${T_RESET} value"
-    _print_menu_action "r" "${C_L_YELLOW}(R)emove${T_RESET} setting (use Ollama default)"
-    _print_menu_action "b" "Back to main menu (or press ${C_L_YELLOW}ESC${T_RESET})"
+    _print_menu_item "1" "2048 (Default for many models)"
+    _print_menu_item "2" "4096"
+    _print_menu_item "3" "8192"
+    _print_menu_item "4" "16384"
+    _print_menu_item "c" "Enter a ${C_L_CYAN}(c)ustom${T_RESET} value"
+    _print_menu_item "r" "${C_L_YELLOW}(R)emove${T_RESET} setting (use Ollama default)"
+    _print_menu_item "b" "Back to main menu (or press ${C_L_YELLOW}ESC${T_RESET})"
     printMsg ""
     printMsgNoNewline " ${T_QST_ICON} Your choice: "
 
@@ -441,13 +445,13 @@ configure_num_parallel() {
     printMsg "Increasing this can improve throughput but significantly increases \nVRAM usage. Default is 1."
 
     printMsg "\n${T_ULINE}Choose a value or enter a custom one:${T_RESET}"
-    _print_menu_action "1" "1 (Default)"
-    _print_menu_action "2" "2"
-    _print_menu_action "3" "3"
-    _print_menu_action "4" "4"
-    _print_menu_action "c" "Enter a ${C_L_CYAN}(c)ustom${T_RESET} value"
-    _print_menu_action "r" "${C_L_YELLOW}(R)emove${T_RESET} setting (use Ollama default)"
-    _print_menu_action "b" "Back to main menu (or press ${C_L_YELLOW}ESC${T_RESET})"
+    _print_menu_item "1" "1 (Default)"
+    _print_menu_item "2" "2"
+    _print_menu_item "3" "3"
+    _print_menu_item "4" "4"
+    _print_menu_item "c" "Enter a ${C_L_CYAN}(c)ustom${T_RESET} value"
+    _print_menu_item "r" "${C_L_YELLOW}(R)emove${T_RESET} setting (use Ollama default)"
+    _print_menu_item "b" "Back to main menu (or press ${C_L_YELLOW}ESC${T_RESET})"
     printMsg ""
     printMsgNoNewline " ${T_QST_ICON} Your choice: "
 
@@ -507,9 +511,9 @@ configure_models_dir() {
     printMsg "Useful for storing models on a separate, larger drive."
 
     printMsg "\n${T_ULINE}Choose an option:${T_RESET}"
-    _print_menu_action "c" "Enter a ${C_L_CYAN}(c)ustom${T_RESET} path"
-    _print_menu_action "r" "${C_L_YELLOW}(R)emove${T_RESET} setting (use Ollama default)"
-    _print_menu_action "b" "Back to main menu (or press ${C_L_YELLOW}ESC${T_RESET})"
+    _print_menu_item "c" "Enter a ${C_L_CYAN}(c)ustom${T_RESET} path"
+    _print_menu_item "r" "${C_L_YELLOW}(R)emove${T_RESET} setting (use Ollama default)"
+    _print_menu_item "b" "Back to main menu (or press ${C_L_YELLOW}ESC${T_RESET})"
     printMsg ""
     printMsgNoNewline " ${T_QST_ICON} Your choice: "
 
@@ -641,16 +645,16 @@ run_interactive_menu() {
 
         # --- Display Menu ---
         printMsg "${T_ULINE}Choose an option to configure:${T_RESET}"
-        _print_menu_option "1" "Network Exposure" "$network_display"
-        _print_menu_option "2" "KV Cache Type" "$kv_display"
-        _print_menu_option "3" "Context Length" "$context_display"
-        _print_menu_option "4" "Parallel Requests" "$parallel_display"
-        _print_menu_option "5" "Models Directory" "$models_dir_display"
+        _print_menu_item "1" "Network Exposure" "$network_display"
+        _print_menu_item "2" "KV Cache Type" "$kv_display"
+        _print_menu_item "3" "Context Length" "$context_display"
+        _print_menu_item "4" "Parallel Requests" "$parallel_display"
+        _print_menu_item "5" "Models Directory" "$models_dir_display"
         printMsg ""
-        _print_menu_action "r" "${C_L_BLUE}(R)eset${T_RESET} all advanced settings to default"
-        _print_menu_action "c" "${C_L_YELLOW}(C)ancel/(D)iscard${T_RESET} all pending changes"
-        _print_menu_action "s" "${C_L_GREEN}(S)ave changes and Quit${T_RESET}"
-        _print_menu_action "q" "${C_L_YELLOW}(Q)uit${T_RESET} without saving (or press ${C_L_YELLOW}ESC${T_RESET})"
+        _print_menu_item "r" "${C_L_BLUE}(R)eset${T_RESET} all advanced settings to default"
+        _print_menu_item "c" "${C_L_YELLOW}(C)ancel/(D)iscard${T_RESET} all pending changes"
+        _print_menu_item "s" "${C_L_GREEN}(S)ave changes and Quit${T_RESET}"
+        _print_menu_item "q" "${C_L_YELLOW}(Q)uit${T_RESET} without saving (or press ${C_L_YELLOW}ESC${T_RESET})"
         printMsg "" # Add blank line before prompt.
         printMsgNoNewline " ${T_QST_ICON} Your choice: "
 
