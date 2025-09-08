@@ -514,15 +514,18 @@ run_interactive_menu() {
     local current_num_parallel pending_num_parallel
     local current_models_dir pending_models_dir
 
-    # --- Helper to load all current and pending states from the system ---
-    _load_states() {
+    # --- Helper to load all current states from the system ---
+    _load_current_states() {
         if check_network_exposure; then current_network_status="network"; else current_network_status="localhost"; fi
         current_kv_type=$(get_env_var "$KV_CACHE_VAR" "$OLLAMA_ADVANCED_CONF")
         current_flash_attention=$(get_env_var "OLLAMA_FLASH_ATTENTION" "$OLLAMA_ADVANCED_CONF")
         current_context_length=$(get_env_var "$CONTEXT_LENGTH_VAR" "$OLLAMA_ADVANCED_CONF")
         current_num_parallel=$(get_env_var "$NUM_PARALLEL_VAR" "$OLLAMA_ADVANCED_CONF")
         current_models_dir=$(get_env_var "$OLLAMA_MODELS_VAR" "$OLLAMA_ADVANCED_CONF")
+    }
 
+    # --- Helper to reset pending states from the current in-memory state ---
+    _reset_pending_states() {
         pending_network_status="$current_network_status"
         pending_kv_type="$current_kv_type"
         pending_flash_attention="$current_flash_attention"
@@ -530,7 +533,6 @@ run_interactive_menu() {
         pending_num_parallel="$current_num_parallel"
         pending_models_dir="$current_models_dir"
     }
-
     # --- Helper to check for pending changes ---
     _has_pending_changes() {
         if [[ "$current_network_status" != "$pending_network_status" || \
@@ -545,7 +547,8 @@ run_interactive_menu() {
         fi
     }
 
-    _load_states # Initial load
+    _load_current_states # Load initial state from disk
+    _reset_pending_states # Set pending state to match
 
     local menu_height=14 # banner(2) + header(1) + options(5) + spacer(1) + actions(4) + prompt(1)
     local redraw_full_menu=true
@@ -563,11 +566,11 @@ run_interactive_menu() {
 
         # --- Display Logic ---
         local network_display
-        if [[ "$current_network_status" == "network" ]]; then network_display="${C_L_YELLOW}EXPOSED${T_RESET}"; else network_display="${C_L_BLUE}RESTRICTED${T_RESET}"; fi
+        if [[ "$pending_network_status" == "network" ]]; then network_display="${C_L_YELLOW}EXPOSED${T_RESET}"; else network_display="${C_L_BLUE}RESTRICTED${T_RESET}"; fi
         if [[ "$current_network_status" != "$pending_network_status" ]]; then
-            local pending_net_display
-            if [[ "$pending_network_status" == "network" ]]; then pending_net_display="${C_L_YELLOW}EXPOSED${T_RESET}"; else pending_net_display="${C_L_BLUE}RESTRICTED${T_RESET}"; fi
-            network_display+=" ${C_WHITE}→${T_RESET} ${pending_net_display}"
+            local current_net_display
+            if [[ "$current_network_status" == "network" ]]; then current_net_display="${C_L_YELLOW}EXPOSED${T_RESET}"; else current_net_display="${C_L_BLUE}RESTRICTED${T_RESET}"; fi
+            network_display="${current_net_display} ${C_WHITE}→${T_RESET} ${network_display}"
         fi
 
         local kv_display
@@ -604,11 +607,11 @@ run_interactive_menu() {
 
         # --- Display Menu ---
         printMsg "${T_ULINE}Choose an option to configure:${T_RESET}"
-        printf " ${T_BOLD}1)${T_RESET} %-25s - %b\n" "Network Exposure" "$network_display"
-        printf " ${T_BOLD}2)${T_RESET} %-25s - %b\n" "KV Cache Type" "$kv_display"
-        printf " ${T_BOLD}3)${T_RESET} %-25s - %b\n" "Context Length" "$context_display"
-        printf " ${T_BOLD}4)${T_RESET} %-25s - %b\n" "Parallel Requests" "$parallel_display"
-        printf " ${T_BOLD}5)${T_RESET} %-25s - %b\n" "Models Directory" "$models_dir_display"
+        printf " ${T_BOLD}1)${T_RESET} %-25s - %b${T_CLEAR_LINE}\n" "Network Exposure" "$network_display"
+        printf " ${T_BOLD}2)${T_RESET} %-25s - %b${T_CLEAR_LINE}\n" "KV Cache Type" "$kv_display"
+        printf " ${T_BOLD}3)${T_RESET} %-25s - %b${T_CLEAR_LINE}\n" "Context Length" "$context_display"
+        printf " ${T_BOLD}4)${T_RESET} %-25s - %b${T_CLEAR_LINE}\n" "Parallel Requests" "$parallel_display"
+        printf " ${T_BOLD}5)${T_RESET} %-25s - %b${T_CLEAR_LINE}\n" "Models Directory" "$models_dir_display"
         printMsg ""
         printMsg " ${T_BOLD}r)${T_RESET} Reset all advanced settings to default"
         printMsg " ${T_BOLD}c)${T_RESET} ${C_L_YELLOW}Cancel/Discard${T_RESET} all pending changes"
@@ -651,7 +654,7 @@ run_interactive_menu() {
                 ;;
             c|C)
                 printInfoMsg "Discarding pending changes..."
-                _load_states # Reloads current state and resets pending state
+                _reset_pending_states # Discard changes by resetting pending values to match the original state.
                 sleep 1
                 # Clear the message before redrawing
                 clear_lines_up 1
