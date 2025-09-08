@@ -44,7 +44,7 @@ test_parse_models_to_tsv() {
     local empty_json='{"models": []}'
     _run_string_test "$(_parse_models_to_tsv "$empty_json")" "" "Parsing empty model list"
 
-    printTestSectionHeader "Corner Cases"
+    printTestSectionHeader "─── Corner Cases ───"
     local malformed_json='{"models": [ "name": "bad" }'
     _run_string_test "$(_parse_models_to_tsv "$malformed_json")" "" "Handles malformed JSON"
 
@@ -175,7 +175,7 @@ test_read_single_char() {
     output=$(printf "%s" "$KEY_LEFT" | read_single_char)
     _run_string_test "$output" "$KEY_LEFT" "Handles an arrow key sequence (Left)"
 
-    printTestSectionHeader "--- Corner Cases ---"
+    printTestSectionHeader "─── Corner Cases ───"
 
     # Scenario 7: Enter key
     output=$(printf "\n" | read_single_char)

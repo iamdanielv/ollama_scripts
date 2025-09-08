@@ -139,7 +139,7 @@ watch_ollama_ps() {
 
 # --- Ollama Status ---
 check_ollama_status() {
-    printMsg "${T_BOLD}--- Ollama Status ---${T_RESET}"
+    printMsg "${T_BOLD}─── Ollama Status ───${T_RESET}"
 
     local is_systemd=false
     local service_known=false
@@ -193,14 +193,14 @@ check_gpu_status() {
         return
     fi
 
-    printMsg "\n${T_BOLD}--- GPU Status (NVIDIA) ---${T_RESET}"
+    printMsg "\n${T_BOLD}─── GPU Status (NVIDIA) ───${T_RESET}"
     # Call the shared helper function from ollama-helpers.sh
     print_gpu_status
 }
 
 # --- OpenWebUI Status ---
 check_openwebui_status() {
-    printMsg "\n${T_BOLD}--- OpenWebUI Status ---${T_RESET}"
+    printMsg "\n${T_BOLD}─── OpenWebUI Status ───${T_RESET}"
 
     # Check for docker first
     if ! _check_command_exists "docker"; then
@@ -251,7 +251,7 @@ test_format_ps_output() {
     _run_string_test "$(_format_ps_output "$no_models_json")" "$expected_no_models_output" "Handles empty model list"
 
     # Scenario 3: Invalid JSON input
-    printTestSectionHeader "--- Corner Cases ---"
+    printTestSectionHeader "─── Corner Cases ───"
     local invalid_json='this is not json'
     # The function should still produce the "no models" message because jq will fail and produce empty output.
     _run_string_test "$(_format_ps_output "$invalid_json")" "$expected_no_models_output" "Handles invalid JSON input gracefully"

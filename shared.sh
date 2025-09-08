@@ -36,10 +36,9 @@ export T_CURSOR_SHOW='\e[?25h'
 
 export T_ERR="${T_BOLD}\e[31;1m"
 export T_ERR_ICON="[${T_BOLD}${C_RED}✗${T_RESET}]"
-
 export T_OK_ICON="[${T_BOLD}${C_GREEN}✓${T_RESET}]"
-export T_INFO_ICON="[${T_BOLD}${C_YELLOW}i${T_RESET}]"
-export T_WARN_ICON="[${T_BOLD}${C_YELLOW}!${T_RESET}]"
+export T_INFO_ICON="[${T_BOLD}${C_L_BLUE}i${T_RESET}]"
+export T_WARN_ICON="/${T_BOLD}${C_L_YELLOW}!${T_RESET}\\"
 export T_QST_ICON="[${T_BOLD}${C_L_CYAN}?${T_RESET}]"
 
 export DIV="──────────────────────────────────────────────────────────────────────"
@@ -74,7 +73,7 @@ function generate_banner_string() {
     local prompt="$1"
     if [[ "$SHLVL" -gt "$SCRIPT_EXEC_ENTRY_SHLVL" ]]; then
         # H2-style banner for nested calls
-        echo -n -e "${C_BLUE}${T_BOLD}--- ${prompt} ---${T_RESET}"
+        echo -n -e "${C_BLUE}${T_BOLD}─── ${prompt} ───${T_RESET}"
     else
         # H1-style banner for top-level calls
         echo -n -e "${C_L_BLUE}+ ${prompt}\n${DIV}${T_RESET}"
@@ -82,7 +81,7 @@ function generate_banner_string() {
 }
 
 function printTestSectionHeader() {
-  printMsg "\n${T_ULINE}${C_L_WHITE}    ${1}${T_RESET}"
+  printMsg "\n${T_ULINE}${C_L_WHITE}${1}${T_RESET}"
 }
 
 function printBanner() {
@@ -103,7 +102,7 @@ function printDatedMsgNoNewLine() {
 }
 
 function printErrMsg() {
-  printMsg "${T_ERR_ICON}${T_ERR} ${1} ${T_RESET}"
+  printMsg "${T_ERR_ICON} ${T_ERR}${1}${T_RESET}"
 }
 
 function printOkMsg() {
@@ -115,7 +114,7 @@ function printInfoMsg() {
 }
 
 function printWarnMsg() {
-  printMsg "${T_WARN_ICON} ${1}${T_RESET}"
+  printMsg "${T_WARN_ICON} ${T_BOLD}${1}${T_RESET}"
 }
 
 function getFormattedDate() {
