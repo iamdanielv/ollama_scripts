@@ -531,9 +531,9 @@ _get_menu_item_prefix() {
 
     local checkbox=" " # One space for alignment in single-select mode
     if [[ "$is_multi_select" == "true" ]]; then
-        checkbox="☐" # Default unchecked state
+        checkbox="_" # Default unchecked state
         if [[ "$is_selected" == "true" ]]; then
-            checkbox="${T_BOLD}${C_GREEN}🗹${T_FG_RESET}"
+            checkbox="${T_BOLD}${C_GREEN}✓${T_FG_RESET}"
         fi
     fi
 
