@@ -701,11 +701,16 @@ _interactive_list_view() {
 
     while true; do
         local key; key=$(read_single_char)
-        local handler_result="noop"
+        local handler_result="noop" # Default to no action
+        local navigation_key_pressed=false # Flag for built-in navigation
 
         case "$key" in
-            "$KEY_UP"|"k") if (( num_options > 0 )); then current_option=$(( (current_option - 1 + num_options) % num_options )); fi ;;
-            "$KEY_DOWN"|"j") if (( num_options > 0 )); then current_option=$(( (current_option + 1) % num_options )); fi ;;
+            "$KEY_UP"|"k")
+                if (( num_options > 0 )); then current_option=$(( (current_option - 1 + num_options) % num_options )); navigation_key_pressed=true; fi
+                ;;
+            "$KEY_DOWN"|"j")
+                if (( num_options > 0 )); then current_option=$(( (current_option + 1) % num_options )); navigation_key_pressed=true; fi
+                ;;
             *)
                 "$key_handler_func" "$key" data_payloads selected_options current_option num_options handler_result
                 ;;
@@ -721,9 +726,12 @@ _interactive_list_view() {
             # like toggling the footer or a multi-select checkbox.
             move_cursor_up "$list_lines"
             _draw_list
-            # The handler is responsible for cursor positioning after this.
-        elif [[ "$handler_result" == "partial_redraw" ]]; then : # The handler already did the drawing and cursor positioning.
-        else move_cursor_up "$list_lines"; _draw_list; fi
+            # The handler is responsible for final cursor positioning.
+        elif [[ "$handler_result" == "partial_redraw" ]]; then : # The handler already did its own drawing.
+        elif [[ "$navigation_key_pressed" == "true" ]]; then
+            # This is the default action ONLY for built-in navigation keys.
+            move_cursor_up "$list_lines"; _draw_list
+        fi
     done
 }
 #endregion Interactive Menus
