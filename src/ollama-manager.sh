@@ -29,7 +29,7 @@ _FOOTER_EXPANDED=0
 # --- UI Drawing Functions ---
 
 _draw_header() {
-    local header; header=$(printf "   %-38s %-10s  %-15s" "MODEL NAME" "SIZE" "MODIFIED")
+    local header; header=$(printf "    %-41s %10s   %-10s" "MODEL NAME" "SIZE" "MODIFIED")
     printMsg "${C_WHITE}${header}${T_RESET}"
 }
 
