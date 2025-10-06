@@ -285,6 +285,17 @@ _handle_multi_select_toggle() {
         if (( current_option == 0 )); then # If "All" was just toggled...
             local all_state=${selected_options_ref[0]}
             for i in "${!selected_options_ref[@]}"; do selected_options_ref[i]=$all_state; done
+        else # An individual item was toggled, so we need to update the "All" status.
+            local all_selected=1
+            # Check if all items (from index 1 onwards) are selected.
+            for ((i=1; i<num_options; i++)); do
+                if [[ ${selected_options_ref[i]} -eq 0 ]]; then
+                    all_selected=0
+                    break
+                fi
+            done
+            # Set the "All" checkbox state accordingly.
+            selected_options_ref[0]=$all_selected
         fi
     fi
 }
@@ -520,9 +531,9 @@ _get_menu_item_prefix() {
 
     local checkbox=" " # One space for alignment in single-select mode
     if [[ "$is_multi_select" == "true" ]]; then
-        checkbox="_" # Default unchecked state
+        checkbox="☐" # Default unchecked state
         if [[ "$is_selected" == "true" ]]; then
-            checkbox="${T_BOLD}${C_GREEN}✓${T_FG_RESET}"
+            checkbox="${T_BOLD}${C_GREEN}🗹${T_FG_RESET}"
         fi
     fi
 
@@ -546,7 +557,7 @@ _draw_menu_item() {
 
     for j in "${!lines[@]}"; do
         local line_prefix="│"
-        if (( num_lines == 1 )); then line_prefix="╶";
+        if (( num_lines == 1 )); then line_prefix=" ";
         elif (( j == 0 )); then line_prefix="┌";
         elif (( j == num_lines - 1 )); then line_prefix="└";
         fi
