@@ -152,9 +152,10 @@ _handle_key_press() {
                     handler_result_ref="redraw_footer"
                 fi
             else
+                _clear_list_view_footer "$(_draw_footer | wc -l)"
                 show_timed_message "${T_WARN_ICON} No models selected to delete."
-                # show_timed_message handles its own redraw, so we just need to redraw the footer
-                _draw_footer >/dev/tty
+                # After the timed message clears itself, we need to redraw the footer.
+                handler_result_ref="redraw_footer"
             fi
             ;;
         'u'|'U')
@@ -179,9 +180,9 @@ _handle_key_press() {
                 run_menu_action _perform_model_updates "${models_to_update[@]}"
                 handler_result_ref="refresh"
             else
+                _clear_list_view_footer "$(_draw_footer | wc -l)"
                 show_timed_message "${T_WARN_ICON} No models selected to update."
-                # show_timed_message handles its own redraw, so we just need to redraw the footer
-                _draw_footer >/dev/tty
+                handler_result_ref="redraw_footer"
             fi
             ;;
         'r'|'R')
@@ -199,9 +200,9 @@ _handle_key_press() {
                     handler_result_ref="redraw_footer"
                 fi
             else
+                _clear_list_view_footer "$(_draw_footer | wc -l)"
                 show_timed_message "${T_WARN_ICON} Cannot run 'All' models. Please select an individual model."
-                # show_timed_message handles its own redraw, so we just need to redraw the footer
-                _draw_footer >/dev/tty
+                handler_result_ref="redraw_footer"
             fi
             ;;
         'f'|'F')
