@@ -251,7 +251,7 @@ _handle_key_press() {
             ;;
         'c'|'C')
             if [[ $_FOOTER_EXPANDED -eq 1 ]]; then
-                run_menu_action bash "${SCRIPT_DIR}/config-ollama.sh"
+                run_menu_action bash "${SCRIPT_DIR}/../config-ollama.sh"
                 handler_result_ref="refresh_data"
             fi
             ;;
@@ -259,7 +259,7 @@ _handle_key_press() {
             if [[ $_FOOTER_EXPANDED -eq 1 ]]; then
                 _clear_list_view_footer "$(_draw_footer | wc -l)"
                 if prompt_yes_no "Are you sure you want to stop the Ollama service?" "n"; then
-                    run_menu_action bash "${SCRIPT_DIR}/stop-ollama.sh"
+                    run_menu_action bash "${SCRIPT_DIR}/../stop-ollama.sh"
                     handler_result_ref="refresh_data"
                 else
                     # On cancel, just tell the main loop to redraw the footer.
@@ -271,7 +271,7 @@ _handle_key_press() {
             if [[ $_FOOTER_EXPANDED -eq 1 ]]; then
                 _clear_list_view_footer "$(_draw_footer | wc -l)"
                 if prompt_yes_no "Are you sure you want to restart the Ollama service?" "y"; then
-                    run_menu_action bash "${SCRIPT_DIR}/restart-ollama.sh"
+                    run_menu_action bash "${SCRIPT_DIR}/../restart-ollama.sh"
                     handler_result_ref="refresh_data"
                 else
                     # On cancel, just tell the main loop to redraw the footer.
@@ -283,7 +283,7 @@ _handle_key_press() {
             if [[ $_FOOTER_EXPANDED -eq 1 ]]; then
                 _clear_list_view_footer "$(_draw_footer | wc -l)"
                 if prompt_yes_no "This will run the Ollama installer. Continue?" "y"; then
-                    run_menu_action bash "${SCRIPT_DIR}/install-ollama.sh"
+                    run_menu_action bash "${SCRIPT_DIR}/../install-ollama.sh"
                     handler_result_ref="refresh_data"
                 else
                     # On cancel, just tell the main loop to redraw the footer.
