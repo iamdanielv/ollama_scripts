@@ -744,14 +744,17 @@ _interactive_list_view() {
         if [[ "$handler_result" == "exit" ]]; then break
 
         elif [[ "$handler_result" == "refresh" ]]; then
-            # For subsequent refreshes, clear the footer and show the message.
-            _clear_list_view_footer "$footer_lines"
+            # For subsequent refreshes, follow the same pattern as initial startup:
+            # show the skeleton UI with a loading message.
+            clear_screen
+            printBanner "$banner"
+            "$header_func"
+            printMsg "${C_GRAY}${DIV}${T_RESET}"
             printInfoMsg "Refreshing..." >/dev/tty
 
             if [[ "$is_multi_select" == "true" ]]; then _refresh_data_multi; else _refresh_data; fi
-            # Redraw the entire view and position the cursor correctly.
-            _draw_full_view
-            lines_below_list=$(( footer_lines + 1 )); move_cursor_up "$lines_below_list"
+            _draw_full_view # Redraw the entire view with the new data.
+            lines_below_list=$(( footer_lines + 1 )); move_cursor_up "$lines_below_list" # Reposition cursor.
         elif [[ "$handler_result" == "partial_redraw_no_clear" ]]; then
             # This is for actions that do their own drawing but don't want a full clear,
             # like toggling the footer or a multi-select checkbox.
