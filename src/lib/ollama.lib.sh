@@ -240,7 +240,7 @@ _perform_model_deletions() {
         fi
     done
     printMsg "${C_BLUE}${DIV}${T_RESET}"
-    printOkMsg "Deletion process finished."
+    printOkMsg "Delete process finished."
 }
 
 # Updates (pulls) one or more models.
