@@ -281,6 +281,7 @@ _handle_key_press() {
             ;;
         'i'|'I')
             if [[ $_FOOTER_EXPANDED -eq 1 ]]; then
+                _clear_list_view_footer "$(_draw_footer | wc -l)"
                 if prompt_yes_no "This will run the Ollama installer. Continue?" "y"; then
                     run_menu_action bash "${SCRIPT_DIR}/install-ollama.sh"
                     handler_result_ref="refresh_data"
