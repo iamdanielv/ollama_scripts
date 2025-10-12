@@ -148,6 +148,61 @@ _parse_model_data_for_menu() {
     return 0
 }
 
+# (Private) An optimized version of _parse_model_data_for_menu.
+# This version avoids calling the expensive _format_fixed_width_string function.
+# It manually truncates the model name and uses a carefully crafted printf
+# statement to build the pre-rendered line, which is significantly faster.
+# Arguments are the same as the original function.
+_parse_model_data_for_menu_optimized() {
+    local json_data="$1"
+    local include_all="$2"
+    local -n out_names="$3"
+    local -n out_sizes="$4"
+    local -n out_dates="$5"
+    local -n out_f_sizes="$6"
+    local -n out_colors="$7"
+    local -n out_lines="$8"
+
+    if [[ $(echo "$json_data" | jq '.models | length') -eq 0 ]]; then
+        return 1
+    fi
+
+    local sorted_json
+    sorted_json=$(echo "$json_data" | jq -c '.models | sort_by(.modified_at) | reverse | .[]')
+
+    out_names=() out_sizes=() out_dates=() out_f_sizes=() out_colors=() out_lines=()
+
+    if [[ "$include_all" == "true" ]]; then
+        out_names+=("All")
+        # Manually format the "All" line to the correct width
+        local all_line; all_line=$(printf " ${C_L_YELLOW}%-66s${T_RESET}" "All Models")
+        out_lines+=("$all_line")
+    fi
+
+    while IFS= read -r line; do
+        local name size modified_at
+        name=$(echo "$line" | jq -r '.name')
+        size=$(echo "$line" | jq -r '.size')
+        modified_at=$(echo "$line" | jq -r '.modified_at')
+
+        local size_gb; size_gb=$(awk -v s="$size" 'BEGIN { printf "%.2f", s / 1024 / 1024 / 1024 }')
+        local size_gb_int=${size_gb%.*}; local size_color="${C_L_GREEN}"
+        if (( size_gb_int >= 9 )); then size_color="${C_L_RED}"; elif (( size_gb_int >= 6 )); then size_color="${C_L_YELLOW}"; elif (( size_gb_int >= 3 )); then size_color="${C_L_BLUE}"; fi
+        local formatted_size="${size_gb} GB"
+        local formatted_date; formatted_date=$(date -d "$(echo "$modified_at" | cut -d'T' -f1)" +"%Y-%m-%d")
+
+        out_names+=("$name"); out_sizes+=("$size"); out_dates+=("$formatted_date"); out_f_sizes+=("$formatted_size"); out_colors+=("$size_color")
+
+        # Manually truncate the name to fit within the 41-character column.
+        local truncated_name; truncated_name=$(printf "%.40s" "$name"); if [[ ${#name} -gt 40 ]]; then truncated_name+="…"; fi
+
+        # Use a single, optimized printf call. No more _format_fixed_width_string.
+        out_lines+=("$(printf " %-41s ${size_color}%10s ${T_RESET} ${C_MAGENTA} %-10s ${T_RESET}" "$truncated_name" "$formatted_size" "$formatted_date")")
+    done <<< "$sorted_json"
+
+    return 0
+}
+
 # --- Model Action Wrappers ---
 
 # Executes 'ollama pull' for a given model.

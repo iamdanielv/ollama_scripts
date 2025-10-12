@@ -67,7 +67,7 @@ _refresh_model_data() {
 
     # Parse models into arrays. Sorting is done by jq.
     local -a names sizes dates formatted_sizes bg_colors pre_rendered_lines
-    if ! _parse_model_data_for_menu "$models_json" "true" names sizes dates formatted_sizes bg_colors pre_rendered_lines; then
+    if ! _parse_model_data_for_menu_optimized "$models_json" "true" names sizes dates formatted_sizes bg_colors pre_rendered_lines; then
         out_menu_options=("${C_L_YELLOW}(No local models found. Press 'A' to add one.)${T_RESET}")
         out_data_payloads=("")
         return
