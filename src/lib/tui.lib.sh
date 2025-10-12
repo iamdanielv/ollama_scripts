@@ -414,8 +414,6 @@ prompt_for_input() {
 
                     # Show a summary of the accepted input.
                     show_action_summary "$prompt_text" "$var_ref"
-                    # Immediately show a loading state, which will be replaced by the full view refresh.
-                    printInfoMsg "Refreshing..." >/dev/tty
                     printMsgNoNewline "${T_CURSOR_HIDE}" >/dev/tty
 
                     return 0
@@ -708,13 +706,21 @@ _interactive_list_view() {
         printMsg "$footer_content"
     }
 
-    if [[ "$is_multi_select" == "true" ]]; then
-        _refresh_data_multi
-    else
-        _refresh_data
-    fi
+    # --- Initial Data Load & Draw ---
+    # Perform the first data refresh and a full draw before entering the interactive loop.
+    clear_screen
+    printMsgNoNewline "${T_CURSOR_HIDE}" >/dev/tty
+    printBanner "$banner"
+    "$header_func"
+    printMsg "${C_GRAY}${DIV}${T_RESET}"
+    printInfoMsg "Loading..." >/dev/tty
+
+    if [[ "$is_multi_select" == "true" ]]; then _refresh_data_multi; else _refresh_data; fi
+
+    # Now that data is loaded, do the first full draw.
     _draw_full_view
 
+    # Position cursor at the end of the list content for the first key press.
     local lines_below_list=$(( footer_lines + 1 ))
     move_cursor_up "$lines_below_list"
 
@@ -736,8 +742,14 @@ _interactive_list_view() {
         esac
 
         if [[ "$handler_result" == "exit" ]]; then break
+
         elif [[ "$handler_result" == "refresh" ]]; then
+            # For subsequent refreshes, clear the footer and show the message.
+            _clear_list_view_footer "$footer_lines"
+            printInfoMsg "Refreshing..." >/dev/tty
+
             if [[ "$is_multi_select" == "true" ]]; then _refresh_data_multi; else _refresh_data; fi
+            # Redraw the entire view and position the cursor correctly.
             _draw_full_view
             lines_below_list=$(( footer_lines + 1 )); move_cursor_up "$lines_below_list"
         elif [[ "$handler_result" == "partial_redraw_no_clear" ]]; then

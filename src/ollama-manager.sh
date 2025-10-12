@@ -159,26 +159,30 @@ _handle_key_press() {
             fi
             ;;
         'u'|'U')
+            # The 'selected_indices_ref' is actually an array of booleans (0 or 1).
             local -a models_to_update=()
-            if [[ ${#selected_indices_ref[@]} -gt 0 ]]; then
-                # Check if "All" is selected
-                if [[ " ${selected_indices_ref[*]} " == *" 0 "* ]]; then
-                     # Get all models except "All"
-                    for ((i=1; i<${#selected_payloads_ref[@]}; i++)); do
+            local has_selection=false
+            for i in "${!selected_indices_ref[@]}"; do
+                if [[ ${selected_indices_ref[i]} -eq 1 ]]; then
+                    has_selection=true
+                    # Don't add "All" to the list of models to update.
+                    if [[ "${selected_payloads_ref[i]}" != "All" ]]; then
                         models_to_update+=("${selected_payloads_ref[i]}")
-                    done
-                else
-                    for index in "${selected_indices_ref[@]}"; do
-                        models_to_update+=("${selected_payloads_ref[index]}")
-                    done
+                    fi
                 fi
-            elif [[ -n "$current_model" ]]; then
+            done
+            if [[ "$has_selection" == "false" && -n "$current_model" && "$current_model" != "All" ]]; then
                 models_to_update=("$current_model")
             fi
 
             if [[ ${#models_to_update[@]} -gt 0 ]]; then
-                run_menu_action _perform_model_updates "${models_to_update[@]}"
-                handler_result_ref="refresh"
+                clear_screen
+                if _perform_model_updates "${models_to_update[@]}"; then
+                    show_timed_message "${T_OK_ICON} Update process finished." 1.5
+                else
+                    show_timed_message "${T_WARN_ICON} Update process finished with some errors." 2.5
+                fi
+                handler_result_ref="refresh" # This will trigger the "Refreshing..." message in the TUI loop.
             else
                 _clear_list_view_footer "$(_draw_footer | wc -l)"
                 show_timed_message "${T_WARN_ICON} No models selected to update."
@@ -219,8 +223,6 @@ _handle_key_press() {
         'l'|'L')
             if [[ -n "$_VIEW_MODEL_FILTER" ]]; then
                 _VIEW_MODEL_FILTER=""
-                _clear_list_view_footer "$(_draw_footer | wc -l)"
-                printInfoMsg "Refreshing..." >/dev/tty
                 handler_result_ref="refresh"
             fi
             ;;
