@@ -86,9 +86,9 @@ _parse_model_data_for_menu() {
     local -n out_names="$3"
     local -n out_sizes="$4"
     local -n out_dates="$5"
-    local -n out_f_sizes="$6"
-    local -n out_bg_colors="$7"
-    local -n out_lines="$8"
+    local -n out_f_sizes="$6"  # formatted sizes
+    local -n out_colors="$7"   # colors
+    local -n out_lines="$8"    # pre-rendered lines
 
     # Check if there are any models.
     if [[ $(echo "$json_data" | jq '.models | length') -eq 0 ]]; then
@@ -100,7 +100,7 @@ _parse_model_data_for_menu() {
     sorted_json=$(echo "$json_data" | jq -c '.models | sort_by(.modified_at) | reverse | .[]')
 
     # Clear output arrays
-    out_names=() out_sizes=() out_dates=() out_f_sizes=() out_bg_colors=() out_lines=()
+    out_names=() out_sizes=() out_dates=() out_f_sizes=() out_colors=() out_lines=()
 
     if [[ "$include_all" == "true" ]]; then
         out_names+=("All")
@@ -134,15 +134,13 @@ _parse_model_data_for_menu() {
         out_names+=("$name")
         out_sizes+=("$size")
         out_dates+=("$formatted_date")
-        # Store the raw formatted size and the color separately
-        out_f_sizes+=("$formatted_size") 
-        out_bg_colors+=("$size_color") # Re-using this array for the color
+        out_f_sizes+=("$formatted_size")
+        out_colors+=("$size_color")
 
         # Pre-render the line for the menu
-        local rendered_line
         local unformatted_line
         unformatted_line=$(printf " %-41s ${size_color}%10s ${T_RESET} ${C_MAGENTA} %-10s ${T_RESET}" "$name" "$formatted_size" "$formatted_date")
-        # Perform the expensive fixed-width formatting here, once.
+        # Perform the expensive fixed-width formatting here, once per refresh.
         out_lines+=("$(_format_fixed_width_string "$unformatted_line" 67)")
 
     done <<< "$sorted_json"

@@ -556,34 +556,29 @@ _get_menu_item_prefix() {
 #
 # Usage: _draw_menu_item <is_current> <is_selected> <is_multi_select> <option_text> <output_nameref>
 _draw_menu_item() {
-    local is_current="$1" is_selected="$2" is_multi_select="$3" option_text="$4"; local -n output_ref="$5"
+    local is_current="$1" is_selected="$2" is_multi_select="$3" option_text="$4"
+    local -n output_ref="$5"
 
     local prefix; prefix=$(_get_menu_item_prefix "$is_current" "$is_selected" "$is_multi_select")
 
-    # --- 2. Format and Draw Lines ---
     local item_output=""
-    local -a lines=()
-    mapfile -t lines <<< "$option_text"
-
-    # Since the lines are now pre-formatted, we just need to handle the prefix and highlighting.
-    # This logic assumes single-line items for this specific high-performance view.
-    # The more complex multi-line logic is bypassed.
-    if ((${#lines[@]} > 0)); then
-        local line_content="${lines[0]}" # Use the first (and only) line.
-        local line_prefix=" " # Simple space prefix for alignment.
+    # The option_text is now a pre-rendered, fixed-width string.
+    # We just need to add the prefix and apply highlighting if it's the current item.
+    if [[ -n "$option_text" ]]; then
+        local line_prefix=" " # A single space for padding after the prefix.
 
         if [[ "$is_current" == "true" ]]; then
-            # Apply highlight only to the pre-formatted content.
-            local highlighted_line; highlighted_line=$(_apply_highlight "${line_prefix}${line_content}")
-            item_output+=$(printf "%s%s" \
-                "$prefix" \
-                "$highlighted_line")$'\n'
+            # Apply highlight to the pre-formatted content.
+            local highlighted_line
+            highlighted_line=$(_apply_highlight "${line_prefix}${option_text}")
+            item_output+=$(printf "%s%s" "$prefix" "$highlighted_line")
+            item_output+=$'\n'
         else
-            # For non-current items, print as is.
+            # For non-current items, just combine the parts.
             item_output+=$(printf "%s%s%s%s%s" \
                 "$prefix" \
                 "$line_prefix" \
-                "$line_content" \
+                "$option_text" \
                 "${T_CLEAR_LINE}" \
                 "${T_RESET}")$'\n'
         fi
@@ -696,7 +691,7 @@ _interactive_list_view() {
         if [[ $num_options -gt 0 ]]; then
             for i in "${!menu_options[@]}"; do
                 local is_current="false"; if (( i == current_option )); then is_current="true"; fi
-                local is_selected="false"; if [[ "$is_multi_select" == "true" && ${selected_options[i]} -eq 1 ]]; then is_selected="true"; fi
+                local is_selected="false"; if [[ "$is_multi_select" == "true" && "${selected_options[i]}" -eq 1 ]]; then is_selected="true"; fi
                 _draw_menu_item "$is_current" "$is_selected" "$is_multi_select" "${menu_options[i]}" list_content
             done
         else
