@@ -149,11 +149,11 @@ _handle_key_press() {
                     handler_result_ref="refresh"
                 else
                     handler_result_ref="partial_redraw"
-                    _draw_footer >/dev/tty
+                    _draw_footer >/dev/tty # Redraw footer after prompt
                 fi
             else
                 show_timed_message "${T_WARN_ICON} No models selected to delete."
-                handler_result_ref="partial_redraw"
+                # show_timed_message handles its own redraw, so we just need to redraw the footer
                 _draw_footer >/dev/tty
             fi
             ;;
@@ -180,7 +180,7 @@ _handle_key_press() {
                 handler_result_ref="refresh"
             else
                 show_timed_message "${T_WARN_ICON} No models selected to update."
-                handler_result_ref="partial_redraw"
+                # show_timed_message handles its own redraw, so we just need to redraw the footer
                 _draw_footer >/dev/tty
             fi
             ;;
@@ -195,11 +195,11 @@ _handle_key_press() {
                     handler_result_ref="refresh"
                 else
                     handler_result_ref="partial_redraw"
-                    _draw_footer >/dev/tty
+                    _draw_footer >/dev/tty # Redraw footer after prompt
                 fi
             else
                 show_timed_message "${T_WARN_ICON} Cannot run 'All' models. Please select an individual model."
-                handler_result_ref="partial_redraw"
+                # show_timed_message handles its own redraw, so we just need to redraw the footer
                 _draw_footer >/dev/tty
             fi
             ;;
@@ -210,8 +210,7 @@ _handle_key_press() {
                 _VIEW_MODEL_FILTER="$new_filter"
                 handler_result_ref="refresh"
             else
-                # On cancel, prompt_for_input shows a timed message and clears itself.
-                # We just need to redraw the footer.
+                # On cancel, prompt_for_input handles its own redraw. We just need to redraw the footer.
                 handler_result_ref="partial_redraw" # Redraw footer and position cursor
             fi
             ;;
@@ -238,7 +237,7 @@ _handle_key_press() {
                     handler_result_ref="refresh"
                 else
                     handler_result_ref="partial_redraw"
-                    _draw_footer >/dev/tty
+                    _draw_footer >/dev/tty # Redraw footer after prompt
                 fi
             fi
             ;;
@@ -249,7 +248,7 @@ _handle_key_press() {
                     handler_result_ref="refresh"
                 else
                     handler_result_ref="partial_redraw"
-                    _draw_footer >/dev/tty
+                    _draw_footer >/dev/tty # Redraw footer after prompt
                 fi
             fi
             ;;
@@ -260,7 +259,7 @@ _handle_key_press() {
                     handler_result_ref="refresh"
                 else
                     handler_result_ref="partial_redraw"
-                    _draw_footer >/dev/tty
+                    _draw_footer >/dev/tty # Redraw footer after prompt
                 fi
             fi
             ;;

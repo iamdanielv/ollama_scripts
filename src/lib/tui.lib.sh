@@ -544,13 +544,14 @@ _get_menu_item_prefix() {
 # This function encapsulates the complex logic for single-line, multi-line,
 # and highlighted rendering, promoting DRY principles.
 #
-# Usage: _draw_menu_item <is_current> <is_selected> <is_multi_select> <option_text>
+# Usage: _draw_menu_item <is_current> <is_selected> <is_multi_select> <option_text> <output_nameref>
 _draw_menu_item() {
-    local is_current="$1" is_selected="$2" is_multi_select="$3" option_text="$4"
+    local is_current="$1" is_selected="$2" is_multi_select="$3" option_text="$4"; local -n output_ref="$5"
 
     local prefix; prefix=$(_get_menu_item_prefix "$is_current" "$is_selected" "$is_multi_select")
 
     # --- 2. Format and Draw Lines ---
+    local item_output=""
     local -a lines=()
     mapfile -t lines <<< "$option_text"
     local num_lines=${#lines[@]}
@@ -570,19 +571,20 @@ _draw_menu_item() {
 
         if [[ "$is_current" == "true" ]]; then
             local highlighted_line; highlighted_line=$(_apply_highlight "${line_prefix}${formatted_line}")
-            printf "%s%s\n" \
+            item_output+=$(printf "%s%s" \
                 "$current_prefix" \
-                "$highlighted_line"
+                "$highlighted_line")$'\n'
         else
             # For non-current items, print as is.
-            printf "%s%s%s%s%s\n" \
+            item_output+=$(printf "%s%s%s%s%s" \
                 "$current_prefix" \
                 "$line_prefix" \
                 "$formatted_line" \
                 "${T_CLEAR_LINE}" \
-                "${T_RESET}"
+                "${T_RESET}")$'\n'
         fi
     done
+    output_ref+=$item_output
 }
 
 # Generic interactive menu function.
@@ -604,12 +606,14 @@ interactive_menu() {
     fi
 
     _draw_menu_options() {
+        local menu_content=""
         for i in "${!options[@]}"; do
             local is_current="false"; if (( i == current_option )); then is_current="true"; fi
             local is_selected="false"; if [[ "$mode" == "multi" && ${selected_options[i]} -eq 1 ]]; then is_selected="true"; fi
             local is_multi="false"; if [[ "$mode" == "multi" ]]; then is_multi="true"; fi
-            _draw_menu_item "$is_current" "$is_selected" "$is_multi" "${options[i]}"
+            _draw_menu_item "$is_current" "$is_selected" "$is_multi" "${options[i]}" menu_content
         done
+        printf "%s" "$menu_content"
     }
 
     printMsgNoNewline "${T_CURSOR_HIDE}" >/dev/tty; trap 'printMsgNoNewline "${T_CURSOR_SHOW}" >/dev/tty' EXIT
@@ -681,15 +685,17 @@ _interactive_list_view() {
     }
 
     _draw_list() {
+        local list_content=""
         if [[ $num_options -gt 0 ]]; then
             for i in "${!menu_options[@]}"; do
                 local is_current="false"; if (( i == current_option )); then is_current="true"; fi
                 local is_selected="false"; if [[ "$is_multi_select" == "true" && ${selected_options[i]} -eq 1 ]]; then is_selected="true"; fi
-                _draw_menu_item "$is_current" "$is_selected" "$is_multi_select" "${menu_options[i]}"
+                _draw_menu_item "$is_current" "$is_selected" "$is_multi_select" "${menu_options[i]}" list_content
             done
         else
-            printf "  %s\n" "${C_GRAY}(No items found.)${T_CLEAR_LINE}${T_RESET}"
+            list_content=$(printf "  %s\n" "${C_GRAY}(No items found.)${T_CLEAR_LINE}${T_RESET}")
         fi
+        printf "%s" "$list_content"
     }
 
     _draw_full_view() {
