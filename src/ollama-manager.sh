@@ -124,9 +124,9 @@ _handle_key_press() {
                 run_menu_action _execute_pull "$model_to_pull"
                 handler_result_ref="refresh"
             else
-                # On cancel, prompt_for_input shows a timed message and clears itself.
-                # We just need to redraw the footer.
-                handler_result_ref="partial_redraw" # Redraw footer and position cursor
+                # On cancel, prompt_for_input handles its own feedback.
+                # We just need to tell the main loop to redraw the footer.
+                handler_result_ref="redraw_footer"
             fi
             ;;
         'd'|'D')
@@ -148,8 +148,8 @@ _handle_key_press() {
                     run_menu_action _perform_model_deletions "${models_to_delete[@]}"
                     handler_result_ref="refresh"
                 else
-                    handler_result_ref="partial_redraw"
-                    _draw_footer >/dev/tty # Redraw footer after prompt
+                    # On cancel, just tell the main loop to redraw the footer.
+                    handler_result_ref="redraw_footer"
                 fi
             else
                 show_timed_message "${T_WARN_ICON} No models selected to delete."
@@ -186,16 +186,17 @@ _handle_key_press() {
             ;;
         'r'|'R')
             if [[ "$current_model" != "All" && -n "$current_model" ]]; then
+                _clear_list_view_footer "$(_draw_footer | wc -l)"
                 if prompt_yes_no "Run model ${C_L_CYAN}${current_model}${T_RESET}?" "y"; then
                     clear_screen
                     printInfoMsg "Starting model: ${C_L_BLUE}${current_model}${T_RESET}"
                     printInfoMsg "Type '/bye' to exit the model chat."
                     printMsg "${C_BLUE}${DIV}${T_RESET}"
                     ollama run "$current_model"
-                    handler_result_ref="refresh"
+                    handler_result_ref="refresh" # Full refresh after returning from model
                 else
-                    handler_result_ref="partial_redraw"
-                    _draw_footer >/dev/tty # Redraw footer after prompt
+                    # On cancel, just tell the main loop to redraw the footer.
+                    handler_result_ref="redraw_footer"
                 fi
             else
                 show_timed_message "${T_WARN_ICON} Cannot run 'All' models. Please select an individual model."
@@ -210,8 +211,8 @@ _handle_key_press() {
                 _VIEW_MODEL_FILTER="$new_filter"
                 handler_result_ref="refresh"
             else
-                # On cancel, prompt_for_input handles its own redraw. We just need to redraw the footer.
-                handler_result_ref="partial_redraw" # Redraw footer and position cursor
+                # On cancel, prompt_for_input handles its own feedback. Redraw the footer.
+                handler_result_ref="redraw_footer"
             fi
             ;;
         'l'|'L')
@@ -238,8 +239,8 @@ _handle_key_press() {
                     run_menu_action bash "${SCRIPT_DIR}/stop-ollama.sh"
                     handler_result_ref="refresh"
                 else
-                    handler_result_ref="partial_redraw"
-                    _draw_footer >/dev/tty # Redraw footer after prompt
+                    # On cancel, just tell the main loop to redraw the footer.
+                    handler_result_ref="redraw_footer"
                 fi
             fi
             ;;
@@ -249,8 +250,8 @@ _handle_key_press() {
                     run_menu_action bash "${SCRIPT_DIR}/restart-ollama.sh"
                     handler_result_ref="refresh"
                 else
-                    handler_result_ref="partial_redraw"
-                    _draw_footer >/dev/tty # Redraw footer after prompt
+                    # On cancel, just tell the main loop to redraw the footer.
+                    handler_result_ref="redraw_footer"
                 fi
             fi
             ;;
@@ -260,8 +261,8 @@ _handle_key_press() {
                     run_menu_action bash "${SCRIPT_DIR}/install-ollama.sh"
                     handler_result_ref="refresh"
                 else
-                    handler_result_ref="partial_redraw"
-                    _draw_footer >/dev/tty # Redraw footer after prompt
+                    # On cancel, just tell the main loop to redraw the footer.
+                    handler_result_ref="redraw_footer"
                 fi
             fi
             ;;

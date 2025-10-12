@@ -745,12 +745,26 @@ _interactive_list_view() {
             # like toggling the footer or a multi-select checkbox.
             move_cursor_up "$list_lines"
             _draw_list
-            # The handler is responsible for final cursor positioning.
+        elif [[ "$handler_result" == "redraw_footer" ]]; then
+            # This is for actions that cancel and need the footer redrawn.
+            # The prompt has left the cursor on a new line. We need to go up one line
+            # to where the list's bottom divider should be.
+            move_cursor_up 1
+            # Now clear the old footer area (footer text + bottom divider).
+            clear_lines_down $(( footer_lines + 1 ))
+            printMsg "${C_GRAY}${DIV}${T_RESET}" >/dev/tty
+            local footer_content; footer_content=$("$footer_func"); footer_lines=$(echo -e "$footer_content" | wc -l)
+            printMsg "$footer_content" >/dev/tty
+            # Move cursor back up to the end of the list content for the next loop iteration.
+            move_cursor_up $(( footer_lines + 1 ))
         elif [[ "$handler_result" == "partial_redraw" ]]; then : # The handler already did its own drawing.
         elif [[ "$navigation_key_pressed" == "true" ]]; then
             # This is the default action ONLY for built-in navigation keys.
             move_cursor_up "$list_lines"; _draw_list
         fi
+
+        # DEBUG: Print a marker to see where the cursor is before the next key press.
+        printf "%s" "${C_L_RED}*${T_RESET}" >/dev/tty
     done
 }
 #endregion Interactive Menus
