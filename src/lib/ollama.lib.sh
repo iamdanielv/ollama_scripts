@@ -95,9 +95,9 @@ _parse_model_data_for_menu() {
         return 1 # No models found
     fi
 
-    # Use jq to extract and sort data. Sorting by 'modified_at' descending.
+    # Use jq to extract and sort data. Sorting by name alphabetically.
     local sorted_json
-    sorted_json=$(echo "$json_data" | jq -c '.models | sort_by(.modified_at) | reverse | .[]')
+    sorted_json=$(echo "$json_data" | jq -c '.models | sort_by(.name) | .[]')
 
     # Clear output arrays
     out_names=() out_sizes=() out_dates=() out_f_sizes=() out_colors=() out_lines=()
@@ -168,7 +168,7 @@ _parse_model_data_for_menu_optimized() {
     fi
 
     local sorted_json
-    sorted_json=$(echo "$json_data" | jq -c '.models | sort_by(.modified_at) | reverse | .[]')
+    sorted_json=$(echo "$json_data" | jq -c '.models | sort_by(.name) | .[]')
 
     out_names=() out_sizes=() out_dates=() out_f_sizes=() out_colors=() out_lines=()
 
