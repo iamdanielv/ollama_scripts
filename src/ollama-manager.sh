@@ -217,6 +217,8 @@ _handle_key_press() {
         'l'|'L')
             if [[ -n "$_VIEW_MODEL_FILTER" ]]; then
                 _VIEW_MODEL_FILTER=""
+                _clear_list_view_footer "$(_draw_footer | wc -l)"
+                printInfoMsg "Refreshing..." >/dev/tty
                 handler_result_ref="refresh"
             fi
             ;;

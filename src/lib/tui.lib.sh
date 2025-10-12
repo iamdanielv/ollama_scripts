@@ -151,7 +151,7 @@ read_single_char() {
 
 prompt_to_continue() {
     printInfoMsg "Press any key to continue..." >/dev/tty
-    read_single_char >/dev/null </dev/tty
+    read_single_char >/dev/null
     clear_lines_up 1
 }
 
@@ -170,6 +170,25 @@ show_timed_message() {
     sleep "$duration"
     # Also redirect to /dev/tty to ensure it works when stdout is captured.
     clear_lines_up "$message_lines" >/dev/tty
+}
+
+# Prints a standardized, single-line summary of an action that was just taken.
+# This is useful for providing feedback after a prompt is successfully answered.
+# It truncates the label and value to fit neatly on one line.
+# Usage: show_action_summary "Label" "Value"
+show_action_summary() {
+    local label="$1"
+    local value="$2"
+    local total_width=70
+    local icon_len; icon_len=$(strip_ansi_codes "${T_QST_ICON} " | wc -c)
+    local separator_len=2 # for ": "
+    local available_width=$(( total_width - icon_len - separator_len ))
+    local label_width=$(( available_width / 3 )); local value_width=$(( available_width - label_width ))
+
+    local truncated_label; truncated_label=$(_truncate_string "$label" "$label_width")
+    local truncated_value; truncated_value=$(_truncate_string "${C_L_GREEN}${value}${T_RESET}" "$value_width")
+
+    printMsg "${T_QST_ICON} ${truncated_label}: ${truncated_value}" >/dev/tty
 }
 
 # An interactive yes/no prompt that handles single-character input.
@@ -391,21 +410,12 @@ prompt_for_input() {
                 if [[ -n "$input_str" || "$allow_empty" == "true" ]]; then
                     var_ref="$input_str"
                     # On success, clear the input line and the prompt text above it.
-                    # We clear `prompt_lines` in total. The current line is one of them.
                     clear_current_line >/dev/tty; clear_lines_up $(( prompt_lines - 1 )) >/dev/tty
 
-                    # --- Print a clean, single-line, truncated summary ---
-                    local total_width=70
-                    local icon_len; icon_len=$(strip_ansi_codes "${T_QST_ICON} " | wc -c)
-                    local separator_len=2 # for ": "
-                    local available_width=$(( total_width - icon_len - separator_len ))
-                    local prompt_width=$(( available_width / 2 )); local value_width=$(( available_width - prompt_width ))
-                    local single_line_prompt; single_line_prompt=$(echo -e "$prompt_text" | tr '\n' ' ')
-                    local truncated_prompt; truncated_prompt=$(_truncate_string "$single_line_prompt" "$prompt_width")
-                    local truncated_value; truncated_value=$(_truncate_string "${C_L_GREEN}${var_ref}${T_RESET}" "$value_width")
-                    printMsg "${T_QST_ICON} ${truncated_prompt}: ${truncated_value}" >/dev/tty
-
-                    # Hide the cursor again to return to the list view's state.
+                    # Show a summary of the accepted input.
+                    show_action_summary "$prompt_text" "$var_ref"
+                    # Immediately show a loading state, which will be replaced by the full view refresh.
+                    printInfoMsg "Refreshing..." >/dev/tty
                     printMsgNoNewline "${T_CURSOR_HIDE}" >/dev/tty
 
                     return 0
@@ -610,7 +620,8 @@ interactive_menu() {
         printf "%s" "$menu_content"
     }
 
-    printMsgNoNewline "${T_CURSOR_HIDE}" >/dev/tty; trap 'printMsgNoNewline "${T_CURSOR_SHOW}" >/dev/tty' EXIT
+    # Hide cursor. The global EXIT trap will restore it.
+    printMsgNoNewline "${T_CURSOR_HIDE}" >/dev/tty
     printf '%s\n' "${T_QST_ICON} ${prompt}" >/dev/tty; printf '%s\n' "${C_GRAY}${DIV}${T_RESET}" >/dev/tty
     if [[ -n "$header" ]]; then printf '  %s%s\n' "${header}" "${T_RESET}" >/dev/tty; fi
     _draw_menu_options >/dev/tty
@@ -753,7 +764,7 @@ _interactive_list_view() {
 run_menu_action() {
     local action_func="$1"; shift; clear_screen; printMsgNoNewline "${T_CURSOR_SHOW}" >/dev/tty
     "$action_func" "$@"; local exit_code=$?
-    printMsgNoNewline "${T_CURSOR_HIDE}" >/dev/tty
+    printMsgNoNewline "${T_CURSOR_HIDE}" >/dev/tty # Hide cursor before prompt
     # If the exit code is 2, it's a signal that the action handled its own
     # "cancellation" feedback and we should skip the prompt.
     if [[ $exit_code -ne 2 ]]; then prompt_to_continue; fi
