@@ -743,7 +743,7 @@ _interactive_list_view() {
 
         if [[ "$handler_result" == "exit" ]]; then break
 
-        elif [[ "$handler_result" == "refresh" ]]; then
+        elif [[ "$handler_result" == "refresh_data" ]]; then
             # For subsequent refreshes, follow the same pattern as initial startup:
             # show the skeleton UI with a loading message.
             clear_screen
@@ -754,6 +754,10 @@ _interactive_list_view() {
 
             if [[ "$is_multi_select" == "true" ]]; then _refresh_data_multi; else _refresh_data; fi
             _draw_full_view # Redraw the entire view with the new data.
+            lines_below_list=$(( footer_lines + 1 )); move_cursor_up "$lines_below_list" # Reposition cursor.
+        elif [[ "$handler_result" == "redraw_view" ]]; then
+            # This is for a full redraw of the screen using existing (cached) data.
+            _draw_full_view
             lines_below_list=$(( footer_lines + 1 )); move_cursor_up "$lines_below_list" # Reposition cursor.
         elif [[ "$handler_result" == "partial_redraw_no_clear" ]]; then
             # This is for actions that do their own drawing but don't want a full clear,
