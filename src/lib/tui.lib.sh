@@ -554,36 +554,30 @@ _draw_menu_item() {
     local item_output=""
     local -a lines=()
     mapfile -t lines <<< "$option_text"
-    local num_lines=${#lines[@]}
 
-    for j in "${!lines[@]}"; do
-        local line_prefix="│"
-        if (( num_lines == 1 )); then line_prefix=" ";
-        elif (( j == 0 )); then line_prefix="┌";
-        elif (( j == num_lines - 1 )); then line_prefix="└";
-        fi
-
-        local formatted_line; formatted_line=$(_format_fixed_width_string "${lines[j]}" 67)
-
-        # Use a different prefix for subsequent lines of a multi-line item
-        local current_prefix="  " # Two spaces for alignment
-        if (( j == 0 )); then current_prefix="$prefix"; fi
+    # Since the lines are now pre-formatted, we just need to handle the prefix and highlighting.
+    # This logic assumes single-line items for this specific high-performance view.
+    # The more complex multi-line logic is bypassed.
+    if ((${#lines[@]} > 0)); then
+        local line_content="${lines[0]}" # Use the first (and only) line.
+        local line_prefix=" " # Simple space prefix for alignment.
 
         if [[ "$is_current" == "true" ]]; then
-            local highlighted_line; highlighted_line=$(_apply_highlight "${line_prefix}${formatted_line}")
+            # Apply highlight only to the pre-formatted content.
+            local highlighted_line; highlighted_line=$(_apply_highlight "${line_prefix}${line_content}")
             item_output+=$(printf "%s%s" \
-                "$current_prefix" \
+                "$prefix" \
                 "$highlighted_line")$'\n'
         else
             # For non-current items, print as is.
             item_output+=$(printf "%s%s%s%s%s" \
-                "$current_prefix" \
+                "$prefix" \
                 "$line_prefix" \
-                "$formatted_line" \
+                "$line_content" \
                 "${T_CLEAR_LINE}" \
                 "${T_RESET}")$'\n'
         fi
-    done
+    fi
     output_ref+=$item_output
 }
 
@@ -655,7 +649,9 @@ interactive_menu() {
                     echo "$current_option"; return 0
                 fi
                 ;;
-        esac; _draw_menu_options >/dev/tty; done
+        esac
+        _draw_menu_options >/dev/tty;
+    done
 }
 
 interactive_multi_select_menu() {
@@ -671,7 +667,7 @@ _interactive_list_view() {
     local -a selected_options=()
 
     _refresh_data() {
-        "$refresh_func" menu_options data_payloads; num_options=${#menu_options[@]}
+        "$refresh_func" menu_options data_payloads selected_options; num_options=${#menu_options[@]}
         if (( current_option >= num_options )); then current_option=$(( num_options - 1 )); fi
         if (( current_option < 0 )); then current_option=0; fi
         if (( num_options > 0 )); then list_lines=$(printf "%s\n" "${menu_options[@]}" | wc -l); else list_lines=1; fi

@@ -104,7 +104,7 @@ _parse_model_data_for_menu() {
 
     if [[ "$include_all" == "true" ]]; then
         out_names+=("All")
-        local all_line; all_line=$(printf " ${C_L_YELLOW}%-41s ${T_RESET}" "All Models")
+        local all_line; all_line=$(_format_fixed_width_string " ${C_L_YELLOW}All Models${T_RESET}" 67)
         out_lines+=("$all_line")
     fi
 
@@ -140,8 +140,10 @@ _parse_model_data_for_menu() {
 
         # Pre-render the line for the menu
         local rendered_line
-        rendered_line=$(printf " %-41s ${size_color}%10s ${T_RESET} ${C_MAGENTA} %-10s ${T_RESET}" "$name" "$formatted_size" "$formatted_date")
-        out_lines+=("$rendered_line")
+        local unformatted_line
+        unformatted_line=$(printf " %-41s ${size_color}%10s ${T_RESET} ${C_MAGENTA} %-10s ${T_RESET}" "$name" "$formatted_size" "$formatted_date")
+        # Perform the expensive fixed-width formatting here, once.
+        out_lines+=("$(_format_fixed_width_string "$unformatted_line" 67)")
 
     done <<< "$sorted_json"
 
