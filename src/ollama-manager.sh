@@ -299,6 +299,9 @@ _handle_key_press() {
                 handler_result_ref="partial_redraw_no_clear"
             fi
             ;;
+        *)
+            handler_result_ref="noop" # Explicitly do nothing for unhandled keys
+            ;;
     esac
 }
 
