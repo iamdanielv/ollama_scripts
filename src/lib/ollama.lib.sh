@@ -261,6 +261,6 @@ _perform_model_updates() {
         # 'ollama pull' also works for updating
         ollama pull "$model"
     done
+
     printMsg "${C_BLUE}${DIV}${T_RESET}"
-    printOkMsg "Update process finished."
 }

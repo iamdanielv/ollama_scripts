@@ -131,26 +131,35 @@ _handle_key_press() {
             ;;
         'd'|'D')
             local -a models_to_delete=()
-            if [[ ${#selected_indices_ref[@]} -gt 0 ]]; then
-                for index in "${selected_indices_ref[@]}"; do
-                    # Don't try to delete "All"
-                    if [[ "${selected_payloads_ref[index]}" != "All" ]]; then
-                        models_to_delete+=("${selected_payloads_ref[index]}")
+            # If "All" is selected (index 0), get all models except "All" itself.
+            if [[ ${selected_indices_ref[0]} -eq 1 ]]; then
+                for i in "${!selected_payloads_ref[@]}"; do
+                    if (( i > 0 )); then # Skip "All" at index 0
+                        models_to_delete+=("${selected_payloads_ref[i]}")
                     fi
                 done
-            elif [[ "$current_model" != "All" && -n "$current_model" ]]; then
-                models_to_delete=("$current_model")
+            else
+                # Otherwise, get only the individually selected models.
+                for i in "${!selected_indices_ref[@]}"; do
+                    if [[ ${selected_indices_ref[i]} -eq 1 && "${selected_payloads_ref[i]}" != "All" ]]; then
+                        models_to_delete+=("${selected_payloads_ref[i]}")
+                    fi
+                done
+                # If still no selections, fall back to the current model.
+                if [[ ${#models_to_delete[@]} -eq 0 && -n "$current_model" && "$current_model" != "All" ]]; then
+                    models_to_delete=("$current_model")
+                fi
             fi
 
             if [[ ${#models_to_delete[@]} -gt 0 ]]; then
+                clear_screen
                 local question="Are you sure you want to delete ${#models_to_delete[@]} model(s): ${C_L_RED}${models_to_delete[*]}${T_RESET}?"
                 if prompt_yes_no "$question" "n"; then
                     run_menu_action _perform_model_deletions "${models_to_delete[@]}"
-                    handler_result_ref="refresh"
                 else
-                    # On cancel, just tell the main loop to redraw the footer.
-                    handler_result_ref="redraw_footer"
+                    show_timed_message "${T_INFO_ICON} Deletion cancelled."
                 fi
+                handler_result_ref="refresh"
             else
                 _clear_list_view_footer "$(_draw_footer | wc -l)"
                 show_timed_message "${T_WARN_ICON} No models selected to delete."
@@ -159,30 +168,36 @@ _handle_key_press() {
             fi
             ;;
         'u'|'U')
-            # The 'selected_indices_ref' is actually an array of booleans (0 or 1).
             local -a models_to_update=()
-            local has_selection=false
-            for i in "${!selected_indices_ref[@]}"; do
-                if [[ ${selected_indices_ref[i]} -eq 1 ]]; then
-                    has_selection=true
-                    # Don't add "All" to the list of models to update.
-                    if [[ "${selected_payloads_ref[i]}" != "All" ]]; then
+            # If "All" is selected (index 0), get all models except "All" itself.
+            if [[ ${selected_indices_ref[0]} -eq 1 ]]; then
+                for i in "${!selected_payloads_ref[@]}"; do
+                    if (( i > 0 )); then # Skip "All" at index 0
                         models_to_update+=("${selected_payloads_ref[i]}")
                     fi
+                done
+            else
+                # Otherwise, get only the individually selected models.
+                for i in "${!selected_indices_ref[@]}"; do
+                    if [[ ${selected_indices_ref[i]} -eq 1 && "${selected_payloads_ref[i]}" != "All" ]]; then
+                        models_to_update+=("${selected_payloads_ref[i]}")
+                    fi
+                done
+                # If still no selections, fall back to the current model.
+                if [[ ${#models_to_update[@]} -eq 0 && -n "$current_model" && "$current_model" != "All" ]]; then
+                    models_to_update=("$current_model")
                 fi
-            done
-            if [[ "$has_selection" == "false" && -n "$current_model" && "$current_model" != "All" ]]; then
-                models_to_update=("$current_model")
             fi
 
             if [[ ${#models_to_update[@]} -gt 0 ]]; then
                 clear_screen
-                if _perform_model_updates "${models_to_update[@]}"; then
-                    show_timed_message "${T_OK_ICON} Update process finished." 1.5
+                local question="Are you sure you want to update ${#models_to_update[@]} model(s): ${C_L_MAGENTA}${models_to_update[*]}${T_RESET}?"
+                if prompt_yes_no "$question" "y"; then
+                    run_menu_action _perform_model_updates "${models_to_update[@]}"
                 else
-                    show_timed_message "${T_WARN_ICON} Update process finished with some errors." 2.5
+                    show_timed_message "${T_INFO_ICON} Update cancelled."
                 fi
-                handler_result_ref="refresh" # This will trigger the "Refreshing..." message in the TUI loop.
+                handler_result_ref="refresh"
             else
                 _clear_list_view_footer "$(_draw_footer | wc -l)"
                 show_timed_message "${T_WARN_ICON} No models selected to update."
