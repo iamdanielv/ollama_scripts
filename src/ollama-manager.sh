@@ -25,6 +25,7 @@ show_help() {
 # --- State Variables ---
 _VIEW_MODEL_FILTER=""
 _FOOTER_EXPANDED=0
+_LIST_VIEW_OFFSET=0 # For scrolling
 
 # --- UI Drawing Functions ---
 
@@ -41,16 +42,17 @@ _draw_footer() {
 
     if [[ $_FOOTER_EXPANDED -eq 0 ]]; then
         model_actions+=" │ ${C_L_YELLOW}?${T_RESET} more options"
-        filter_line+=" │ ${C_L_YELLOW}Q/ESC${T_RESET} (Q)uit"
-        footer_content="${model_actions}\n${filter_line}"
+        filter_line+=" │ ${C_L_YELLOW}Q/ESC${T_RESET} (Q)uit${T_CLEAR_LINE}"
+        footer_content="${model_actions}${T_CLEAR_LINE}\n${filter_line}"
     else
         model_actions+=" │ ${C_L_YELLOW}?${T_RESET} fewer options"
-        filter_line+=" │ ${C_L_YELLOW}Q/ESC${T_RESET} (Q)uit"
-        local manage_actions="  ${C_L_GRAY}Ollama Manage:${T_RESET} ${C_L_BLUE}(C)onfig${T_RESET} | ${C_L_YELLOW}(S)top${T_RESET} | R(${C_L_YELLOW}e${T_RESET})start | ${C_L_GREEN}(I)nstall${T_RESET}"
-        local nav_actions="  ${C_L_GRAY}Navigation:   ${T_RESET} ${C_L_MAGENTA}↓/j${T_RESET} Move Down | ${C_L_MAGENTA}↑/k${T_RESET} Move Up | ${C_L_MAGENTA}SPACE${T_RESET} Select"
-        footer_content="${model_actions}\n${filter_line}\n${manage_actions}\n${nav_actions}"
+        filter_line+=" │ ${C_L_YELLOW}Q/ESC${T_RESET} (Q)uit${T_CLEAR_LINE}"
+        local manage_actions="  ${C_L_GRAY}Ollama Manage:${T_RESET} ${C_L_BLUE}(C)onfig${T_RESET} | ${C_L_YELLOW}(S)top${T_RESET} | R(${C_L_YELLOW}e${T_RESET})start | ${C_L_GREEN}(I)nstall${T_RESET}${T_CLEAR_LINE}"
+        local nav_actions="  ${C_L_GRAY}Navigation:   ${T_RESET} ${C_L_MAGENTA}↓/j${T_RESET} Move Down | ${C_L_MAGENTA}↑/k${T_RESET} Move Up | ${C_L_MAGENTA}SPACE${T_RESET} Select${T_CLEAR_LINE}"
+        footer_content="${model_actions}${T_CLEAR_LINE}\n${filter_line}\n${manage_actions}\n${nav_actions}"
     fi
-    echo -e "$footer_content"
+
+    printf '%b' "${footer_content}"
 }
 
 _refresh_model_data() {
@@ -58,7 +60,7 @@ _refresh_model_data() {
     local -n out_data_payloads="$2"
     local -n out_selected_options="$3"
 
-    local models_json
+    local models_json=""
     if ! models_json=$(get_ollama_models_json); then
         out_menu_options=("${T_ERR}Could not fetch models from Ollama API.${T_RESET}")
         out_data_payloads=("")
@@ -68,7 +70,7 @@ _refresh_model_data() {
     # Parse models into arrays. Sorting is done by jq.
     local -a names sizes dates formatted_sizes bg_colors pre_rendered_lines
     if ! _parse_model_data_for_menu_optimized "$models_json" "true" names sizes dates formatted_sizes bg_colors pre_rendered_lines; then
-        out_menu_options=("${C_L_YELLOW}(No local models found. Press 'A' to add one.)${T_RESET}")
+        out_menu_options=()
         out_data_payloads=("")
         return
     fi
@@ -104,6 +106,47 @@ _refresh_model_data() {
     done
 }
 
+# --- Scrolling and Viewport Logic ---
+
+_calculate_viewport_height() {
+    local footer_height
+    footer_height=$(_draw_footer | wc -l)
+    local terminal_height
+    terminal_height=$(tput lines)
+    # Calculate total static lines:
+    # 1 (banner) + 1 (header) + 1 (top divider) + 1 (bottom divider) + footer_height
+    local static_lines=$(( 4 + footer_height ))
+    echo $(( terminal_height - static_lines ))
+}
+
+_update_scroll_offset() {
+    local current_option="$1"
+    local num_options="$2"
+    local viewport_height="$3"
+
+    # Scroll down if selection moves past the bottom of the viewport
+    if (( current_option >= _LIST_VIEW_OFFSET + viewport_height )); then
+        _LIST_VIEW_OFFSET=$(( current_option - viewport_height + 1 ))
+    fi
+
+    # Scroll up if selection moves before the top of the viewport
+    if (( current_option < _LIST_VIEW_OFFSET )); then
+        _LIST_VIEW_OFFSET=$current_option
+    fi
+
+    # Don't scroll past the end of the list
+    local max_offset=$(( num_options - viewport_height ))
+    if (( max_offset < 0 )); then max_offset=0; fi # Handle lists smaller than viewport
+    if (( _LIST_VIEW_OFFSET > max_offset )); then
+        _LIST_VIEW_OFFSET=$max_offset
+    fi
+
+    # Ensure the cursor position is within the visible viewport if the list is smaller than the viewport
+    if (( num_options < viewport_height )); then
+        _LIST_VIEW_OFFSET=0
+    fi
+}
+
 # --- Action Handlers ---
 
 _handle_key_press() {
@@ -113,6 +156,7 @@ _handle_key_press() {
     local -n current_option_ref="$4"
     local -n num_options_ref="$5"
     local -n handler_result_ref="$6"
+    local viewport_height="$7"
 
     local current_model="${selected_payloads_ref[$current_option_ref]}"
 
@@ -121,12 +165,11 @@ _handle_key_press() {
             _clear_list_view_footer "$(_draw_footer | wc -l)"
             local model_to_pull
             if prompt_for_input "Name of model to pull (e.g., llama3)" model_to_pull; then
-                run_menu_action _execute_pull "$model_to_pull"
-                handler_result_ref="refresh_data"
+                run_menu_action _execute_pull "$model_to_pull" && handler_result_ref="refresh_data"
             else
-                # On cancel, prompt_for_input handles its own feedback.
-                # We just need to tell the main loop to redraw the footer.
-                handler_result_ref="redraw_footer"
+                # On cancel, prompt_for_input handles its own feedback. Redraw the view.
+                handler_result_ref="redraw"
+                _LIST_VIEW_OFFSET=0 # Reset scroll on data refresh
             fi
             ;;
         'd'|'D')
@@ -158,15 +201,14 @@ _handle_key_press() {
                 if prompt_yes_no "$question" "n"; then
                     run_menu_action _perform_model_deletions "${models_to_delete[@]}"
                     handler_result_ref="refresh_data"
+                    _LIST_VIEW_OFFSET=0 # Reset scroll on data refresh
                 else
-                    show_timed_message "${T_INFO_ICON} Delete cancelled."
-                    handler_result_ref="redraw_view" # Redraw with cached data
+                    handler_result_ref="redraw" # Redraw with cached data
                 fi
             else
                 _clear_list_view_footer "$(_draw_footer | wc -l)"
                 show_timed_message "${T_WARN_ICON} No models selected to delete."
-                # After the timed message clears itself, we need to redraw the footer.
-                handler_result_ref="redraw_footer"
+                handler_result_ref="redraw"
             fi
             ;;
         'u'|'U')
@@ -198,14 +240,14 @@ _handle_key_press() {
                 if prompt_yes_no "$question" "y"; then
                     run_menu_action _perform_model_updates "${models_to_update[@]}"
                     handler_result_ref="refresh_data"
+                    _LIST_VIEW_OFFSET=0 # Reset scroll on data refresh
                 else
-                    show_timed_message "${T_INFO_ICON} Update cancelled."
-                    handler_result_ref="redraw_view" # Redraw with cached data
+                    handler_result_ref="redraw" # Redraw with cached data
                 fi
             else
                 _clear_list_view_footer "$(_draw_footer | wc -l)"
                 show_timed_message "${T_WARN_ICON} No models selected to update."
-                handler_result_ref="redraw_footer"
+                handler_result_ref="redraw"
             fi
             ;;
         'r'|'R')
@@ -217,15 +259,16 @@ _handle_key_press() {
                     printInfoMsg "Type '/bye' to exit the model chat."
                     printMsg "${C_BLUE}${DIV}${T_RESET}"
                     ollama run "$current_model" # This takes over the terminal
+                    _LIST_VIEW_OFFSET=0 # Reset scroll on data refresh
                     handler_result_ref="refresh_data" # Full refresh after returning from model
                 else
-                    # On cancel, just tell the main loop to redraw the footer.
-                    handler_result_ref="redraw_footer"
+                    # On cancel, just tell the main loop to redraw the view.
+                    handler_result_ref="redraw"
                 fi
             else
                 _clear_list_view_footer "$(_draw_footer | wc -l)"
-                show_timed_message "${T_WARN_ICON} Cannot run 'All' models. Please select an individual model."
-                handler_result_ref="redraw_footer"
+                show_timed_message "${T_WARN_ICON} Cannot run 'All' models. Please select an individual model." "2"
+                handler_result_ref="redraw"
             fi
             ;;
         'f'|'F')
@@ -233,26 +276,31 @@ _handle_key_press() {
             local new_filter
             if prompt_for_input "Filter by name" new_filter "$_VIEW_MODEL_FILTER" "true"; then
                 _VIEW_MODEL_FILTER="$new_filter"
+                _LIST_VIEW_OFFSET=0 # Reset scroll on data refresh
                 handler_result_ref="refresh_data"
             else
-                # On cancel, prompt_for_input handles its own feedback. Redraw the footer.
-                handler_result_ref="redraw_footer"
+                # On cancel, prompt_for_input handles its own feedback. Redraw the view.
+                handler_result_ref="redraw"
             fi
             ;;
         'l'|'L')
             if [[ -n "$_VIEW_MODEL_FILTER" ]]; then
                 _VIEW_MODEL_FILTER=""
+                _LIST_VIEW_OFFSET=0 # Reset scroll on data refresh
                 handler_result_ref="refresh_data"
             fi
             ;;
         '?'|'/')
-            _handle_footer_toggle _draw_footer _FOOTER_EXPANDED
-            handler_result_ref="partial_redraw_no_clear"
+            _FOOTER_EXPANDED=$(( 1 - _FOOTER_EXPANDED ))
+            handler_result_ref="redraw"
+            # Signal to the TUI that a resize-like event occurred to force a height recalculation.
+            #_tui_resized=1
             ;;
         'c'|'C')
             if [[ $_FOOTER_EXPANDED -eq 1 ]]; then
                 run_menu_action bash "${SCRIPT_DIR}/../config-ollama.sh"
                 handler_result_ref="refresh_data"
+                _LIST_VIEW_OFFSET=0 # Reset scroll on data refresh
             fi
             ;;
         's'|'S')
@@ -260,10 +308,11 @@ _handle_key_press() {
                 _clear_list_view_footer "$(_draw_footer | wc -l)"
                 if prompt_yes_no "Are you sure you want to stop the Ollama service?" "n"; then
                     run_menu_action bash "${SCRIPT_DIR}/../stop-ollama.sh"
+                    _LIST_VIEW_OFFSET=0 # Reset scroll on data refresh
                     handler_result_ref="refresh_data"
                 else
-                    # On cancel, just tell the main loop to redraw the footer.
-                    handler_result_ref="redraw_footer"
+                    # On cancel, just tell the main loop to redraw the view.
+                    handler_result_ref="redraw"
                 fi
             fi
             ;;
@@ -272,10 +321,11 @@ _handle_key_press() {
                 _clear_list_view_footer "$(_draw_footer | wc -l)"
                 if prompt_yes_no "Are you sure you want to restart the Ollama service?" "y"; then
                     run_menu_action bash "${SCRIPT_DIR}/../restart-ollama.sh"
+                    _LIST_VIEW_OFFSET=0 # Reset scroll on data refresh
                     handler_result_ref="refresh_data"
                 else
-                    # On cancel, just tell the main loop to redraw the footer.
-                    handler_result_ref="redraw_footer"
+                    # On cancel, just tell the main loop to redraw the view.
+                    handler_result_ref="redraw"
                 fi
             fi
             ;;
@@ -284,10 +334,11 @@ _handle_key_press() {
                 _clear_list_view_footer "$(_draw_footer | wc -l)"
                 if prompt_yes_no "This will run the Ollama installer. Continue?" "y"; then
                     run_menu_action bash "${SCRIPT_DIR}/../install-ollama.sh"
+                    _LIST_VIEW_OFFSET=0 # Reset scroll on data refresh
                     handler_result_ref="refresh_data"
                 else
-                    # On cancel, just tell the main loop to redraw the footer.
-                    handler_result_ref="redraw_footer"
+                    # On cancel, just tell the main loop to redraw the view.
+                    handler_result_ref="redraw"
                 fi
             fi
             ;;
@@ -297,12 +348,34 @@ _handle_key_press() {
         ' ') # Spacebar for multi-select
             if (( num_options_ref > 0 )); then
                 _handle_multi_select_toggle "true" "$current_option_ref" "$num_options_ref" selected_indices_ref
-                handler_result_ref="partial_redraw_no_clear"
+                _update_scroll_offset "$current_option_ref" "$num_options_ref" "$viewport_height"
+                handler_result_ref="redraw"
             fi
             ;;
         *)
             handler_result_ref="noop" # Explicitly do nothing for unhandled keys
             ;;
+    esac
+
+    # After handling the key, update scroll position for navigation keys
+    case "$key" in
+        "$KEY_UP"|"k"|"$KEY_DOWN"|"j")
+            if (( num_options_ref > 0 )); then
+                _update_scroll_offset "$current_option_ref" "$num_options_ref" "$viewport_height"
+            fi
+            ;;
+        "$KEY_PGUP")
+            _LIST_VIEW_OFFSET=$((_LIST_VIEW_OFFSET - viewport_height))
+            if (( _LIST_VIEW_OFFSET < 0 )); then _LIST_VIEW_OFFSET=0; fi
+            ;;
+        "$KEY_PGDN")
+            _LIST_VIEW_OFFSET=$((_LIST_VIEW_OFFSET + viewport_height)); _update_scroll_offset "$current_option_ref" "$num_options_ref" "$viewport_height"
+            ;;
+        "$KEY_HOME")
+            _LIST_VIEW_OFFSET=0
+            ;;
+        "$KEY_END")
+            _LIST_VIEW_OFFSET=$(( num_options_ref > viewport_height ? num_options_ref - viewport_height : 0 ))
     esac
 }
 
@@ -323,6 +396,8 @@ main() {
         _draw_header \
         _refresh_model_data \
         _handle_key_press \
+        _calculate_viewport_height \
+        _LIST_VIEW_OFFSET \
         _draw_footer \
         "true" # Enable multi-select
 

@@ -66,6 +66,7 @@ export KEY_BACKSPACE=$'\x7f' # ASCII DEL character for backspace
 export KEY_HOME=$'\033[H'
 export KEY_END=$'\033[F'
 export KEY_DELETE=$'\033[3~'
+export KEY_CTRL_D=$'\x04' # ASCII End of Transmission
 #endregion Key Codes
 
 #region Logging & Banners
@@ -137,6 +138,18 @@ clear_lines_down() {
 move_cursor_up() {
     local lines=${1:-1}; if (( lines > 0 )); then for ((i = 0; i < lines; i++)); do printf '\033[1A'; done; fi; printf '\r'
 } >/dev/tty
+
+move_cursor_to() {
+    local line=${1:-1} column=${2:-1}; printf '\033[%s;%sH' "$line" "$column"
+} >/dev/tty
+
+save_cursor_pos() {
+    printf '\033[s'
+} >/dev/tty
+
+restore_cursor_pos() {
+    printf '\033[u'
+} >/dev/tty
 #endregion Terminal Control
 
 #region User Input
@@ -160,7 +173,7 @@ prompt_to_continue() {
 # Usage: show_timed_message "My message" [duration]
 show_timed_message() {
     local message="$1"
-    local duration="${2:-1.5}"
+    local duration="${2:-1.8}"
 
     # Calculate how many lines the message will take up to clear it correctly.
     # This is important for multi-line messages (e.g., from terminal wrapping).
@@ -249,38 +262,6 @@ _clear_list_view_footer() {
     local lines_to_clear=$(( footer_lines + 1 ))
     clear_lines_down "$lines_to_clear" >/dev/tty
     # The cursor is now at the start of where the footer text was, ready for new output.
-}
-
-# (Private) Handles the common keypress logic for toggling an expanded footer in a list view.
-# It assumes the cursor is at the end of the list content, before the divider.
-# It uses a nameref to modify the caller's state variable.
-# Usage: _handle_footer_toggle footer_draw_func_name expanded_state_var_name
-_handle_footer_toggle() {
-    local footer_draw_func="$1"
-    local -n is_expanded_ref="$2" # Nameref to the state variable
-
-    {
-        local old_footer_content; old_footer_content=$("$footer_draw_func") # Capture old footer
-        local old_footer_line_count; old_footer_line_count=$(echo -e "$old_footer_content" | wc -l)
-
-        # Toggle the state
-        is_expanded_ref=$(( 1 - is_expanded_ref ))
-
-        # --- Perform the partial redraw without a full refresh ---
-        # The cursor is at the end of the list, before the divider. Move down into the footer area.
-        printf '\n'
-
-        # Clear the old footer area (the footer text + the final bottom divider).
-        clear_lines_down $(( old_footer_line_count + 1 ))
-
-        # Now, print the new footer.
-        local new_footer_content; new_footer_content=$("$footer_draw_func") # Capture new footer
-        printMsg "$new_footer_content"
-
-        # Move the cursor back to where the main loop expects it (end of list).
-        local new_footer_lines; new_footer_lines=$(echo -e "$new_footer_content" | wc -l) # The +1 is for the divider we removed
-        move_cursor_up $(( new_footer_lines + 1 ))
-    } >/dev/tty
 }
 
 # (Private) Handles the logic for toggling a selection in a multi-select list.
@@ -499,7 +480,13 @@ _interactive_editor_loop() {
 script_exit_handler() { printMsgNoNewline "${T_CURSOR_SHOW}" >/dev/tty; }
 trap 'script_exit_handler' EXIT
 script_interrupt_handler() {
-    trap - INT; clear_screen; printMsg "${T_WARN_ICON} ${C_L_YELLOW}Operation cancelled by user.${T_RESET}"; exit 130
+    trap - INT # Disable the trap to prevent recursion
+    # Restore terminal state before exiting
+    printMsgNoNewline "${T_CURSOR_SHOW}" >/dev/tty
+    stty echo >/dev/tty
+    clear_screen
+    printMsg "${T_WARN_ICON} ${C_L_YELLOW}Operation cancelled by user.${T_RESET}"
+    exit 130
 }
 trap 'script_interrupt_handler' INT
 #endregion Error Handling & Traps
@@ -568,9 +555,8 @@ _draw_menu_item() {
         if [[ "$is_current" == "true" ]]; then
             # Apply highlight to the pre-formatted content.
             local highlighted_line
-            highlighted_line=$(_apply_highlight "${line_prefix}${option_text}")
+            highlighted_line=$(_apply_highlight "${line_prefix}${option_text}${T_CLEAR_LINE}")
             item_output+=$(printf "%s%s" "$prefix" "$highlighted_line")
-            item_output+=$'\n'
         else
             # For non-current items, just combine the parts.
             item_output+=$(printf "%s%s%s%s%s" \
@@ -578,7 +564,7 @@ _draw_menu_item() {
                 "$line_prefix" \
                 "$option_text" \
                 "${T_CLEAR_LINE}" \
-                "${T_RESET}")$'\n'
+                "${T_RESET}")
         fi
     fi
     output_ref+=$item_output
@@ -664,46 +650,78 @@ interactive_multi_select_menu() {
 }
 
 _interactive_list_view() {
-    local banner="$1" header_func="$2" refresh_func="$3" key_handler_func="$4" footer_func="$5" is_multi_select="${6:-false}"
+    local banner="$1" header_func="$2" refresh_func="$3" key_handler_func="$4" viewport_calc_func="$5"
+    local -n list_offset_ref="$6" # Nameref for scroll offset
+    local footer_func="$7" is_multi_select="${8:-false}"
 
     local current_option=0; local -a menu_options=(); local -a data_payloads=(); local num_options=0
-    local list_lines=0; local footer_lines=0
+    local footer_lines=0
     local -a selected_options=()
 
+    # --- Resize Handling ---
+    # Flag to signal that the terminal has been resized.
+    local _tui_resized=0
+    # Trap the WINCH signal (window change) and set the flag.
+    # The actual redraw will happen on the next key press.
+    trap '_tui_resized=1' WINCH
+
     _refresh_data() {
-        "$refresh_func" menu_options data_payloads selected_options; num_options=${#menu_options[@]}
+        "$refresh_func" menu_options data_payloads selected_options; num_options=${#data_payloads[@]}
         if (( current_option >= num_options )); then current_option=$(( num_options - 1 )); fi
         if (( current_option < 0 )); then current_option=0; fi
-        if (( num_options > 0 )); then list_lines=$(printf "%s\n" "${menu_options[@]}" | wc -l); else list_lines=1; fi
     }
     # A more advanced refresh function can also populate the selected_options array
     _refresh_data_multi() {
         "$refresh_func" menu_options data_payloads selected_options; num_options=${#menu_options[@]}
         if (( current_option >= num_options )); then current_option=$(( num_options - 1 )); fi
         if (( current_option < 0 )); then current_option=0; fi
-        if (( num_options > 0 )); then list_lines=$(printf "%s\n" "${menu_options[@]}" | wc -l); else list_lines=1; fi
     }
 
     _draw_list() {
         local list_content=""
+        local viewport_height; viewport_height=$("$viewport_calc_func")
+        local start_index=$list_offset_ref
+        local end_index=$(( list_offset_ref + viewport_height -1 ))
+        if (( end_index >= num_options )); then end_index=$(( num_options - 1 )); fi
+
         if [[ $num_options -gt 0 ]]; then
-            for i in "${!menu_options[@]}"; do
+            # Only loop through the visible items
+            for (( i=start_index; i<=end_index; i++ )); do
+                # Add newline before the item, but not for the very first one.
+                if [[ ${#list_content} -gt 0 ]]; then list_content+='\n'; fi
                 local is_current="false"; if (( i == current_option )); then is_current="true"; fi
                 local is_selected="false"; if [[ "$is_multi_select" == "true" && "${selected_options[i]}" -eq 1 ]]; then is_selected="true"; fi
                 _draw_menu_item "$is_current" "$is_selected" "$is_multi_select" "${menu_options[i]}" list_content
             done
         else
-            list_content=$(printf "  %s\n" "${C_GRAY}(No items found.)${T_CLEAR_LINE}${T_RESET}")
+            list_content+=$(printf "  %s" "${C_GRAY}(No items found. Press 'A' to add a model.)${T_CLEAR_LINE}${T_RESET}")
         fi
-        printf "%s" "$list_content"
-    }
 
-    _draw_full_view() {
-        clear_screen; printMsgNoNewline "${T_CURSOR_HIDE}" >/dev/tty; printBanner "$banner"; "$header_func"; printMsg "${C_GRAY}${DIV}${T_RESET}"; _draw_list
-        printMsg "${C_GRAY}${DIV}${T_RESET}"
+        # Directly calculate the number of lines that were just added to the list_content.
+        # This is more reliable than using `wc -l` on a string with ANSI codes.
+        local list_draw_height=$(( end_index - start_index + 1 ))
+        if (( num_options <= 0 )); then list_draw_height=1; fi # "No items" is 1 line.
+
+
+        # If the list is shorter than the viewport, add blank lines to fill the space.
+        # This prevents old content from being left behind on the screen.
+        local lines_to_fill=$(( viewport_height - list_draw_height ))
+        if (( lines_to_fill > 0 )); then
+            for ((i=0; i<lines_to_fill; i++)); do list_content+=$(printf '\n%s' "${T_CLEAR_LINE}"); done
+        fi
+
+        printf "%b" "$list_content"
+        printf "%s\n" "${C_GRAY}${DIV}${T_RESET}"
+    }
+    
+    _redraw_body() { # This is the key to smooth scrolling and updates
+        # This function redraws the list and the footer without clearing the screen.
+        # It uses absolute cursor positioning to prevent flicker.
+        local list_start_line=4 # 1 for banner, 1 for header, 1 for divider, starts on line 4
+        move_cursor_to "$list_start_line"; _draw_list >/dev/tty
         local footer_content; footer_content=$("$footer_func")
         footer_lines=$(echo -e "$footer_content" | wc -l)
-        printMsg "$footer_content"
+        printf '%b' "$footer_content"
     }
 
     # --- Initial Data Load & Draw ---
@@ -718,26 +736,42 @@ _interactive_list_view() {
     if [[ "$is_multi_select" == "true" ]]; then _refresh_data_multi; else _refresh_data; fi
 
     # Now that data is loaded, do the first full draw.
-    _draw_full_view
+    move_cursor_to 1 1
+    _redraw_body
 
-    # Position cursor at the end of the list content for the first key press.
-    local lines_below_list=$(( footer_lines + 1 ))
-    move_cursor_up "$lines_below_list"
+    # Calculate initial viewport height after the first draw.
+    local viewport_height; viewport_height=$("$viewport_calc_func")
 
     while true; do
+        # If a resize was detected, force a full redraw and recalculate height.
+        if [[ $_tui_resized -eq 1 ]]; then
+            _tui_resized=0
+            clear_screen
+            printBanner "$banner"; "$header_func"; printMsg "${C_GRAY}${DIV}${T_RESET}"
+            viewport_height=$("$viewport_calc_func")
+            _redraw_body
+        fi
+
         local key; key=$(read_single_char)
         local handler_result="noop" # Default to no action
-        local navigation_key_pressed=false # Flag for built-in navigation
 
         case "$key" in
             "$KEY_UP"|"k")
-                if (( num_options > 0 )); then current_option=$(( (current_option - 1 + num_options) % num_options )); navigation_key_pressed=true; fi
+                if (( num_options > 0 )); then current_option=$(( (current_option - 1 + num_options) % num_options )); handler_result="redraw"; fi
                 ;;
             "$KEY_DOWN"|"j")
-                if (( num_options > 0 )); then current_option=$(( (current_option + 1) % num_options )); navigation_key_pressed=true; fi
+                if (( num_options > 0 )); then current_option=$(( (current_option + 1) % num_options )); handler_result="redraw"; fi
                 ;;
             *)
-                "$key_handler_func" "$key" data_payloads selected_options current_option num_options handler_result
+                # Pass the viewport height to the key handler for its own calculations
+                "$key_handler_func" \
+                    "$key" \
+                    data_payloads \
+                    selected_options \
+                    current_option \
+                    num_options \
+                    handler_result \
+                    "$viewport_height"
                 ;;
         esac
 
@@ -753,39 +787,17 @@ _interactive_list_view() {
             printInfoMsg "Refreshing..." >/dev/tty
 
             if [[ "$is_multi_select" == "true" ]]; then _refresh_data_multi; else _refresh_data; fi
-            _draw_full_view # Redraw the entire view with the new data.
-            lines_below_list=$(( footer_lines + 1 )); move_cursor_up "$lines_below_list" # Reposition cursor.
-        elif [[ "$handler_result" == "redraw_view" ]]; then
-            # This is for a full redraw of the screen using existing (cached) data.
-            _draw_full_view
-            lines_below_list=$(( footer_lines + 1 )); move_cursor_up "$lines_below_list" # Reposition cursor.
-        elif [[ "$handler_result" == "partial_redraw_no_clear" ]]; then
-            # This is for actions that do their own drawing but don't want a full clear,
-            # like toggling the footer or a multi-select checkbox.
-            move_cursor_up "$list_lines"
-            _draw_list
-        elif [[ "$handler_result" == "redraw_footer" ]]; then
-            # This is for actions that cancel and need the footer redrawn.
-            # The prompt has left the cursor on a new line. We need to go up one line
-            # to where the list's bottom divider should be.
-            move_cursor_up 1
-            # Now clear the old footer area (footer text + bottom divider).
-            clear_lines_down $(( footer_lines + 1 ))
-            printMsg "${C_GRAY}${DIV}${T_RESET}" >/dev/tty
-            local footer_content; footer_content=$("$footer_func"); footer_lines=$(echo -e "$footer_content" | wc -l)
-            printMsg "$footer_content" >/dev/tty
-            # Move cursor back up to the end of the list content for the next loop iteration.
-            move_cursor_up $(( footer_lines + 1 ))
-        elif [[ "$handler_result" == "partial_redraw" ]]; then : # The handler already did its own drawing.
-        elif [[ "$navigation_key_pressed" == "true" ]]; then
-            # This is the default action ONLY for built-in navigation keys.
-            move_cursor_up "$list_lines"; _draw_list
+            move_cursor_to 1 1
+            _redraw_body
+        elif [[ "$handler_result" == "redraw" ]]; then
+            _redraw_body
         fi
-
-        # DEBUG: Print a marker to see where the cursor is before the next key press.
-        printf "%s" "${C_L_RED}*${T_RESET}" >/dev/tty
     done
 }
+
+# Restore default trap behavior when the script exits.
+trap - WINCH
+
 #endregion Interactive Menus
 # (Private) A wrapper for running a menu action.
 # It clears the screen, runs the function, and then prompts to continue.
