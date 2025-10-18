@@ -30,7 +30,7 @@ _LIST_VIEW_OFFSET=0 # For scrolling
 # --- UI Drawing Functions ---
 
 _draw_header() {
-    printf "    %-41s %10s   %-10s%s\n" "MODEL NAME" "SIZE" "MODIFIED" "${T_RESET}"
+    printf "    %-41s %10s   %-10s%s\n" "MODEL NAME" "SIZE" "MODIFIED" "${T_RESET}${T_CLEAR_LINE}"
 }
 
 _draw_footer() {
@@ -115,36 +115,8 @@ _calculate_viewport_height() {
     terminal_height=$(tput lines)
     # Calculate total static lines:
     # 1 (banner) + 1 (header) + 1 (top divider) + 1 (bottom divider) + footer_height
-    local static_lines=$(( 4 + footer_height ))
+    local static_lines=$(( 5 + footer_height ))
     echo $(( terminal_height - static_lines ))
-}
-
-_update_scroll_offset() {
-    local current_option="$1"
-    local num_options="$2"
-    local viewport_height="$3"
-
-    # Scroll down if selection moves past the bottom of the viewport
-    if (( current_option >= _LIST_VIEW_OFFSET + viewport_height )); then
-        _LIST_VIEW_OFFSET=$(( current_option - viewport_height + 1 ))
-    fi
-
-    # Scroll up if selection moves before the top of the viewport
-    if (( current_option < _LIST_VIEW_OFFSET )); then
-        _LIST_VIEW_OFFSET=$current_option
-    fi
-
-    # Don't scroll past the end of the list
-    local max_offset=$(( num_options - viewport_height ))
-    if (( max_offset < 0 )); then max_offset=0; fi # Handle lists smaller than viewport
-    if (( _LIST_VIEW_OFFSET > max_offset )); then
-        _LIST_VIEW_OFFSET=$max_offset
-    fi
-
-    # Ensure the cursor position is within the visible viewport if the list is smaller than the viewport
-    if (( num_options < viewport_height )); then
-        _LIST_VIEW_OFFSET=0
-    fi
 }
 
 # --- Action Handlers ---
@@ -156,7 +128,6 @@ _handle_key_press() {
     local -n current_option_ref="$4"
     local -n num_options_ref="$5"
     local -n handler_result_ref="$6"
-    local viewport_height="$7"
 
     local current_model="${selected_payloads_ref[$current_option_ref]}"
 
@@ -292,9 +263,7 @@ _handle_key_press() {
             ;;
         '?'|'/')
             _FOOTER_EXPANDED=$(( 1 - _FOOTER_EXPANDED ))
-            handler_result_ref="redraw"
-            # Signal to the TUI that a resize-like event occurred to force a height recalculation.
-            #_tui_resized=1
+            handler_result_ref="recalculate_viewport"
             ;;
         'c'|'C')
             if [[ $_FOOTER_EXPANDED -eq 1 ]]; then
@@ -348,34 +317,12 @@ _handle_key_press() {
         ' ') # Spacebar for multi-select
             if (( num_options_ref > 0 )); then
                 _handle_multi_select_toggle "true" "$current_option_ref" "$num_options_ref" selected_indices_ref
-                _update_scroll_offset "$current_option_ref" "$num_options_ref" "$viewport_height"
                 handler_result_ref="redraw"
             fi
             ;;
         *)
             handler_result_ref="noop" # Explicitly do nothing for unhandled keys
             ;;
-    esac
-
-    # After handling the key, update scroll position for navigation keys
-    case "$key" in
-        "$KEY_UP"|"k"|"$KEY_DOWN"|"j")
-            if (( num_options_ref > 0 )); then
-                _update_scroll_offset "$current_option_ref" "$num_options_ref" "$viewport_height"
-            fi
-            ;;
-        "$KEY_PGUP")
-            _LIST_VIEW_OFFSET=$((_LIST_VIEW_OFFSET - viewport_height))
-            if (( _LIST_VIEW_OFFSET < 0 )); then _LIST_VIEW_OFFSET=0; fi
-            ;;
-        "$KEY_PGDN")
-            _LIST_VIEW_OFFSET=$((_LIST_VIEW_OFFSET + viewport_height)); _update_scroll_offset "$current_option_ref" "$num_options_ref" "$viewport_height"
-            ;;
-        "$KEY_HOME")
-            _LIST_VIEW_OFFSET=0
-            ;;
-        "$KEY_END")
-            _LIST_VIEW_OFFSET=$(( num_options_ref > viewport_height ? num_options_ref - viewport_height : 0 ))
     esac
 }
 

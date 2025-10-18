@@ -654,11 +654,12 @@ _interactive_list_view() {
     local -n list_offset_ref="$6" # Nameref for scroll offset
     local footer_func="$7" is_multi_select="${8:-false}"
 
-    local current_option=0; local -a menu_options=(); local -a data_payloads=(); local num_options=0
-    local footer_lines=0
+    local current_option=0; local -a menu_options=(); local -a data_payloads=()
+    local num_options=0; local viewport_height=0
     local -a selected_options=()
 
-    # --- Resize Handling ---
+    # --- Resize Handling & State ---
+    local _tui_is_loading=true # Add a loading state flag
     # Flag to signal that the terminal has been resized.
     local _tui_resized=0
     # Trap the WINCH signal (window change) and set the flag.
@@ -666,10 +667,12 @@ _interactive_list_view() {
     trap '_tui_resized=1' WINCH
 
     _refresh_data() {
-        "$refresh_func" menu_options data_payloads selected_options; num_options=${#data_payloads[@]}
+        "$refresh_func" menu_options data_payloads selected_options
+        num_options=${#data_payloads[@]}
         if (( current_option >= num_options )); then current_option=$(( num_options - 1 )); fi
         if (( current_option < 0 )); then current_option=0; fi
     }
+
     # A more advanced refresh function can also populate the selected_options array
     _refresh_data_multi() {
         "$refresh_func" menu_options data_payloads selected_options; num_options=${#menu_options[@]}
@@ -677,24 +680,47 @@ _interactive_list_view() {
         if (( current_option < 0 )); then current_option=0; fi
     }
 
+    _update_scroll_offset() {
+        # Scroll down if selection moves past the bottom of the viewport
+        if (( current_option >= list_offset_ref + viewport_height )); then
+            list_offset_ref=$(( current_option - viewport_height + 1 ))
+        fi
+        # Scroll up if selection moves before the top of the viewport
+        if (( current_option < list_offset_ref )); then
+            list_offset_ref=$current_option
+        fi
+        # Don't scroll past the end of the list
+        local max_offset=$(( num_options - viewport_height ))
+        if (( max_offset < 0 )); then max_offset=0; fi # Handle lists smaller than viewport
+        if (( list_offset_ref > max_offset )); then
+            list_offset_ref=$max_offset
+        fi
+        # Ensure offset is 0 if list is smaller than viewport
+        if (( num_options < viewport_height )); then list_offset_ref=0; fi
+    }
+
     _draw_list() {
         local list_content=""
-        local viewport_height; viewport_height=$("$viewport_calc_func")
         local start_index=$list_offset_ref
-        local end_index=$(( list_offset_ref + viewport_height -1 ))
+        local end_index=$(( list_offset_ref + viewport_height - 1 ))
         if (( end_index >= num_options )); then end_index=$(( num_options - 1 )); fi
 
         if [[ $num_options -gt 0 ]]; then
             # Only loop through the visible items
             for (( i=start_index; i<=end_index; i++ )); do
-                # Add newline before the item, but not for the very first one.
+                # Add newline before the item, but not for the very first one in the viewport.
+                # The check should be against start_index, not just i > 0.
                 if [[ ${#list_content} -gt 0 ]]; then list_content+='\n'; fi
                 local is_current="false"; if (( i == current_option )); then is_current="true"; fi
                 local is_selected="false"; if [[ "$is_multi_select" == "true" && "${selected_options[i]}" -eq 1 ]]; then is_selected="true"; fi
                 _draw_menu_item "$is_current" "$is_selected" "$is_multi_select" "${menu_options[i]}" list_content
             done
         else
-            list_content+=$(printf "  %s" "${C_GRAY}(No items found. Press 'A' to add a model.)${T_CLEAR_LINE}${T_RESET}")
+            if [[ "$_tui_is_loading" != "true" ]]; then
+                list_content+=$(printf "  %s" "${C_GRAY}(No items found. Press 'A' to add a model.)${T_CLEAR_LINE}${T_RESET}")
+            else
+                list_content+=$(printf "  %s" "${C_YELLOW}(Loading...)${T_CLEAR_LINE}${T_RESET}")
+            fi
         fi
 
         # Directly calculate the number of lines that were just added to the list_content.
@@ -711,57 +737,61 @@ _interactive_list_view() {
         fi
 
         printf "%b" "$list_content"
-        printf "%s\n" "${C_GRAY}${DIV}${T_RESET}"
     }
     
-    _redraw_body() { # This is the key to smooth scrolling and updates
-        # This function redraws the list and the footer without clearing the screen.
-        # It uses absolute cursor positioning to prevent flicker.
-        local list_start_line=4 # 1 for banner, 1 for header, 1 for divider, starts on line 4
-        move_cursor_to "$list_start_line"; _draw_list >/dev/tty
+    _redraw_all() {
+        # Double-buffering approach to eliminate flicker.
+        # 1. Build the entire screen content in a single variable.
+        local screen_buffer=""
+        screen_buffer+=$(generate_banner_string "$banner")
+        screen_buffer+=$'\n' # Add the newline the layout calculation expects
+        screen_buffer+=$("$header_func")
+        screen_buffer+='\n'
+        screen_buffer+="${C_GRAY}${DIV}${T_RESET}\n"
+        screen_buffer+=$(_draw_list)
+        screen_buffer+="\n${C_GRAY}${DIV}${T_RESET}" # Moved divider from _draw_list
+
         local footer_content; footer_content=$("$footer_func")
-        footer_lines=$(echo -e "$footer_content" | wc -l)
-        printf '%b' "$footer_content"
+        screen_buffer+="\n$footer_content"
+
+        # 2. Move cursor to home and print the entire buffer in one go.
+        # This is the key to a flicker-free update.
+        printf '\033[H%b' "$screen_buffer"
     }
 
     # --- Initial Data Load & Draw ---
-    # Perform the first data refresh and a full draw before entering the interactive loop.
-    clear_screen
     printMsgNoNewline "${T_CURSOR_HIDE}" >/dev/tty
-    printBanner "$banner"
-    "$header_func"
-    printMsg "${C_GRAY}${DIV}${T_RESET}"
-    printInfoMsg "Loading..." >/dev/tty
+    _redraw_all # Draw skeleton UI. _tui_is_loading is true, so list is empty.
+    #printInfoMsg "Loading..." >/dev/tty # Show loading message over it
 
+    # Load initial data
     if [[ "$is_multi_select" == "true" ]]; then _refresh_data_multi; else _refresh_data; fi
-
-    # Now that data is loaded, do the first full draw.
-    move_cursor_to 1 1
-    _redraw_body
-
-    # Calculate initial viewport height after the first draw.
-    local viewport_height; viewport_height=$("$viewport_calc_func")
+    _tui_is_loading=false # Mark loading as complete
+    viewport_height=$("$viewport_calc_func")
+    _redraw_all # Redraw with actual data
 
     while true; do
         # If a resize was detected, force a full redraw and recalculate height.
         if [[ $_tui_resized -eq 1 ]]; then
             _tui_resized=0
-            clear_screen
-            printBanner "$banner"; "$header_func"; printMsg "${C_GRAY}${DIV}${T_RESET}"
             viewport_height=$("$viewport_calc_func")
-            _redraw_body
+            _redraw_all
         fi
 
         local key; key=$(read_single_char)
         local handler_result="noop" # Default to no action
 
         case "$key" in
-            "$KEY_UP"|"k")
-                if (( num_options > 0 )); then current_option=$(( (current_option - 1 + num_options) % num_options )); handler_result="redraw"; fi
-                ;;
-            "$KEY_DOWN"|"j")
-                if (( num_options > 0 )); then current_option=$(( (current_option + 1) % num_options )); handler_result="redraw"; fi
-                ;;
+            "$KEY_UP"|"k") if (( num_options > 0 )); then current_option=$(( (current_option - 1 + num_options) % num_options )); handler_result="redraw"; fi ;;
+            "$KEY_DOWN"|"j") if (( num_options > 0 )); then current_option=$(( (current_option + 1) % num_options )); handler_result="redraw"; fi ;;
+            "$KEY_PGUP")
+                if (( num_options > 0 )); then current_option=$(( current_option - viewport_height )); if (( current_option < 0 )); then current_option=0; fi; handler_result="redraw"; fi ;;
+            "$KEY_PGDN")
+                if (( num_options > 0 )); then current_option=$(( current_option + viewport_height )); if (( current_option >= num_options )); then current_option=$(( num_options - 1 )); fi; handler_result="redraw"; fi ;;
+            "$KEY_HOME")
+                if (( num_options > 0 )); then current_option=0; handler_result="redraw"; fi ;;
+            "$KEY_END")
+                if (( num_options > 0 )); then current_option=$(( num_options - 1 )); handler_result="redraw"; fi ;;
             *)
                 # Pass the viewport height to the key handler for its own calculations
                 "$key_handler_func" \
@@ -770,27 +800,25 @@ _interactive_list_view() {
                     selected_options \
                     current_option \
                     num_options \
-                    handler_result \
-                    "$viewport_height"
+                    handler_result
                 ;;
         esac
 
         if [[ "$handler_result" == "exit" ]]; then break
 
         elif [[ "$handler_result" == "refresh_data" ]]; then
-            # For subsequent refreshes, follow the same pattern as initial startup:
-            # show the skeleton UI with a loading message.
-            clear_screen
-            printBanner "$banner"
-            "$header_func"
-            printMsg "${C_GRAY}${DIV}${T_RESET}"
+            _redraw_all
             printInfoMsg "Refreshing..." >/dev/tty
-
             if [[ "$is_multi_select" == "true" ]]; then _refresh_data_multi; else _refresh_data; fi
-            move_cursor_to 1 1
-            _redraw_body
+            viewport_height=$("$viewport_calc_func") # Recalculate in case footer changed
+            _redraw_all
         elif [[ "$handler_result" == "redraw" ]]; then
-            _redraw_body
+            _update_scroll_offset
+            _redraw_all
+        elif [[ "$handler_result" == "recalculate_viewport" ]]; then
+            viewport_height=$("$viewport_calc_func")
+            _update_scroll_offset
+            _redraw_all
         fi
     done
 }
