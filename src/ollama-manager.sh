@@ -157,6 +157,7 @@ _handle_key_press() {
             fi
 
             if [[ ${#models_to_delete[@]} -gt 0 ]]; then
+                clear_screen
                 printBanner "Delete Models"
                 local question="Are you sure you want to delete ${#models_to_delete[@]} model(s):\n ${C_L_RED}${models_to_delete[*]}${T_RESET}?"
                 if prompt_yes_no "$question" "n"; then
@@ -191,6 +192,7 @@ _handle_key_press() {
             fi
 
             if [[ ${#models_to_update[@]} -gt 0 ]]; then
+                clear_screen
                 printBanner "Update Models"
                 local question="Are you sure you want to update ${#models_to_update[@]} model(s):\n ${C_L_MAGENTA}${models_to_update[*]}${T_RESET}?"
                 if prompt_yes_no "$question" "y"; then
