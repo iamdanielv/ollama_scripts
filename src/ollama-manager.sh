@@ -25,7 +25,7 @@ _LIST_VIEW_OFFSET=0 # For scrolling
 # --- UI Drawing Functions ---
 
 _draw_header() {
-    printf "    %-41s %10s   %-10s%s\n" "MODEL NAME" "SIZE" "MODIFIED" "${T_RESET}${T_CLEAR_LINE}"
+    printf "     %-41s %10s  %-10s%s\n" "MODEL NAME" "SIZE" "MODIFIED" "${T_RESET}${T_CLEAR_LINE}"
 }
 
 _draw_footer() {

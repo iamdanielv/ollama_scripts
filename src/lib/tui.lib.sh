@@ -524,11 +524,11 @@ _get_menu_item_prefix() {
         pointer="${T_BOLD}${C_L_MAGENTA}❯${T_FG_RESET}"
     fi
 
-    local checkbox=" " # One space for alignment in single-select mode
+    local checkbox="   " # One space for alignment in single-select mode
     if [[ "$is_multi_select" == "true" ]]; then
-        checkbox="_" # Default unchecked state
+        checkbox="[ ]" # Default unchecked state
         if [[ "$is_selected" == "true" ]]; then
-            checkbox="${T_BOLD}${C_GREEN}✓${T_FG_RESET}"
+            checkbox="${T_BOLD}${C_GREEN}[✓]${T_FG_RESET}"
         fi
     fi
 

@@ -212,7 +212,7 @@ _parse_model_data_for_menu() {
 
     if [[ "$include_all" == "true" ]]; then
         out_names+=("All")
-        local all_line; all_line=$(_format_fixed_width_string " ${C_L_YELLOW}All Models${T_RESET}" 67)
+        local all_line; all_line=$(_format_fixed_width_string " ${C_L_YELLOW}All Models${T_RESET}" 65)
         out_lines+=("$all_line")
     fi
 
@@ -247,7 +247,7 @@ _parse_model_data_for_menu() {
 
         # Pre-render the line for the menu
         local unformatted_line
-        unformatted_line=$(printf " %-41s ${size_color}%10s ${T_RESET} ${C_MAGENTA} %-10s ${T_RESET}" "$name" "$formatted_size" "$formatted_date")
+        unformatted_line=$(printf "%-41s ${size_color}%10s ${T_RESET} ${C_MAGENTA} %-10s ${T_RESET}" "$name" "$formatted_size" "$formatted_date")
         # Perform the expensive fixed-width formatting here, once per refresh.
         out_lines+=("$(_format_fixed_width_string "$unformatted_line" 67)")
 
@@ -283,7 +283,7 @@ _parse_model_data_for_menu_optimized() {
     if [[ "$include_all" == "true" ]]; then
         out_names+=("All")
         # Manually format the "All" line to the correct width
-        local all_line; all_line=$(printf " ${C_L_YELLOW}%-66s${T_RESET}" "All Models")
+        local all_line; all_line=$(printf "${C_L_YELLOW}%-65s${T_RESET}" "All Models")
         out_lines+=("$all_line")
     fi
 
@@ -305,7 +305,7 @@ _parse_model_data_for_menu_optimized() {
         local truncated_name; truncated_name=$(printf "%.40s" "$name"); if [[ ${#name} -gt 40 ]]; then truncated_name+="…"; fi
 
         # Use a single, optimized printf call. No more _format_fixed_width_string.
-        out_lines+=("$(printf " %-41s ${size_color}%10s ${T_RESET} ${C_MAGENTA} %-10s ${T_RESET}" "$truncated_name" "$formatted_size" "$formatted_date")")
+        out_lines+=("$(printf "%-41s ${size_color}%10s ${T_RESET}${C_MAGENTA} %-10s ${T_RESET}" "$truncated_name" "$formatted_size" "$formatted_date")")
     done <<< "$sorted_json"
 
     return 0
