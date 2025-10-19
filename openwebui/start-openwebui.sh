@@ -3,15 +3,15 @@
 # Start OpenWebUI using docker compose in detached mode
 
 # --- Source the shared libraries ---
-# shellcheck source=../shared.sh
-if ! source "$(dirname "$0")/../shared.sh"; then
-    echo "Error: Could not source shared.sh. Make sure it's in the parent directory." >&2
+# shellcheck source=../src/lib/shared.lib.sh
+if ! source "$(dirname "$0")/../src/lib/shared.lib.sh"; then
+    echo "Error: Could not source shared.lib.sh. Make sure it's in the '../src/lib' directory." >&2
     exit 1
 fi
 
-# shellcheck source=../ollama-helpers.sh
-if ! source "$(dirname "$0")/../ollama-helpers.sh"; then
-    echo "Error: Could not source ollama-helpers.sh. Make sure it's in the parent directory." >&2
+# shellcheck source=../src/lib/ollama.lib.sh
+if ! source "$(dirname "$0")/../src/lib/ollama.lib.sh"; then
+    echo "Error: Could not source ollama.lib.sh. Make sure it's in the '../src/lib' directory." >&2
     exit 1
 fi
 
@@ -62,7 +62,7 @@ main() {
     if ! poll_service "$ollama_url" "Ollama" 10; then
         printErrMsg "Ollama service is not responding at ${ollama_url}."
         printMsg "    ${T_INFO_ICON} Please ensure Ollama is running before starting OpenWebUI."
-        printMsg "    ${T_INFO_ICON} You can try running: ${C_L_BLUE}../restart-ollama.sh${T_RESET}"
+        printMsg "    ${T_INFO_ICON} You can try running: ${C_L_BLUE}../src/restart-ollama.sh${T_RESET}"
         exit 1
     fi
     # The success message is already printed by poll_service.
@@ -77,7 +77,7 @@ main() {
         if ! check_network_exposure; then
             printMsg "    ${T_WARN_ICON} ${C_L_YELLOW}Warning: Ollama is only listening on localhost.${T_RESET}"
             printMsg "    ${T_INFO_ICON} OpenWebUI (in Docker) may not be able to connect to it."
-            printMsg "    ${T_INFO_ICON} If you have issues, run ${C_L_BLUE}../config-ollama-net.sh${T_RESET} to expose Ollama."
+            printMsg "    ${T_INFO_ICON} If you have issues, run ${C_L_BLUE}../src/config-ollama.sh --expose${T_RESET} to expose Ollama."
         else
             printMsg "    ${T_OK_ICON} Ollama is exposed to the network."
         fi

@@ -816,40 +816,6 @@ show_logs_and_exit() {
     exit 1
 }
 
-# Polls a given URL until it gets a successful HTTP response or times out.
-# Usage: poll_service <url> <service_name> [timeout_seconds]
-poll_service() {
-    local url="$1"
-    local service_name="$2"
-    # The number of tries is based on the timeout in seconds.
-    # We poll once per second.
-    local tries=${3:-10} # Default to 10 tries (10 seconds)
-
-    local desc="Waiting for ${service_name} to respond at ${url}"
-
-    # We need to run the loop in a subshell so that `run_with_spinner` can treat it
-    # as a single command. The subshell will exit with 0 on success and 1 on failure.
-    # We pass 'url' and 'tries' as arguments to the subshell to avoid quoting issues.
-    if run_with_spinner "${desc}" bash -c '
-        url="$1"
-        tries="$2"
-        for ((j=0; j<tries; j++)); do
-            # Use a short connect timeout for each attempt
-            if curl --silent --fail --head --connect-timeout 2 "$url" &>/dev/null; then
-                exit 0 # Success
-            fi
-            sleep 1
-        done
-        exit 1 # Failure
-    ' -- "$url" "$tries"; then
-        clear_lines_up 1
-        return 0
-    else
-        printErrMsg "${service_name} is not responding at ${url}"
-        return 1
-    fi
-}
-
 # Checks if an endpoint is responsive without writing to terminal
 # Returns 0 on success, 1 on failure.
 # Usage: check_endpoint_status <url> [timeout_seconds]

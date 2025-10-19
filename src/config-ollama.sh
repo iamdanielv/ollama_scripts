@@ -19,15 +19,9 @@
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 
 # Source common utilities for colors and functions
-# shellcheck source=./shared.sh
-if ! source "${SCRIPT_DIR}/shared.sh"; then
-    echo "Error: Could not source shared.sh. Make sure it's in the same directory." >&2
-    exit 1
-fi
-
-# shellcheck source=./ollama-helpers.sh
-if ! source "${SCRIPT_DIR}/ollama-helpers.sh"; then
-    echo "Error: Could not source ollama-helpers.sh. Make sure it's in the same directory." >&2
+# shellcheck source=./lib/ollama.lib.sh
+if ! source "${SCRIPT_DIR}/lib/ollama.lib.sh"; then
+    echo "Error: Could not source ollama.lib.sh. Make sure it's in the 'src/lib' directory." >&2
     exit 1
 fi
 

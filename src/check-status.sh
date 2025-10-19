@@ -6,42 +6,11 @@
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 
 # Source common utilities for colors and functions
-# shellcheck source=./shared.sh
-if ! source "${SCRIPT_DIR}/shared.sh"; then
-    echo "Error: Could not source shared.sh. Make sure it's in the same directory." >&2
+# shellcheck source=./lib/ollama.lib.sh
+if ! source "${SCRIPT_DIR}/lib/ollama.lib.sh"; then
+    echo "Error: Could not source ollama.lib.sh. Make sure it's in the 'src/lib' directory." >&2
     exit 1
 fi
-
-# shellcheck source=./ollama-helpers.sh
-if ! source "${SCRIPT_DIR}/ollama-helpers.sh"; then
-    echo "Error: Could not source ollama-helpers.sh. Make sure it's in the same directory." >&2
-    exit 1
-fi
-
-show_help() {
-    printBanner "Ollama & OpenWebUI Status Checker"
-    printMsg "Checks the status of the Ollama service and OpenWebUI containers."
-    printMsg "It can also list installed models or watch loaded models in real-time."
-
-    printMsg "\n${T_ULINE}Usage:${T_RESET}"
-    printMsg "  $(basename "$0") [-m | -w | -h]"
-
-    printMsg "\n${T_ULINE}Options:${T_RESET}"
-    printMsg "  ${C_L_BLUE}-m, --models${T_RESET}   List all installed Ollama models."
-    printMsg "  ${C_L_BLUE}-w, --watch${T_RESET}    Watch currently loaded models, updating every second."
-    printMsg "  ${C_L_BLUE}-h, --help${T_RESET}      Shows this help message."
-    printMsg "  ${C_L_BLUE}-t, --test${T_RESET}      Run internal self-tests for script logic."
-
-    printMsg "\n${T_ULINE}Examples:${T_RESET}"
-    printMsg "  ${C_GRAY}# Run the standard status check${T_RESET}"
-    printMsg "  $(basename "$0")"
-    printMsg "  ${C_GRAY}# List installed models${T_RESET}"
-    printMsg "  $(basename "$0") --models"
-    printMsg "  ${C_GRAY}# Watch loaded models in real-time${T_RESET}"
-    printMsg "  $(basename "$0") --watch"
-    printMsg "  ${C_GRAY}# Run internal script tests${T_RESET}"
-    printMsg "  $(basename "$0") --test"
-}
 
 # Formats the raw JSON from the /api/ps endpoint into a human-readable table.
 # This function is separated from the watch loop to make it testable.

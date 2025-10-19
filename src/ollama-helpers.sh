@@ -7,7 +7,14 @@
 #
 # It should be sourced by any script that needs to manage Ollama,
 # after sourcing the main 'shared.sh' library.
-#
+
+# Source the TUI library which contains spinners, prompts, etc.
+# shellcheck source=./lib/tui.lib.sh
+if ! source "$(dirname "${BASH_SOURCE[0]}")/lib/tui.lib.sh"; then
+    echo "Error: Could not source tui.lib.sh. Make sure it's in the 'src/lib' directory." >&2
+    exit 1
+fi
+
 
 # --- Ollama Service Helpers ---
 # Variable to cache result of install check.

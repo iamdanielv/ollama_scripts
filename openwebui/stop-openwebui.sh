@@ -3,15 +3,15 @@
 # Stop OpenWebUI using docker compose
 
 # --- Source the shared libraries ---
-# shellcheck source=../shared.sh
-if ! source "$(dirname "$0")/../shared.sh"; then
-    echo "Error: Could not source shared.sh. Make sure it's in the parent directory." >&2
+# shellcheck source=../src/lib/shared.lib.sh
+if ! source "$(dirname "$0")/../src/lib/shared.lib.sh"; then
+    echo "Error: Could not source shared.lib.sh. Make sure it's in the '../src/lib' directory." >&2
     exit 1
 fi
 
-# shellcheck source=../ollama-helpers.sh
-if ! source "$(dirname "$0")/../ollama-helpers.sh"; then
-    echo "Error: Could not source ollama-helpers.sh. Make sure it's in the parent directory." >&2
+# shellcheck source=../src/lib/ollama.lib.sh
+if ! source "$(dirname "$0")/../src/lib/ollama.lib.sh"; then
+    echo "Error: Could not source ollama.lib.sh. Make sure it's in the '../src/lib' directory." >&2
     exit 1
 fi
 

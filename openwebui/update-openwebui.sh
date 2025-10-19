@@ -3,15 +3,15 @@
 # Pull the latest OpenWebUI images and restarts the service if new images are found
 
 # --- Source the shared libraries ---
-# shellcheck source=../shared.sh
-if ! source "$(dirname "$0")/../shared.sh"; then
-    echo "Error: Could not source shared.sh. Make sure it's in the parent directory." >&2
+# shellcheck source=../src/lib/shared.lib.sh
+if ! source "$(dirname "$0")/../src/lib/shared.lib.sh"; then
+    echo "Error: Could not source shared.lib.sh. Make sure it's in the '../src/lib' directory." >&2
     exit 1
 fi
 
-# shellcheck source=./ollama-helpers.sh
-if ! source "$(dirname "$0")/../ollama-helpers.sh"; then
-    echo "Error: Could not source ollama-helpers.sh. Make sure it's in the parent directory." >&2
+# shellcheck source=../src/lib/ollama.lib.sh
+if ! source "$(dirname "$0")/../src/lib/ollama.lib.sh"; then
+    echo "Error: Could not source ollama.lib.sh. Make sure it's in the '../src/lib' directory." >&2
     exit 1
 fi
 
@@ -127,7 +127,7 @@ update_logic() {
 
     printOkMsg "New OpenWebUI images have been downloaded."
     if ! prompt_yes_no "Do you want to restart the OpenWebUI service to apply the updates?" "y"; then
-        printInfoMsg "Update cancelled. Run './openwebui/start-openwebui.sh' later to apply the changes."
+        printInfoMsg "Update cancelled. Run './start-openwebui.sh' later to apply the changes."
         return 0
     fi
 

@@ -4,14 +4,9 @@
 
 # --- Source shared libraries ---
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
-# shellcheck source=./shared.sh
-if ! source "${SCRIPT_DIR}/shared.sh"; then
-    echo "Error: Could not source shared.sh." >&2
-    exit 1
-fi
-# shellcheck source=./ollama-helpers.sh
-if ! source "${SCRIPT_DIR}/ollama-helpers.sh"; then
-    echo "Error: Could not source ollama-helpers.sh." >&2
+# shellcheck source=./lib/ollama.lib.sh
+if ! source "${SCRIPT_DIR}/lib/ollama.lib.sh"; then
+    echo "Error: Could not source ollama.lib.sh. Make sure it's in the 'src/lib' directory." >&2
     exit 1
 fi
 
@@ -355,7 +350,7 @@ run_diagnostics() {
                     else
                         printMsg "${C_RED}Failed${T_RESET}"
                         printMsg "      ${C_GRAY}This is a common issue. It can mean Ollama is not configured for network access"
-                        printMsg "      ${C_GRAY}or a firewall is blocking the connection. Try running: ${C_L_BLUE}./config-ollama.sh --expose${T_RESET}"
+                        printMsg "      ${C_GRAY}or a firewall is blocking the connection. Try running: ${C_L_BLUE}./src/config-ollama.sh --expose${T_RESET}"
                     fi
                 fi
             fi

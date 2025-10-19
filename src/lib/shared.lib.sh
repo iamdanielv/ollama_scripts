@@ -1,15 +1,13 @@
 #!/bin/bash
 
-# Source the TUI library which contains all shared visual/interactive functions.
+# Source the TUI library which contains all shared visual/interactive functions
 # This ensures that colors, key codes, prompts, and spinners are consistent.
-TUI_LIB_PATH="$(dirname "${BASH_SOURCE[0]}")/tui.lib.sh"
-if [[ ! -f "$TUI_LIB_PATH" ]]; then
-    # Use raw echo for fatal errors in case TUI functions aren't available.
-    echo "FATAL: TUI library not found at: $TUI_LIB_PATH" >&2
+# shellcheck source=src/lib/tui.lib.sh
+if ! source "$(dirname "${BASH_SOURCE[0]}")/tui.lib.sh"; then
+    # Use raw echo for fatal errors in case TUI/shared functions aren't available.
+    echo "FATAL: TUI library not found." >&2
     exit 1
 fi
-# shellcheck source=src/lib/tui.lib.sh
-source "$TUI_LIB_PATH"
 
 # --- Banner Control ---
 # This logic helps determine if a script is being called by another script in this project.
@@ -17,7 +15,7 @@ source "$TUI_LIB_PATH"
 # Any script *executed* by that first script will run in a new shell, which will have a
 # higher SHLVL. This allows us to print a simpler banner for nested script calls.
 # Note: This banner logic is distinct from the TUI library's banner.
-if [[ -z "$SCRIPT_EXEC_ENTRY_SHLVL" ]]; then
+if [[ -z "${SCRIPT_EXEC_ENTRY_SHLVL:-}" ]]; then
     export SCRIPT_EXEC_ENTRY_SHLVL=$SHLVL
 fi
 
@@ -442,6 +440,21 @@ show_logs_and_exit() {
         printMsg "    ${T_WARN_ICON} 'journalctl' not found. Cannot display logs."
     fi
     exit 1
+}
+
+# Checks if an endpoint is responsive without writing to terminal
+# Returns 0 on success, 1 on failure.
+# Usage: check_endpoint_status <url> [timeout_seconds]
+check_endpoint_status() {
+    local url="$1"
+    local timeout=${2:-5} # A shorter default timeout is fine for a status check.
+    # Use --connect-timeout to fail fast if the port isn't open.
+    # Use --max-time for the total operation.
+    if curl --silent --fail --head --connect-timeout 2 --max-time "$timeout" "$url" &>/dev/null; then
+        return 0 # Success
+    else
+        return 1 # Failure
+    fi
 }
 # --- OpenWebUI Helpers ---
 

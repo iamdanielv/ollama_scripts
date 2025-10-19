@@ -2,14 +2,14 @@
 
 ## Overview
 
-This repository provides a set of simple shell scripts to install, manage, and run Ollama and OpenWebUI on a Linux system with `systemd`.
+This repository provides a set of shell scripts to install, manage, and run Ollama and OpenWebUI on a Linux system with `systemd`, centered around a unified, interactive TUI.
 
 These scripts provide a user-friendly way to:
 
-1. 📦 Install/update Ollama  
-2. 🌐 Configure network access (localhost vs. network)  
-3. ▶️⏸️ Manage the OpenWebUI service (start/stop/update)  
-4. 🛠️ Check system status and troubleshoot issues  
+1. 📦 Interactively manage local models (add, delete, update, run).
+2. ⚙️ Manage the Ollama service (start, stop, restart, configure).
+3. 🌐 Manage the OpenWebUI service (start, stop, update).
+4. 🩺 Check system status and troubleshoot issues.
 
 ---
 
@@ -17,23 +17,26 @@ These scripts provide a user-friendly way to:
 
 ```shell
 .
-├── shared.sh                 # 🛠️ Common utility functions, colors, and error handling  
-├── ollama-helpers.sh         # 🤖 Helper functions specific to Ollama (API, service checks)
-├── install-ollama.sh         # 📦 Installs or updates Ollama with version checking
-├── config-ollama.sh          # ⚙️ Unified script to configure network and advanced settings
-├── restart-ollama.sh         # 🔄 Restarts Ollama service after system wake/sleep issues  
-├── manage-models.sh          # ⚙️ Interactively pull, delete, and manage models
-├── run-model.sh              # ▶️ Interactively select and run a local model
-├── stop-ollama.sh            # 🛑 Stops the Ollama service cleanly  
-├── logs-ollama.sh            # 📜 View Ollama service logs via journalctl  
-├── check-status.sh           # 🔄 Checks status of services and lists installed models  
-├── test-all.sh               # 🧪 Runs all script self-tests
-├── diagnose.sh               # 🩺 Generates diagnostic report for troubleshooting
-└── openwebui/                # 🌐 OpenWebUI management scripts and configuration files  
-    ├── start-openwebui.sh  # ⚡ Starts the OpenWebUI service  
-    ├── stop-openwebui.sh   # 🛑 Stops the OpenWebUI service  
-    ├── update-openwebui.sh # ⬆️ Updates OpenWebUI container images  
-    └── docker-compose.yaml # 📁 Docker Compose configuration for OpenWebUI  
+├── src/
+│   ├── ollama-manager.sh     # 🚀 Main interactive TUI for managing Ollama
+│   ├── install-ollama.sh     # 📦 Installs or updates Ollama with version checking
+│   ├── config-ollama.sh      # ⚙️ Unified script to configure network and advanced settings
+│   ├── restart-ollama.sh     # 🔄 Restarts Ollama service after system wake/sleep issues
+│   ├── stop-ollama.sh        # 🛑 Stops the Ollama service cleanly
+│   ├── logs-ollama.sh        # 📜 View Ollama service logs via journalctl
+│   ├── check-status.sh       # 🔄 Checks status of services and lists installed models
+│   ├── test-all.sh           # 🧪 Runs all script self-tests
+│   ├── manage-models.sh      # ⚙️ Interactively pull, delete, and manage models
+│   ├── run-model.sh          # ▶️ Interactively select and run a local model
+│   ├── diagnose.sh           # 🩺 Generates diagnostic report for troubleshooting
+│   └── lib/                  # 📚 Shared library files used by the manager
+│       ├── shared.lib.sh     # 🛠️ Common utilities, colors, and error handling
+│       ├── tui.lib.sh        # 🎨 TUI components (menus, prompts, spinners)
+│       └── ollama.lib.sh     # 🤖 Helper functions specific to Ollama
+└── openwebui/                # 🌐 OpenWebUI management scripts and configuration files
+    ├── start-openwebui.sh    # ⚡ Starts the OpenWebUI service
+    ├── stop-openwebui.sh     # 🛑 Stops the OpenWebUI service
+    └── update-openwebui.sh   # ⬆️ Updates OpenWebUI container images
 ```
 
 ---
@@ -66,9 +69,8 @@ To get up and running quickly:
 > Example: `sudo ufw allow 11434` on Ubuntu.
 
 ### 1. 📦 Install/Update Ollama
-
 ```bash
-./install-ollama.sh
+./src/install-ollama.sh
 ```
 
 ### 2. ⚡ Start OpenWebUI
@@ -87,20 +89,20 @@ After it starts, open the link provided (usually `http://localhost:3000`) and fo
 
 | Script | Description |
 |---|---|
-| `./diagnose.sh` | 🩺 Generates diagnostic report of the system, services, and configurations to help with troubleshooting. |
-| `./check-status.sh` | 🔄 Checks the status of Ollama and OpenWebUI. Can also list installed models (`--models`), watch currently loaded models in real-time (`--watch`), or run self-tests (`--test`). |
+| `./src/diagnose.sh` | 🩺 Generates diagnostic report of the system, services, and configurations to help with troubleshooting. |
+| `./src/check-status.sh` | 🔄 Checks the status of Ollama and OpenWebUI. Can also list installed models (`--models`), watch currently loaded models in real-time (`--watch`), or run self-tests (`--test`). |
 
 ### 🤖 Ollama Management Scripts
 
 | Script | Description |
 |---|---|
-| `./install-ollama.sh` | 📦 Installs or updates Ollama. Can also be run with `--version` to check for updates without installing. |
-| `./run-model.sh` | ▶️ Interactively select and run a local model. |
-| `./manage-models.sh` | ⚙️ An interactive script to list, pull, update, and delete local Ollama models. |
-| `./logs-ollama.sh` | 📜 A convenient wrapper to view the Ollama service logs using `journalctl`. |
-| `./restart-ollama.sh` | 🔄 Sometimes on wake from sleep, the `ollama` service will go into an inconsistent state. This script stops, resets GPU state (if applicable), and restarts the Ollama service using `systemd`. |
-| `./stop-ollama.sh` | 🛑 Stops the Ollama service. |
-| `./config-ollama.sh` | ⚙️ A unified, interactive script to configure network access, KV cache, models directory, and other advanced Ollama settings. Can also be run non-interactively with flags. |
+| `./src/install-ollama.sh` | 📦 Installs or updates Ollama. Can also be run with `--version` to check for updates without installing. |
+| `./src/run-model.sh` | ▶️ Interactively select and run a local model. |
+| `./src/manage-models.sh` | ⚙️ An interactive script to list, pull, update, and delete local Ollama models. |
+| `./src/logs-ollama.sh` | 📜 A convenient wrapper to view the Ollama service logs using `journalctl`. |
+| `./src/restart-ollama.sh` | 🔄 Sometimes on wake from sleep, the `ollama` service will go into an inconsistent state. This script stops, resets GPU state (if applicable), and restarts the Ollama service using `systemd`. |
+| `./src/stop-ollama.sh` | 🛑 Stops the Ollama service. |
+| `./src/config-ollama.sh` | ⚙️ A unified, interactive script to configure network access, KV cache, models directory, and other advanced Ollama settings. Can also be run non-interactively with flags. |
 
 ### 🌐 OpenWebUI Management Scripts
 
@@ -119,7 +121,7 @@ After it starts, open the link provided (usually `http://localhost:3000`) and fo
 The `install-ollama.sh` script handles both initial installation and updates.
 
 ```bash
-./install-ollama.sh
+./src/install-ollama.sh
 ```
 
 The script will:
@@ -141,7 +143,7 @@ The script will:
 **Example:**
 
 ```bash
-$ ./install-ollama.sh --version
+$ ./src/install-ollama.sh --version
 -------------------------------------------------------------------------------
  Ollama Version
 -------------------------------------------------------------------------------
@@ -156,7 +158,7 @@ $ ./install-ollama.sh --version
 To quickly run any of your installed models from the command line, use the `run-model.sh` script.
 
 ```bash
-./run-model.sh
+./src/run-model.sh
 ```
 
 This will show a list of your local models. Choose one to start a chat session directly in your terminal.
@@ -172,7 +174,7 @@ This script provides a user-friendly interactive menu to manage your local Ollam
 Run the script without any arguments to launch the interactive menu.
 
 ```bash
-./manage-models.sh
+./src/manage-models.sh
 ```
 
 The menu allows you to perform actions with single keypresses (`R` for Refresh, `P` for Pull, etc.), making model management easier.
@@ -195,16 +197,16 @@ The script can also be used non-interactively with flags, making it suitable for
 
 ```bash
 # Update the 'llama3' model
-./manage-models.sh --update llama3
+./src/manage-models.sh --update llama3
 
 # Update all local models
-./manage-models.sh --update-all
+./src/manage-models.sh --update-all
 
 # Pull the 'llama3.1' model
-./manage-models.sh --pull llama3.1
+./src/manage-models.sh --pull llama3.1
 
 # Delete the 'gemma' model
-./manage-models.sh --delete gemma
+./src/manage-models.sh --delete gemma
 ```
 
 ### 🔌 Ollama Network Access for Docker

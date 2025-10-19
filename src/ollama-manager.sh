@@ -2,11 +2,6 @@
 
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 # --- Source the shared libraries from the new lib folder ---
-# shellcheck source=./lib/shared.lib.sh
-if ! source "${SCRIPT_DIR}/lib/shared.lib.sh"; then
-    echo "Error: Could not source shared.lib.sh. Make sure it's in the 'src/lib' directory." >&2
-    exit 1
-fi
 # shellcheck source=./lib/ollama.lib.sh
 if ! source "${SCRIPT_DIR}/lib/ollama.lib.sh"; then
     echo "Error: Could not source ollama.lib.sh. Make sure it's in the 'src/lib' directory." >&2
@@ -267,7 +262,7 @@ _handle_key_press() {
             ;;
         'c'|'C')
             if [[ $_FOOTER_EXPANDED -eq 1 ]]; then
-                run_menu_action bash "${SCRIPT_DIR}/../config-ollama.sh"
+                run_menu_action bash "${SCRIPT_DIR}/config-ollama.sh"
                 handler_result_ref="refresh_data"
                 _LIST_VIEW_OFFSET=0 # Reset scroll on data refresh
             fi
@@ -276,7 +271,7 @@ _handle_key_press() {
             if [[ $_FOOTER_EXPANDED -eq 1 ]]; then
                 _clear_list_view_footer "$(_draw_footer | wc -l)"
                 if prompt_yes_no "Are you sure you want to stop the Ollama service?" "n"; then
-                    run_menu_action bash "${SCRIPT_DIR}/../stop-ollama.sh"
+                    run_menu_action bash "${SCRIPT_DIR}/stop-ollama.sh"
                     _LIST_VIEW_OFFSET=0 # Reset scroll on data refresh
                     handler_result_ref="refresh_data"
                 else
@@ -289,7 +284,7 @@ _handle_key_press() {
             if [[ $_FOOTER_EXPANDED -eq 1 ]]; then
                 _clear_list_view_footer "$(_draw_footer | wc -l)"
                 if prompt_yes_no "Are you sure you want to restart the Ollama service?" "y"; then
-                    run_menu_action bash "${SCRIPT_DIR}/../restart-ollama.sh"
+                    run_menu_action bash "${SCRIPT_DIR}/restart-ollama.sh"
                     _LIST_VIEW_OFFSET=0 # Reset scroll on data refresh
                     handler_result_ref="refresh_data"
                 else
@@ -302,7 +297,7 @@ _handle_key_press() {
             if [[ $_FOOTER_EXPANDED -eq 1 ]]; then
                 _clear_list_view_footer "$(_draw_footer | wc -l)"
                 if prompt_yes_no "This will run the Ollama installer. Continue?" "y"; then
-                    run_menu_action bash "${SCRIPT_DIR}/../install-ollama.sh"
+                    run_menu_action bash "${SCRIPT_DIR}/install-ollama.sh"
                     _LIST_VIEW_OFFSET=0 # Reset scroll on data refresh
                     handler_result_ref="refresh_data"
                 else
@@ -327,6 +322,7 @@ _handle_key_press() {
 }
 
 main() {
+    clear_screen
     case "$1" in
         -h|--help) show_help; exit 0;;
     esac

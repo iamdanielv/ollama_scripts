@@ -838,6 +838,36 @@ run_menu_action() {
     if [[ $exit_code -ne 2 ]]; then prompt_to_continue; fi
 }
 
+# Polls a given URL until it gets a successful HTTP response or times out.
+# Usage: poll_service <url> <service_name> [timeout_seconds]
+poll_service() {
+    local url="$1"
+    local service_name="$2"
+    # The number of tries is based on the timeout in seconds.
+    # We poll once per second.
+    local tries=${3:-10} # Default to 10 tries (10 seconds)
+
+    local desc="Waiting for ${service_name} to respond at ${url}"
+
+    # We need to run the loop in a subshell so that `run_with_spinner` can treat it
+    # as a single command. The subshell will exit with 0 on success and 1 on failure.
+    # We pass 'url' and 'tries' as arguments to the subshell to avoid quoting issues.
+    if run_with_spinner "${desc}" bash -c '
+        url="$1"
+        tries="$2"
+        for ((j=0; j<tries; j++)); do
+            # Use a short connect timeout for each attempt
+            if curl --silent --fail --head --connect-timeout 2 "$url" &>/dev/null; then
+                exit 0 # Success
+            fi
+            sleep 1
+        done
+        exit 1 # Failure
+    ' -- "$url" "$tries"; then
+        return 0
+    fi
+}
+
 #region Spinners
 SPINNER_OUTPUT=""
 _run_with_spinner_non_interactive() {
@@ -889,5 +919,499 @@ wait_for_pids_with_spinner() {
     if [[ $exit_code -eq 0 ]]; then printOkMsg "${desc}" >&2
     else printErrMsg "Wait command failed with exit code ${exit_code} for task: ${desc}" >&2; fi
     return $exit_code
+}
+
+# The core of the interactive model management UI.
+# This function provides a full-screen, list-based interface where users can
+# navigate, select, and perform actions (pull, delete, update) on models.
+# It encapsulates the entire interactive session.
+#
+# ## Usage:
+#   interactive_model_manager "$models_json"
+#
+# ## Arguments:
+#  $1 - The initial JSON string of models from the Ollama API.
+#
+interactive_model_manager() {
+    local models_json="$1"
+
+    # --- State Variables ---
+    local -a model_names model_sizes model_dates formatted_sizes bg_colors pre_rendered_lines
+    local -a selected_options=()
+    local current_option=0
+    local num_options=0
+
+    # --- Helper: Parse model data ---
+    # Repopulates all model-related arrays from a JSON string.
+    _parse_model_data() {
+        local json_data="$1"
+        # Clear old data
+        model_names=()
+        model_sizes=()
+        model_dates=()
+        formatted_sizes=()
+        bg_colors=()
+        pre_rendered_lines=()
+
+        # Use the existing helper to parse the data into our local arrays
+        if ! _parse_model_data_for_menu "$json_data" "false" model_names model_sizes \
+            model_dates formatted_sizes bg_colors pre_rendered_lines; then
+            num_options=0
+            return 1 # No models found
+        fi
+
+        num_options=${#model_names[@]}
+        # Reset selections
+        selected_options=()
+        for ((i=0; i<num_options; i++)); do selected_options[i]=0; done
+        # Ensure current_option is within bounds
+        if (( current_option >= num_options )); then
+            current_option=$(( num_options > 0 ? num_options - 1 : 0 ))
+        fi
+        return 0
+    }
+
+    # --- Helper: Redraw the entire screen ---
+    _redraw_screen() {
+        # This function now just prints the content. The caller handles clearing and cursor position.
+        printBanner "Ollama Interactive Model Manager" >/dev/tty
+        if [[ $num_options -eq 0 ]]; then
+            printWarnMsg "No local models found." >/dev/tty
+        else
+            # Use the existing table renderer, but in multi-select mode to show checkboxes
+            _render_model_list_table "Local Models" "multi" "$current_option" \
+                model_names model_dates formatted_sizes bg_colors selected_options pre_rendered_lines
+        fi
+
+        local help_nav="  ${C_L_GRAY}Navigation:${T_RESET} ${C_L_MAGENTA}↑↓${C_WHITE} Move | ${C_L_MAGENTA}SPACE${C_WHITE} Select | ${C_L_YELLOW}(Q)uit${T_RESET}"
+        local help_actions="  ${C_L_GRAY}Actions:${T_RESET}    ${C_L_GREEN}(N)ew Model${C_WHITE} | ${C_L_RED}(D)elete${C_WHITE} | ${C_MAGENTA}(U)pdate/Pull${T_RESET}"
+        printMsg "${help_nav}" >/dev/tty
+        printMsg "${help_actions}" >/dev/tty
+        printMsg "${C_BLUE}${DIV}${T_RESET}" >/dev/tty
+    }
+
+    # --- Helper: A special version of pull_model for this UI ---
+    # This function replaces the help text with a prompt, avoiding a full screen clear.
+    _interactive_pull_model_inline() {
+        # The help text is 3 lines tall.
+        # We move the cursor up and clear from there to the end of the screen.
+        move_cursor_up 3
+        tput ed
+
+        local model_name=""
+        local prompt_str=" ${T_QST_ICON} Name of model to pull (e.g., llama3): "
+        printMsgNoNewline "$prompt_str"
+
+        # Show cursor for input
+        tput cnorm
+
+        local key
+        local cancelled=false
+        while true; do
+            key=$(read_single_char </dev/tty)
+
+            if [[ "$key" == "$KEY_ENTER" ]]; then
+                break
+            elif [[ "$key" == "$KEY_ESC" ]]; then
+                cancelled=true
+                break
+            elif [[ "$key" == "$KEY_BACKSPACE" ]]; then
+                if [[ -n "$model_name" ]]; then
+                    # Remove last character from variable
+                    model_name=${model_name%?}
+                    # Move cursor left, print space, move cursor left again
+                    echo -ne "\b \b"
+                fi
+            else
+                # Append printable characters. Filter out control sequences.
+                if [[ ${#key} -eq 1 ]]; then
+                    model_name+="$key"
+                    echo -n "$key"
+                fi
+            fi
+        done
+
+        # Hide cursor again for the pull process
+        tput civis
+
+        # After loop, the cursor is on the same line. Add a newline for spacing.
+        echo
+        printMsg "${C_BLUE}${DIV}${T_RESET}"
+
+        # Now, clean up the prompt area before the real pull starts.
+        move_cursor_up 2 # Move up past the DIV and the prompt line.
+        tput ed # Clear it all.
+
+        if [[ "$cancelled" == "true" || -z "$model_name" ]]; then
+            printWarnMsg "No model name entered or pull cancelled. No action taken."
+            sleep 1.5
+            return 1 # Indicates no action was taken
+        fi
+
+        # Call the core pull logic. It will print its own status messages.
+        # If the pull fails, pause so the user can see the error message.
+        if ! _execute_pull "$model_name"; then
+            prompt_to_continue
+        fi
+        return 0 # Indicates an action was attempted.
+    }
+
+    # --- Helper: Refresh model data from API ---
+    _refresh_models() {
+        local new_json
+        if new_json=$(fetch_models_with_spinner "Refreshing model list..."); then
+            models_json="$new_json"
+            _parse_model_data "$models_json"
+        else
+            # On failure, pause so user can see the error from the spinner.
+            prompt_to_continue
+        fi
+    }
+
+    # --- Initial Setup ---
+    _parse_model_data "$models_json"
+
+    # --- Main Interactive Loop ---
+    tput civis # Hide cursor
+    trap 'tput cnorm; script_interrupt_handler' INT TERM
+
+    # Helper to calculate menu height for flicker-free redrawing.
+    _get_menu_height() {
+        # Banner(2) + Table(N+3) + Help(3) = N+8
+        # Or for no models: Banner(2) + Warn(1) + Help(3) = 6
+        if (( num_options > 0 )); then
+            echo $(( num_options + 8 ))
+        else
+            echo 6
+        fi
+    }
+
+    # Initial draw
+    clear
+    _redraw_screen
+
+    while true; do
+        local key
+        key=$(read_single_char </dev/tty)
+        local state_changed=false
+
+        case "$key" in
+            "$KEY_UP"|"k")
+                if (( num_options > 0 )); then
+                    current_option=$(( (current_option - 1 + num_options) % num_options ))
+                    state_changed=true
+                fi
+                ;;
+            "$KEY_DOWN"|"j")
+                if (( num_options > 0 )); then
+                    current_option=$(( (current_option + 1) % num_options ))
+                    state_changed=true
+                fi
+                ;;
+            ' ')
+                if (( num_options > 0 )); then
+                    selected_options[current_option]=$(( 1 - selected_options[current_option] ))
+                    state_changed=true
+                fi
+                ;;
+            'n'|'N')
+                _interactive_pull_model_inline
+                _refresh_models
+                clear && _redraw_screen # Redraw after action
+                ;;
+            'd'|'D')
+                local -a to_delete=()
+                for i in "${!selected_options[@]}"; do
+                    if [[ ${selected_options[i]} -eq 1 ]]; then
+                        to_delete+=("${model_names[i]}")
+                    fi
+                done
+                if [[ ${#to_delete[@]} -eq 0 && $num_options -gt 0 ]]; then
+                    to_delete=("${model_names[current_option]}")
+                fi
+
+                if [[ ${#to_delete[@]} -gt 0 ]]; then
+                    clear # Clear screen for the confirmation prompt
+                    printInfoMsg "The following models will be deleted: ${C_L_RED}${to_delete[*]}${T_RESET}"
+                    if prompt_yes_no "Are you sure you want to delete these ${#to_delete[@]} models?" "n"; then
+                        _perform_model_deletions "${to_delete[@]}"
+                        _refresh_models
+                    fi
+                    clear && _redraw_screen # Redraw after action
+                else
+                    printWarnMsg "No models to delete." && sleep 1
+                fi
+                ;;            
+            'u'|'U'|'p'|'P')
+                local -a to_update=()
+                for i in "${!selected_options[@]}"; do
+                    if [[ ${selected_options[i]} -eq 1 ]]; then
+                        to_update+=("${model_names[i]}")
+                    fi
+                done
+                if [[ ${#to_update[@]} -eq 0 && $num_options -gt 0 ]]; then
+                    to_update=("${model_names[current_option]}")
+                fi
+
+                if [[ ${#to_update[@]} -gt 0 ]]; then
+                    clear # Clear screen for the confirmation prompt
+                    _perform_model_updates "${to_update[@]}"
+                    _refresh_models
+                    clear && _redraw_screen # Redraw after action
+                else
+                    printWarnMsg "No models to update." && sleep 1
+                fi
+                ;;
+            'q'|'Q'|"$KEY_ESC")
+                clear # Clean up screen on exit
+                break
+                ;;
+            *)
+                continue # Ignore other keys, no need to redraw
+                ;;
+        esac
+        if [[ "$state_changed" == "true" ]]; then
+            move_cursor_up "$(_get_menu_height)" >/dev/tty
+            _redraw_screen
+        fi
+    done
+
+    # --- Cleanup ---
+    tput cnorm
+    trap - INT TERM
+    clear
+    printOkMsg "Goodbye!"
+}
+
+# Private helper to render the interactive model selection table.
+# This is a pure display function that handles both single and multi-select modes.
+# Usage: _render_model_list_table "Prompt" mode current_opt_idx names_ref dates_ref formatted_sizes_ref bg_colors_ref [selected_ref] pre_rendered_lines_ref
+_render_model_list_table() {
+    local prompt="$1"
+    local mode="$2"
+    local current_option="$3"
+    local -n names_ref="$4"
+    local -n _dates_ref="$5" # No longer used directly, but keep for arg position
+    local -n _formatted_sizes_ref="$6" # No longer used directly
+    local -n _bg_colors_ref="$7" # No longer used directly
+    # The 'selected' array is only passed in multi-select mode.
+    local -a _dummy_selected_ref=()
+    local -n selected_ref="${8:-_dummy_selected_ref}" # For multi-select
+    local -n pre_rendered_lines_ref="$9" # The new pre-rendered lines
+    local output=""
+
+    local with_all_option=false
+    if [[ "$mode" == "multi" && "${names_ref[0]}" == "All" ]]; then
+        with_all_option=true
+    fi
+
+    # --- Header ---
+    # Adjust header padding based on mode
+    local header_padding="%-1s"
+    if [[ "$mode" == "multi" ]]; then header_padding="%-3s"; fi
+    output+=$(printf " ${header_padding} %-40s %10s  %-15s" "" "NAME" "SIZE" "MODIFIED")
+    output+="\n${C_BLUE}${DIV}${T_RESET}\n"
+
+    # --- Body ---
+    for i in "${!names_ref[@]}"; do
+        local pointer=" "; local highlight_start=""; local highlight_end=""
+        if [[ $i -eq $current_option ]]; then
+            pointer="${T_BOLD}${C_L_MAGENTA}❯${T_RESET}"; highlight_start="${T_REVERSE}"; highlight_end="${T_RESET}";
+        fi
+
+        local line_prefix=""
+        if [[ "$mode" == "multi" ]]; then
+            local checkbox="[ ]"
+            if [[ ${selected_ref[i]} -eq 1 ]]; then checkbox="${highlight_start}${C_GREEN}${T_BOLD}[✓]"; fi
+            line_prefix=$(printf "%-3s " "${checkbox}")
+        else
+            line_prefix="  " # Two spaces for alignment with multi-select's pointer
+        fi
+
+        local line_body="${pre_rendered_lines_ref[i]}"
+        output+="${pointer}${line_prefix}${highlight_start}${line_body}${highlight_end}${T_CLEAR_LINE}\n"
+    done
+
+    # --- Table Footer ---
+    output+="${C_BLUE}${DIV}${T_RESET}\n"
+
+    # Final combined print
+    echo -ne "$output" >/dev/tty
+}
+
+# Private helper to process the final selections from the multi-select menu.
+# Prints selected model names to stdout and returns an appropriate exit code.
+# Usage: _process_multi_select_output with_all_flag names_arr_ref selected_arr_ref
+_process_multi_select_output() {
+    local with_all_option="$1"
+    local -n names_ref="$2"
+    local -n selected_ref="$3"
+    local num_options=${#names_ref[@]}
+
+    local has_selection=0
+    # If "All" was an option and it was selected, output all model names.
+    if [[ "$with_all_option" == "true" && ${selected_ref[0]} -eq 1 ]]; then
+        for ((i=1; i<num_options; i++)); do
+            echo "${names_ref[i]}"
+        done
+        has_selection=1
+    else
+        # Otherwise, iterate through the selections and output the chosen ones.
+        local start_index=0
+        if [[ "$with_all_option" == "true" ]]; then
+            start_index=1 # Skip the "All" option itself
+        fi
+        for ((i=start_index; i<num_options; i++)); do
+            if [[ ${selected_ref[i]} -eq 1 ]]; then
+                has_selection=1
+                echo "${names_ref[i]}"
+            fi
+        done
+    fi
+
+    if [[ $has_selection -eq 1 ]]; then return 0; else return 1; fi
+}
+
+# (Private) Generic interactive model list. Handles both single and multi-select.
+# This is the new core function that consolidates the logic.
+# Usage: _interactive_list_models <mode> <prompt> <models_json> [with_all_flag]
+_interactive_list_models() {
+    local mode="$1" # "single" or "multi"
+    local prompt="$2"
+    local models_json="$3"
+    local with_all_option=false
+    # The 'with_all' flag is only relevant for multi-select mode.
+    if [[ "$mode" == "multi" && "$4" == "true" ]]; then
+        with_all_option=true
+    fi
+
+    # 1. Parse model data from JSON into arrays
+    local -a model_names model_sizes model_dates formatted_sizes bg_colors pre_rendered_lines
+    if ! _parse_model_data_for_menu "$models_json" "$with_all_option" model_names model_sizes \
+        model_dates formatted_sizes bg_colors pre_rendered_lines; then
+        return 1 # No models found
+    fi
+    local num_options=${#model_names[@]}
+
+    # 2. Initialize state
+    local current_option=0
+    local -a selected_options=()
+    if [[ "$mode" == "multi" ]]; then
+        for ((i=0; i<num_options; i++)); do selected_options[i]=0; done
+    fi
+
+    # --- Helper to print the footer for this menu ---
+    _print_footer() {
+        local help_text="  ${C_L_MAGENTA}↑↓${C_WHITE}(Move)"
+        if [[ "$mode" == "multi" ]]; then
+            help_text+=" | ${C_L_MAGENTA}SPACE${C_WHITE}(Select)"
+        fi
+        if [[ "$mode" == "multi" && "$with_all_option" == "true" ]]; then
+            help_text+=" | ${C_L_GREEN}(A)ll${C_WHITE}(Toggle)"
+        fi
+        help_text+=" | ${C_L_MAGENTA}ENTER${C_WHITE}(Confirm) | ${C_L_YELLOW}Q/ESC${C_WHITE}(Cancel)${T_RESET}"
+        
+        # The table renderer already printed its bottom divider, which acts as our top divider.
+        echo -e "${help_text}" >/dev/tty
+        echo -e "${C_BLUE}${DIV}${T_RESET}" >/dev/tty
+    }
+
+    # 3. Set up interactive environment
+    stty -echo
+    printMsgNoNewline "${T_CURSOR_HIDE}" >/dev/tty
+    trap 'printMsgNoNewline "${T_CURSOR_SHOW}" >/dev/tty; stty echo' EXIT
+
+    # Calculate menu height for cursor control. It's the number of options plus the surrounding chrome.
+    # Banner(1) + Header(1) + Div(1) + N lines + Div(1) + Help(1) + Div(1) = N + 6
+    local menu_height=$((num_options + 7)) # Using 7 is safe for both banner types.
+    printBanner "$prompt" >/dev/tty
+    # The prompt argument to _render_model_list_table is now unused, but harmless to keep.
+    _render_model_list_table "$prompt" "$mode" "$current_option" model_names model_dates formatted_sizes bg_colors selected_options pre_rendered_lines
+    _print_footer
+
+    # 4. Main interactive loop
+    local key
+    while true; do
+        key=$(read_single_char </dev/tty)
+        local state_changed=false
+
+        case "$key" in
+            "$KEY_UP"|"k")
+                current_option=$(( (current_option - 1 + num_options) % num_options ))
+                state_changed=true
+                ;;
+            "$KEY_DOWN"|"j")
+                current_option=$(( (current_option + 1) % num_options ))
+                state_changed=true
+                ;;
+            ' '|"h"|"l")
+                if [[ "$mode" == "multi" ]]; then
+                    _handle_multi_select_toggle "$with_all_option" "$current_option" "$num_options" selected_options
+                    state_changed=true
+                fi
+                ;;
+            "a"|"A")
+                if [[ "$mode" == "multi" && "$with_all_option" == "true" ]]; then
+                    _handle_multi_select_toggle "$with_all_option" "0" "$num_options" selected_options
+                    state_changed=true
+                fi
+                ;;
+            "$KEY_ENTER")
+                break # Exit loop to process selections
+                ;;
+            "$KEY_ESC"|"q")
+                clear_lines_up "$menu_height" >/dev/tty
+                return 1
+                ;;
+            *)
+                continue # Ignore other keys and loop without redrawing
+                ;;
+        esac
+        if [[ "$state_changed" == "true" ]]; then
+            move_cursor_up "$menu_height" >/dev/tty
+            printBanner "$prompt" >/dev/tty
+            _render_model_list_table "$prompt" "$mode" "$current_option" model_names model_dates formatted_sizes bg_colors selected_options pre_rendered_lines
+            _print_footer
+        fi
+    done
+
+    # 5. Clean up screen and process output
+    clear_lines_up "$menu_height" >/dev/tty # This already uses ANSI codes
+
+    if [[ "$mode" == "multi" ]]; then
+        _process_multi_select_output "$with_all_option" model_names selected_options
+        return $?
+    else # single mode
+        echo "${model_names[current_option]}"
+        return 0
+    fi
+}
+
+interactive_multi_select_list_models() {
+    if ! [[ -t 0 ]]; then
+        printErrMsg "Not an interactive session." >&2
+        return 1
+    fi
+
+    local prompt="$1"
+    local models_json="$2"
+    local with_all_option=false
+    [[ "$3" == "--with-all" ]] && with_all_option=true
+
+    # Call the new consolidated function
+    _interactive_list_models "multi" "$prompt" "$models_json" "$with_all_option"
+}
+
+interactive_single_select_list_models() {
+    if ! [[ -t 0 ]]; then
+        printErrMsg "Not an interactive session." >&2
+        return 1
+    fi
+
+    local prompt="$1"
+    local models_json="$2"
+
+    # Call the new consolidated function
+    _interactive_list_models "single" "$prompt" "$models_json"
 }
 #endregion Spinners

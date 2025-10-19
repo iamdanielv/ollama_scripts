@@ -1,62 +1,78 @@
-# Makefile for the Ollama Scripts project.
-# The help comments are based on https://marmelab.com/blog/2016/02/29/auto-documented-makefile.html
-
-.DEFAULT_GOAL := help
-.PHONY: all build clean test help ollama-manager dist-ollama-manager run
+# Makefile for Ollama & OpenWebUI Management Scripts
 
 # Color Definitions
-C_BLUE := \033[34m
-C_WHITE := \033[37m
-T_RESET := \033[0m
+C_BOLD    := \033[1m
+C_ULINE   := \033[4m
+C_MAGENTA := \033[35m
+C_CYAN    := \033[36m
+C_RESET   := \033[0m
 
-# Define variables
+# Use bash for all shell commands
 SHELL := /bin/bash
-SRC_DIR := src
-DIST_DIR := dist
-TEST_DIR := test
-SCRIPTS := $(patsubst $(SRC_DIR)/%.sh,%,$(wildcard $(SRC_DIR)/*.sh))
 
-BUILD_SCRIPT := ./build.sh
+# Define script directories
+SRC_DIR := ./src
+WEBUI_DIR := ./openwebui
 
-LIB_FILES := $(wildcard $(SRC_DIR)/lib/*.sh)
-TEST_SCRIPTS := $(wildcard $(TEST_DIR)/test_*.sh)
- 
-##@ General
+# Set the default goal to 'help' so that running 'make' by itself shows the help menu
+.DEFAULT_GOAL := help
 
-help: ##@ Show this help message
-	@printf "$(C_BLUE)%-28s$(T_RESET) %s\n" "Target" "Description"
-	@printf "%-28s %s\n" "------" "-----------"
-	@grep -E '^[a-zA-Z_-]+:.*?##@ .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?##@ "}; {printf "\033[34m%-28s\033[0m %s\n", $$1, $$2}'
+# Phony targets are not real files
+.PHONY: help install config status models run diagnose test restart stop logs webui-start webui-stop webui-update manager
 
-all: help ##@ Show help message (default if no goal is specified after help)
+help: ##@ ✨ Show this help message
+	@printf "\n$(C_BOLD)Ollama & OpenWebUI Management Scripts$(C_RESET)\n\n"
+	@printf "$(C_BOLD)%-15s %s$(C_RESET)\n" "Target" "Description"; \
+	awk 'BEGIN {FS = ":.*?##@ "} \
+		/^##@ - / { \
+			print ""; \
+			printf "$(C_BOLD)$(C_MAGENTA)%s$(C_RESET)\n", substr($$0, 7); \
+			next \
+		} \
+		/^[a-zA-Z0-9_-]+:.*?##@/ { printf "$(C_CYAN)%-15s$(C_RESET) %s\n", $$1, $$2 }' \
+		$(MAKEFILE_LIST)
 
-build: ##@ Build all distributable scripts
-	@echo "Building all scripts from '$(SRC_DIR)' into '$(DIST_DIR)'..."
-	@$(BUILD_SCRIPT)
+##@ - Ollama 🤖 Management 
+manager: ##@ Ollama Manager 🚀
+	@$(SRC_DIR)/ollama-manager.sh
 
-clean: ##@ Remove the dist directory and other build artifacts
-	@echo "Cleaning up..."
-	@rm -rf $(DIST_DIR)
+install: ##@ Install 📦 or update Ollama
+	@$(SRC_DIR)/install-ollama.sh
 
-ollama-manager: ##@ Run the development version of the Ollama Manager TUI
-	@echo "Running development Ollama Manager from '$(SRC_DIR)'..."
-	@bash ./$(SRC_DIR)/ollama-manager.sh
+config: ##@ Configure ⚙️  Ollama settings
+	@$(SRC_DIR)/config-ollama.sh
 
-dist-ollama-manager: build ##@ Build and run the distributable Ollama Manager TUI
-	@echo "Running distributable Ollama Manager from '$(DIST_DIR)'..."
-	@./$(DIST_DIR)/ollama-manager.sh
+status: ##@ Check service status
+	@$(SRC_DIR)/check-status.sh
 
-run: build ##@ Run a specific script (e.g., 'make run script=check-status')
-	@if [ -z "$(script)" ]; then \
-		echo "Usage: make run script=<script_name>"; \
-		exit 1; \
-	fi
-	@./$(DIST_DIR)/$(script).sh
+models: ##@ Manage local models
+	@$(SRC_DIR)/manage-models.sh
 
-test: $(LIB_FILES) ##@ Run all tests
-	@echo "Running tests..."
-	@for test_script in $(TEST_SCRIPTS); do \
-		echo; \
-		printf "$(C_WHITE)--- Running $test_script ---$(T_RESET)\n"; \
-		bash $$test_script; \
-	done
+run: ##@ Run a local model
+	@$(SRC_DIR)/run-model.sh
+
+diagnose: ##@ Generate a diagnostic report 🩺
+	@$(SRC_DIR)/diagnose.sh
+
+test: ##@ Run all script self-tests
+	@$(SRC_DIR)/test-all.sh
+
+##@ - Ollama Service Management
+restart: ##@ Restart the Ollama service
+	@$(SRC_DIR)/restart-ollama.sh
+
+stop: ##@ Stop 🛑 the Ollama service
+	@$(SRC_DIR)/stop-ollama.sh
+
+logs: ##@ View Ollama service logs 📜
+	@$(SRC_DIR)/logs-ollama.sh -f
+
+##@ - OpenWebUI 🌐 Service Management
+webui-start: ##@ Start the OpenWebUI service
+	@$(WEBUI_DIR)/start-openwebui.sh
+
+webui-stop: ##@ Stop the OpenWebUI service
+	@$(WEBUI_DIR)/stop-openwebui.sh
+
+webui-update: ##@ Update the OpenWebUI service
+	@$(WEBUI_DIR)/update-openwebui.sh
