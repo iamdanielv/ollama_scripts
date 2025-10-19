@@ -150,6 +150,31 @@ save_cursor_pos() {
 restore_cursor_pos() {
     printf '\033[u'
 } >/dev/tty
+
+# A debug helper to display the current cursor position at the top-right of the screen.
+# Call this at any point in a TUI function to see where the cursor is.
+# It saves and restores the cursor position, so it doesn't disrupt the layout.
+# Usage: debug_show_cursor_pos
+debug_show_cursor_pos() {
+    # Save current cursor position and attributes
+    printf '\033[s' >/dev/tty
+
+    # Get current cursor position. The terminal responds with `ESC[<row>;<col>R`.
+    local pos
+    IFS=';' read -s -d R -p $'\E[6n' pos >/dev/tty
+    local row="${pos#*[}"
+    local col="${pos#*;}"
+
+    # Move to top-right corner to display the coordinates
+    local term_width; term_width=$(tput cols)
+    local msg="R:${row} C:${col}"
+    local display_col=$(( term_width - ${#msg} ))
+    printf '\033[1;%sH' "$display_col" >/dev/tty
+    printf '%s' "${BG_YELLOW}${C_BLACK}${msg}${T_RESET}" >/dev/tty
+
+    # Restore original cursor position and attributes
+    printf '\033[u' >/dev/tty
+}
 #endregion Terminal Control
 
 #region User Input
@@ -247,23 +272,6 @@ prompt_yes_no() {
     done
 }
 
-# (Private) Clears the footer area of an interactive list view.
-# The cursor is expected to be at the end of the list content (before the divider).
-# It leaves the cursor at the start of the now-cleared footer area.
-# Usage: _clear_list_view_footer <footer_line_count>
-_clear_list_view_footer() {
-    local footer_lines="$1"
-
-    # The cursor is at the end of the list content.
-    # Move down one line to be past the list's bottom divider.
-    printf '\n' >/dev/tty
-
-    # The area to clear is the footer text + the final bottom divider line.
-    local lines_to_clear=$(( footer_lines + 1 ))
-    clear_lines_down "$lines_to_clear" >/dev/tty
-    # The cursor is now at the start of where the footer text was, ready for new output.
-}
-
 # (Private) Handles the logic for toggling a selection in a multi-select list.
 # It also manages the special behavior of an "All" option if present.
 # Usage: _handle_multi_select_toggle <is_multi_select> <current_option> <num_options> <selected_options_nameref>
@@ -303,25 +311,29 @@ _handle_multi_select_toggle() {
 # An interactive prompt for user input that supports cancellation.
 # It provides a rich line-editing experience including cursor movement
 # (left/right/home/end), insertion, and deletion (backspace/delete). This version
-# handles long input by scrolling the text horizontally within a single line.
-# Usage: prompt_for_input "Prompt text" "variable_name" ["default_value"] ["allow_empty"]
+# handles long input by scrolling the text horizontally. It can also replace a
+# block of existing lines (like a TUI footer) to prevent UI shifting.
+# Usage: prompt_for_input "Prompt text" "variable_name" ["default_value"] ["allow_empty"] [lines_to_replace]
 # Returns 0 on success (Enter), 1 on cancellation (ESC).
 prompt_for_input() {
     local prompt_text="$1"
     local -n var_ref="$2" # Use nameref to assign to caller's variable
     local default_val="${3:-}"
     local allow_empty="${4:-false}"
- 
+    local lines_to_replace="${5:-0}" # Optional: Number of lines this prompt should occupy.
+
+    # If not replacing lines, it's a standalone prompt that takes over the screen.
+    if (( lines_to_replace == 0 )); then
+        clear_screen
+    fi
+
     # Explicitly show the cursor for the input prompt.
     printMsgNoNewline "${T_CURSOR_SHOW}" >/dev/tty
 
     local input_str="$default_val" cursor_pos=${#input_str} view_start=0 key
- 
-    # --- One-time setup ---
-    # Calculate the length of the icon prefix to use for indenting subsequent lines.
+
     local icon_prefix_len; icon_prefix_len=$(strip_ansi_codes "${T_QST_ICON} " | wc -c)
     local padding; printf -v padding '%*s' "$icon_prefix_len" ""
-    # Prepend padding to each line of the prompt text after the first one.
     local indented_prompt_text; indented_prompt_text=$(echo -e "$prompt_text" | sed "2,\$s/^/${padding}/")
 
     # Print the prompt text. Using `printf %b` handles newlines without adding an extra one at the end.
@@ -329,10 +341,20 @@ prompt_for_input() {
     # The actual input line starts with a simple prefix, printed right after the prompt text.
     local input_prefix=": "
     printMsgNoNewline "$input_prefix" >/dev/tty
- 
+
     # Calculate how many lines the prompt text occupies for later cleanup.
     local prompt_lines; prompt_lines=$(echo -e "${indented_prompt_text}" | wc -l)
-    # The length of the last line of the prompt determines where the input starts.
+
+    # If replacing lines, fill the remaining space with blank lines to maintain height.
+    if (( lines_to_replace > prompt_lines )); then
+        local blank_lines_needed=$(( lines_to_replace - prompt_lines ))
+        for ((i=0; i<blank_lines_needed; i++)); do
+            # Print a newline and a clear-line code to ensure it's blank.
+            printf '\n%s' "${T_CLEAR_LINE}"
+        done
+        # Move cursor back up to the input line.
+        move_cursor_up "$blank_lines_needed"
+    fi
     local input_line_prefix_len
     if (( prompt_lines > 1 )); then
         local last_line_prompt; last_line_prompt=$(echo -e "${indented_prompt_text}" | tail -n 1)
@@ -340,22 +362,22 @@ prompt_for_input() {
     else
         input_line_prefix_len=$(strip_ansi_codes "${T_QST_ICON} ${prompt_text}${input_prefix}" | wc -c)
     fi
- 
+
     # (Private) Helper to redraw the input line.
     _prompt_for_input_redraw() {
         # Go to beginning of line, then move right past the static prompt.
         printf '\r\033[%sC' "$input_line_prefix_len" >/dev/tty
- 
+
         local term_width; term_width=$(tput cols)
         local available_width=$(( term_width - input_line_prefix_len ))
         if (( available_width < 1 )); then available_width=1; fi
- 
+
         # --- Scrolling logic ---
         if (( cursor_pos < view_start )); then view_start=$cursor_pos; fi
         if (( cursor_pos >= view_start + available_width )); then view_start=$(( cursor_pos - available_width + 1 )); fi
- 
+
         local display_str="${input_str:$view_start:$available_width}" local total_len=${#input_str}
- 
+
         # --- Ellipsis logic for overflow ---
         local ellipsis="…"
         if (( total_len > available_width )); then
@@ -368,11 +390,11 @@ prompt_for_input() {
                 display_str="${display_str:0:${#display_str}-1}${ellipsis}"
             fi
         fi
- 
+
         # Print the dynamic part: colored input, reset color, and clear rest of line.
         # This overwrites the previous input and clears any leftover characters.
         printMsgNoNewline "${C_L_CYAN}${display_str}${T_RESET}${T_CLEAR_LINE}" >/dev/tty
- 
+
         # --- Cursor positioning ---
         local display_cursor_pos=$(( cursor_pos - view_start )); if (( view_start > 0 )); then ((display_cursor_pos++)); fi
         local chars_after_cursor=$(( ${#display_str} - display_cursor_pos ))
@@ -380,33 +402,29 @@ prompt_for_input() {
             printf '\033[%sD' "$chars_after_cursor" >/dev/tty
         fi
     }
- 
+
     while true; do
         _prompt_for_input_redraw
- 
+
         key=$(read_single_char </dev/tty)
- 
+
         case "$key" in
             "$KEY_ENTER")
                 if [[ -n "$input_str" || "$allow_empty" == "true" ]]; then
                     var_ref="$input_str"
-                    # On success, clear the input line and the prompt text above it.
-                    clear_current_line >/dev/tty; clear_lines_up $(( prompt_lines - 1 )) >/dev/tty
+                    # On success, clear the area that was used by the prompt.
+                    local lines_to_clear=$(( lines_to_replace > 0 ? lines_to_replace : prompt_lines ))
+                    clear_current_line >/dev/tty; clear_lines_up $(( lines_to_clear - 1 )) >/dev/tty
 
                     # Show a summary of the accepted input.
                     show_action_summary "$prompt_text" "$var_ref"
                     printMsgNoNewline "${T_CURSOR_HIDE}" >/dev/tty
-
                     return 0
                 fi
                 ;;
             "$KEY_ESC")
-                # On cancel, clear the input area and show a timed message.
-                # We clear `prompt_lines` in total. The current line is one of them.
-                clear_current_line >/dev/tty; clear_lines_up $(( prompt_lines - 1 )) >/dev/tty
-                show_timed_message "${T_INFO_ICON} Input cancelled." 1
-
-                # Hide the cursor again to return to the list view's state.
+                local lines_to_clear=$(( lines_to_replace > 0 ? lines_to_replace : prompt_lines ))
+                clear_current_line >/dev/tty; clear_lines_up $(( lines_to_clear - 1 )) >/dev/tty; show_timed_message "${T_INFO_ICON} Input cancelled." 1
                 printMsgNoNewline "${T_CURSOR_HIDE}" >/dev/tty
                 return 1
                 ;;
@@ -654,17 +672,17 @@ _interactive_list_view() {
     local -n list_offset_ref="$6" # Nameref for scroll offset
     local footer_func="$7" is_multi_select="${8:-false}"
 
-    local current_option=0; local -a menu_options=(); local -a data_payloads=()
+    local current_option=0; local -a menu_options=(); local -a data_payloads=(); local -a selected_options=();
     local num_options=0; local viewport_height=0
-    local -a selected_options=()
 
-    # --- Resize Handling & State ---
-    local _tui_is_loading=true # Add a loading state flag
     # Flag to signal that the terminal has been resized.
     local _tui_resized=0
     # Trap the WINCH signal (window change) and set the flag.
     # The actual redraw will happen on the next key press.
     trap '_tui_resized=1' WINCH
+
+    # --- State ---
+    local _tui_is_loading=true # Add a loading state flag
 
     _refresh_data() {
         "$refresh_func" menu_options data_payloads selected_options
@@ -793,21 +811,30 @@ _interactive_list_view() {
             "$KEY_END")
                 if (( num_options > 0 )); then current_option=$(( num_options - 1 )); handler_result="redraw"; fi ;;
             *)
-                # Pass the viewport height to the key handler for its own calculations
+                # For other keys, we assume they might trigger a prompt that needs to draw
+                # in the footer area. We prepare the screen by moving the cursor to the
+                # start of the footer and clearing it.
+                local footer_height; footer_height=$($footer_func | wc -l)
+                local footer_start_line=$(( 2 + 1 + 1 + viewport_height + 1 + 1 )) # banner, header, div, list, div, newline
+                move_cursor_to "$footer_start_line" 1
+                clear_lines_down "$footer_height"
+
                 "$key_handler_func" \
                     "$key" \
                     data_payloads \
                     selected_options \
                     current_option \
                     num_options \
-                    handler_result
+                    handler_result \
+                    "$footer_height" # Pass footer height to handler
                 ;;
         esac
 
         if [[ "$handler_result" == "exit" ]]; then break
 
         elif [[ "$handler_result" == "refresh_data" ]]; then
-            _redraw_all
+            #_redraw_all
+            clear_lines_up 1
             printInfoMsg "Refreshing..." >/dev/tty
             if [[ "$is_multi_select" == "true" ]]; then _refresh_data_multi; else _refresh_data; fi
             viewport_height=$("$viewport_calc_func") # Recalculate in case footer changed
@@ -820,6 +847,7 @@ _interactive_list_view() {
             _update_scroll_offset
             _redraw_all
         fi
+        #debug_show_cursor_pos
     done
 }
 

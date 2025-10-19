@@ -123,19 +123,15 @@ _handle_key_press() {
     local -n current_option_ref="$4"
     local -n num_options_ref="$5"
     local -n handler_result_ref="$6"
+    local footer_height="$7" # New: The height of the footer area to use for prompts.
 
     local current_model="${selected_payloads_ref[$current_option_ref]}"
 
     case "$key" in
         'a'|'A')
-            _clear_list_view_footer "$(_draw_footer | wc -l)"
             local model_to_pull
-            if prompt_for_input "Name of model to pull (e.g., llama3)" model_to_pull; then
+            if prompt_for_input "Name of model to pull (e.g., llama3)" model_to_pull "" "false" "$footer_height"; then
                 run_menu_action _execute_pull "$model_to_pull" && handler_result_ref="refresh_data"
-            else
-                # On cancel, prompt_for_input handles its own feedback. Redraw the view.
-                handler_result_ref="redraw"
-                _LIST_VIEW_OFFSET=0 # Reset scroll on data refresh
             fi
             ;;
         'd'|'D')
@@ -161,20 +157,15 @@ _handle_key_press() {
             fi
 
             if [[ ${#models_to_delete[@]} -gt 0 ]]; then
-                clear_screen
                 printBanner "Delete Models"
                 local question="Are you sure you want to delete ${#models_to_delete[@]} model(s):\n ${C_L_RED}${models_to_delete[*]}${T_RESET}?"
                 if prompt_yes_no "$question" "n"; then
                     run_menu_action _perform_model_deletions "${models_to_delete[@]}"
                     handler_result_ref="refresh_data"
                     _LIST_VIEW_OFFSET=0 # Reset scroll on data refresh
-                else
-                    handler_result_ref="redraw" # Redraw with cached data
                 fi
             else
-                _clear_list_view_footer "$(_draw_footer | wc -l)"
                 show_timed_message "${T_WARN_ICON} No models selected to delete."
-                handler_result_ref="redraw"
             fi
             ;;
         'u'|'U')
@@ -200,25 +191,19 @@ _handle_key_press() {
             fi
 
             if [[ ${#models_to_update[@]} -gt 0 ]]; then
-                clear_screen
                 printBanner "Update Models"
                 local question="Are you sure you want to update ${#models_to_update[@]} model(s):\n ${C_L_MAGENTA}${models_to_update[*]}${T_RESET}?"
                 if prompt_yes_no "$question" "y"; then
                     run_menu_action _perform_model_updates "${models_to_update[@]}"
                     handler_result_ref="refresh_data"
                     _LIST_VIEW_OFFSET=0 # Reset scroll on data refresh
-                else
-                    handler_result_ref="redraw" # Redraw with cached data
                 fi
             else
-                _clear_list_view_footer "$(_draw_footer | wc -l)"
                 show_timed_message "${T_WARN_ICON} No models selected to update."
-                handler_result_ref="redraw"
             fi
             ;;
         'r'|'R')
             if [[ "$current_model" != "All" && -n "$current_model" ]]; then
-                _clear_list_view_footer "$(_draw_footer | wc -l)"
                 if prompt_yes_no "Run model ${C_L_CYAN}${current_model}${T_RESET}?" "y"; then
                     clear_screen
                     printInfoMsg "Starting model: ${C_L_BLUE}${current_model}${T_RESET}"
@@ -227,26 +212,17 @@ _handle_key_press() {
                     ollama run "$current_model" # This takes over the terminal
                     _LIST_VIEW_OFFSET=0 # Reset scroll on data refresh
                     handler_result_ref="refresh_data" # Full refresh after returning from model
-                else
-                    # On cancel, just tell the main loop to redraw the view.
-                    handler_result_ref="redraw"
                 fi
             else
-                _clear_list_view_footer "$(_draw_footer | wc -l)"
                 show_timed_message "${T_WARN_ICON} Cannot run 'All' models. Please select an individual model." "2"
-                handler_result_ref="redraw"
             fi
             ;;
         'f'|'F')
-            _clear_list_view_footer "$(_draw_footer | wc -l)"
             local new_filter
-            if prompt_for_input "Filter by name" new_filter "$_VIEW_MODEL_FILTER" "true"; then
+            if prompt_for_input "Filter by name" new_filter "$_VIEW_MODEL_FILTER" "true" "$footer_height"; then
                 _VIEW_MODEL_FILTER="$new_filter"
                 _LIST_VIEW_OFFSET=0 # Reset scroll on data refresh
                 handler_result_ref="refresh_data"
-            else
-                # On cancel, prompt_for_input handles its own feedback. Redraw the view.
-                handler_result_ref="redraw"
             fi
             ;;
         'l'|'L')
@@ -269,40 +245,28 @@ _handle_key_press() {
             ;;
         's'|'S')
             if [[ $_FOOTER_EXPANDED -eq 1 ]]; then
-                _clear_list_view_footer "$(_draw_footer | wc -l)"
                 if prompt_yes_no "Are you sure you want to stop the Ollama service?" "n"; then
                     run_menu_action bash "${SCRIPT_DIR}/stop-ollama.sh"
                     _LIST_VIEW_OFFSET=0 # Reset scroll on data refresh
                     handler_result_ref="refresh_data"
-                else
-                    # On cancel, just tell the main loop to redraw the view.
-                    handler_result_ref="redraw"
                 fi
             fi
             ;;
         'e'|'E')
             if [[ $_FOOTER_EXPANDED -eq 1 ]]; then
-                _clear_list_view_footer "$(_draw_footer | wc -l)"
                 if prompt_yes_no "Are you sure you want to restart the Ollama service?" "y"; then
                     run_menu_action bash "${SCRIPT_DIR}/restart-ollama.sh"
                     _LIST_VIEW_OFFSET=0 # Reset scroll on data refresh
                     handler_result_ref="refresh_data"
-                else
-                    # On cancel, just tell the main loop to redraw the view.
-                    handler_result_ref="redraw"
                 fi
             fi
             ;;
         'i'|'I')
             if [[ $_FOOTER_EXPANDED -eq 1 ]]; then
-                _clear_list_view_footer "$(_draw_footer | wc -l)"
                 if prompt_yes_no "This will run the Ollama installer. Continue?" "y"; then
                     run_menu_action bash "${SCRIPT_DIR}/install-ollama.sh"
                     _LIST_VIEW_OFFSET=0 # Reset scroll on data refresh
                     handler_result_ref="refresh_data"
-                else
-                    # On cancel, just tell the main loop to redraw the view.
-                    handler_result_ref="redraw"
                 fi
             fi
             ;;
@@ -319,6 +283,9 @@ _handle_key_press() {
             handler_result_ref="noop" # Explicitly do nothing for unhandled keys
             ;;
     esac
+
+    # Default to redrawing the screen after any action that doesn't exit or refresh.
+    [[ "$handler_result_ref" == "noop" ]] && handler_result_ref="redraw"
 }
 
 main() {
