@@ -687,6 +687,9 @@ _interactive_list_view() {
     # Flag to signal that the terminal has been resized.
     local _tui_resized=0
     # Trap the WINCH signal (window change) and set the flag.
+    # Scroll indicators
+    local scroll_up_indicator=" "
+    local scroll_down_indicator=" "
     # The actual redraw will happen on the next key press.
     trap '_tui_resized=1' WINCH
 
@@ -725,12 +728,21 @@ _interactive_list_view() {
         # Ensure offset is 0 if list is smaller than viewport
         if (( num_options < viewport_height )); then list_offset_ref=0; fi
     }
+    
+    _update_scroll_indicators() {
+        scroll_up_indicator=" "
+        scroll_down_indicator=" "
+        if (( list_offset_ref > 0 )); then scroll_up_indicator="${C_L_CYAN}▲"; fi
+        if (( list_offset_ref + viewport_height < num_options )); then scroll_down_indicator="${C_L_CYAN}▼"; fi
+    }
 
     _draw_list() {
         local list_content=""
         local start_index=$list_offset_ref
         local end_index=$(( list_offset_ref + viewport_height - 1 ))
         if (( end_index >= num_options )); then end_index=$(( num_options - 1 )); fi
+
+        _update_scroll_indicators
 
         if [[ $num_options -gt 0 ]]; then
             # Only loop through the visible items
@@ -740,7 +752,12 @@ _interactive_list_view() {
                 if [[ ${#list_content} -gt 0 ]]; then list_content+='\n'; fi
                 local is_current="false"; if (( i == current_option )); then is_current="true"; fi
                 local is_selected="false"; if [[ "$is_multi_select" == "true" && "${selected_options[i]}" -eq 1 ]]; then is_selected="true"; fi
+                
+                local scroll_indicator=" "
+                if (( i == start_index )); then scroll_indicator="$scroll_up_indicator"; fi
+                if (( i == end_index )); then scroll_indicator="$scroll_down_indicator"; fi
                 _draw_menu_item "$is_current" "$is_selected" "$is_multi_select" "${menu_options[i]}" list_content
+                list_content+="${scroll_indicator}${T_RESET}"
             done
         else
             if [[ "$_tui_is_loading" != "true" ]]; then
