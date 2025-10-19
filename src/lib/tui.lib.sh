@@ -156,14 +156,19 @@ restore_cursor_pos() {
 # It saves and restores the cursor position, so it doesn't disrupt the layout.
 # Usage: debug_show_cursor_pos
 debug_show_cursor_pos() {
-    # Save current cursor position and attributes
-    printf '\033[s' >/dev/tty
-
     # Get current cursor position. The terminal responds with `ESC[<row>;<col>R`.
     local pos
     IFS=';' read -s -d R -p $'\E[6n' pos >/dev/tty
     local row="${pos#*[}"
     local col="${pos#*;}"
+
+    # Save current cursor position and attributes
+    printf '\033[s' >/dev/tty
+
+    # Print a red star at the current position to make it stand out.
+    printf '%s' "${C_L_RED}*${T_RESET}" >/dev/tty
+    # Move the cursor back to its original position before we printed the star.
+    printf '\033[1D' >/dev/tty
 
     # Move to top-right corner to display the coordinates
     local term_width; term_width=$(tput cols)
@@ -171,6 +176,10 @@ debug_show_cursor_pos() {
     local display_col=$(( term_width - ${#msg} ))
     printf '\033[1;%sH' "$display_col" >/dev/tty
     printf '%s' "${BG_YELLOW}${C_BLACK}${msg}${T_RESET}" >/dev/tty
+
+    # The star and coordinates will be visible until the next screen redraw,
+    # which usually happens on the next keypress in the TUI loop.
+    # We restore the cursor so the next draw operation starts from the correct place.
 
     # Restore original cursor position and attributes
     printf '\033[u' >/dev/tty
