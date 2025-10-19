@@ -298,17 +298,13 @@ test_check_gpu_status() {
 
     # --- Mock dependencies ---
     # We only need to mock _check_command_exists and the new helper.
-    command() {
+    _check_command_exists() {
         if [[ "$1" == "-v" && "$2" == "nvidia-smi" ]]; then
             [[ "$MOCK_NVIDIA_SMI_EXISTS" == "true" ]] && return 0 || return 1
-        else
-            /usr/bin/command "$@"
         fi
     }
-    print_gpu_status() {
-        MOCK_PRINT_GPU_STATUS_CALLED=true
-    }
-    export -f command print_gpu_status
+    print_gpu_status() { MOCK_PRINT_GPU_STATUS_CALLED=true; }
+    export -f _check_command_exists print_gpu_status
 
     # --- Test Cases ---
 
@@ -329,38 +325,25 @@ test_check_openwebui_status() {
     printTestSectionHeader "Testing check_openwebui_status function:"
 
     # --- Mock dependencies ---
-    command() {
-        if [[ "$1" == "-v" && "$2" == "docker" ]]; then
+    _check_command_exists() {
+        if [[ "$1" == "docker" ]]; then
             [[ "$MOCK_DOCKER_EXISTS" == "true" ]] && return 0 || return 1
-        else
-            # Allow other command checks to pass through
-            /usr/bin/command "$@"
         fi
     }
-    get_docker_compose_cmd() {
-        if [[ "$MOCK_COMPOSE_EXISTS" == "true" ]]; then
-            echo "mock_compose_cmd"
-        else
-            echo ""
-        fi
+    check_openwebui_container_running() {
+        [[ "$MOCK_WEBUI_RUNNING" == "true" ]] && return 0 || return 1
     }
-    mock_compose_cmd() {
-        # We only care about the 'ps' subcommand for this test
-        if [[ "$3" == "ps" ]]; then
-            echo "$MOCK_COMPOSE_PS_OUTPUT"
-        fi
-    }
-    # This mock is already used by test_check_ollama_status, but we redefine it here
-    # to control it for our specific scenarios.
     check_endpoint_status() { [[ "$MOCK_WEBUI_RESPONSIVE" == "true" ]]; }
-    export -f command get_docker_compose_cmd mock_compose_cmd check_endpoint_status
+    get_openwebui_url() { echo "http://mock.test:3000"; } # Mock the URL helper
+
+    export -f _check_command_exists check_openwebui_container_running check_endpoint_status get_openwebui_url
 
     # --- Test Cases ---
     local actual_output
     local actual_output_no_color
 
     # Scenario 1: All good
-    export MOCK_DOCKER_EXISTS=true MOCK_COMPOSE_EXISTS=true MOCK_COMPOSE_PS_OUTPUT="open-webui" MOCK_WEBUI_RESPONSIVE=true
+    export MOCK_DOCKER_EXISTS=true MOCK_WEBUI_RUNNING=true MOCK_WEBUI_RESPONSIVE=true
     actual_output=$(check_openwebui_status)
     actual_output_no_color=$(echo "$actual_output" | sed 's/\x1b\[[0-9;]*m//g')
     _run_test "[[ \"$actual_output_no_color\" == *\"Container: Running\"* ]]" 0 "Reports running container"
@@ -373,7 +356,7 @@ test_check_openwebui_status() {
     _run_test "[[ \"$actual_output_no_color\" == *\"Docker not found\"* ]]" 0 "Handles missing Docker"
 
     # Scenario 3: Container is not running
-    export MOCK_DOCKER_EXISTS=true MOCK_COMPOSE_EXISTS=true MOCK_COMPOSE_PS_OUTPUT="" MOCK_WEBUI_RESPONSIVE=false
+    export MOCK_DOCKER_EXISTS=true MOCK_WEBUI_RUNNING=false MOCK_WEBUI_RESPONSIVE=false
     actual_output=$(check_openwebui_status)
     actual_output_no_color=$(echo "$actual_output" | sed 's/\x1b\[[0-9;]*m//g')
     _run_test "[[ \"$actual_output_no_color\" == *\"Container: Not Running\"* ]]" 0 "Reports not running container"
@@ -392,9 +375,9 @@ run_tests() {
     test_check_openwebui_status
 
     print_test_summary \
-        "_is_systemd_system" "_is_ollama_service_known" "systemctl" \
-        "check_endpoint_status" "check_network_exposure" "command" "print_gpu_status" \
-        "get_docker_compose_cmd" "mock_compose_cmd"
+        _is_systemd_system _is_ollama_service_known systemctl \
+        check_endpoint_status check_network_exposure _check_command_exists print_gpu_status \
+        check_openwebui_container_running get_openwebui_url
 }
 
 main() {

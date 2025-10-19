@@ -11,7 +11,7 @@
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 # shellcheck source=./lib/shared.lib.sh
 if ! source "${SCRIPT_DIR}/lib/shared.lib.sh"; then
-    echo "Error: Could not source shared.sh. Make sure it's in the same directory." >&2
+    echo "Error: Could not source shared.lib.sh. Make sure it's in the 'src/lib' directory." >&2
     exit 1
 fi
 
@@ -95,7 +95,7 @@ run_tests() {
     echo 'echo "no test flag"' > "$temp_dir/not_testable_simple.sh"
     echo '# This is a comment about -t|--test)' > "$temp_dir/not_testable_comment.sh"
     echo 'echo "this is a test"' > "$temp_dir/not_testable_word.sh"
-    echo 'ss -tlpn | column -t' > "$temp_dir/not_testable_false_positive.sh" # The original bug
+    echo 'ss -tlpn | column -t' > "$temp_dir/not_testable_false_positive.sh" # A known false positive pattern
     echo 'if [[ "$1" == "--another-test" ]]; then exit 0; fi' > "$temp_dir/not_testable_other_flag.sh"
     local unreadable_file="$temp_dir/unreadable.sh"
     touch "$unreadable_file"
@@ -207,11 +207,11 @@ main() {
 
   # --- Discover testable scripts ---
   for script in "${all_scripts[@]}"; do
-    script_name=$(basename "$script")
     if _is_script_testable "$script"; then
-      testable_scripts+=("$script_name")
+      # Store the full path to the script
+      testable_scripts+=("$script")
     else
-      not_testable_scripts+=("$script_name")
+      not_testable_scripts+=("$(basename "$script")")
     fi
   done
 
@@ -225,13 +225,14 @@ main() {
 
   printMsg "${T_ULINE}${C_L_WHITE}    Running tests in parallel...${T_RESET}"
   # --- Run tests in parallel ---
-  for script_name in "${testable_scripts[@]}"; do
+  for script_path in "${testable_scripts[@]}"; do
+    local script_name; script_name=$(basename "$script_path")
     # Each test runs in a subshell in the background.
     # We save the exit code and output to separate files for later processing.
     (
       local output_file="${results_dir}/${script_name}.log"
       local exit_code_file="${results_dir}/${script_name}.exit"
-      bash "$script_name" --test >"$output_file" 2>&1
+      bash "$script_path" --test >"$output_file" 2>&1
       echo $? >"$exit_code_file"
     ) &
     pids+=($!)
@@ -243,7 +244,8 @@ main() {
 
   # --- Process results ---
   printMsg "${T_ULINE}${C_L_WHITE}    Test Results:${T_RESET}"
-  for script_name in "${testable_scripts[@]}"; do
+  for script_path in "${testable_scripts[@]}"; do
+    local script_name; script_name=$(basename "$script_path")
     local output_file="${results_dir}/${script_name}.log"
     local exit_code_file="${results_dir}/${script_name}.exit"
     local exit_code
