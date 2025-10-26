@@ -349,11 +349,7 @@ configure_kv_cache() {
 #
 configure_context_length() {
     local -n pending_length_ref=$1
-
-    clear
-    printBanner "Configure Context Length"
-    local current_length
-    current_length=$(get_env_var "$CONTEXT_LENGTH_VAR" "$OLLAMA_ADVANCED_CONF")
+    local current_length; current_length=$(get_env_var "$CONTEXT_LENGTH_VAR" "$OLLAMA_ADVANCED_CONF")
     local length_display
     if [[ -n "$current_length" ]]; then
         length_display="${C_L_BLUE}${current_length}${T_RESET}"
@@ -361,62 +357,15 @@ configure_context_length() {
         length_display="${C_GRAY}(default)${T_RESET}"
     fi
     printInfoMsg "Current ${CONTEXT_LENGTH_VAR} is set to: ${length_display}"
-    printMsg "\nOllama will use this much context from a model's context window."
-    printMsg "A larger value requires more VRAM. Default is typically 2048."
 
-    printMsg "\n${T_ULINE}Choose a common value or enter a custom one:${T_RESET}"
-    _print_menu_item "1" "2048 (Default for many models)"
-    _print_menu_item "2" "4096"
-    _print_menu_item "3" "8192"
-    _print_menu_item "4" "16384"
-    _print_menu_item "c" "Enter a ${C_L_CYAN}(c)ustom${T_RESET} value"
-    _print_menu_item "r" "${C_L_YELLOW}(R)emove${T_RESET} setting (use Ollama default)"
-    _print_menu_item "b" "Back to main menu (or press ${C_L_YELLOW}ESC${T_RESET})"
-    printMsg ""
-    printMsgNoNewline " ${T_QST_ICON} Your choice: "
-
-    local choice
-    choice=$(read_single_char)
-    clear_current_line
-
-    local length=""
-
-    case $choice in
-        1) length="2048" ;;
-        2) length="4096" ;;
-        3) length="8192" ;;
-        4) length="16384" ;;
-        c|C)
-            # The menu is 9 lines tall. Clear it before prompting for custom input.
-            clear_lines_up 9
-            read -r -p "$(echo -e "${T_QST_ICON} Enter custom context length: ")" length
-            if [[ -z "$length" ]]; then
-                printWarnMsg "No value entered. No changes made."
-                sleep 1
-                return 2
-            fi
-            ;;
-        r|R)
-            # Setting length to empty string will remove it from the config.
-            length=""
-            ;;
-        b|B|"$KEY_ESC") return 2 ;;
-        *) printWarnMsg "Invalid choice." && sleep 1; return 2 ;;
-    esac
-
-    # This validation block is now common for all choices except 'back' and 'invalid'.
-    # It also handles the case where 'length' is empty (for removal), which is valid.
-    if [[ -n "$length" && ! "$length" =~ ^[0-9]+$ ]]; then
-        printErrMsg "Invalid input. Please enter a positive number."
-        sleep 2
-        return 2
-    fi
-
-    if [[ "$pending_length_ref" != "$length" ]]; then
-        pending_length_ref="$length"
-        return 0 # changed
-    fi
-    return 2 # no change
+    local help_text="Ollama will use this much context from a model's context window.\nA larger value requires more VRAM. Default is typically 2048."
+    local -A options=(
+        [1]="2048 (Default for many models):2048"
+        [2]="4096:4096"
+        [3]="8192:8192"
+        [4]="16384:16384"
+    )
+    _configure_generic_value pending_length_ref "Configure Context Length" "$help_text" options "numeric"
 }
 
 #
@@ -424,10 +373,7 @@ configure_context_length() {
 #
 configure_num_parallel() {
     local -n pending_parallel_ref=$1
-    clear
-    printBanner "Configure Parallel Requests"
-    local current_parallel
-    current_parallel=$(get_env_var "$NUM_PARALLEL_VAR" "$OLLAMA_ADVANCED_CONF")
+    local current_parallel; current_parallel=$(get_env_var "$NUM_PARALLEL_VAR" "$OLLAMA_ADVANCED_CONF")
     local parallel_display
     if [[ -n "$current_parallel" ]]; then
         parallel_display="${C_L_BLUE}${current_parallel}${T_RESET}"
@@ -435,54 +381,15 @@ configure_num_parallel() {
         parallel_display="${C_GRAY}(default)${T_RESET}"
     fi
     printInfoMsg "Current ${NUM_PARALLEL_VAR} is set to: ${parallel_display}"
-    printMsg "\nSets the number of parallel requests that can be processed at once."
-    printMsg "Increasing this can improve throughput but significantly increases \nVRAM usage. Default is 1."
 
-    printMsg "\n${T_ULINE}Choose a value or enter a custom one:${T_RESET}"
-    _print_menu_item "1" "1 (Default)"
-    _print_menu_item "2" "2"
-    _print_menu_item "3" "3"
-    _print_menu_item "4" "4"
-    _print_menu_item "c" "Enter a ${C_L_CYAN}(c)ustom${T_RESET} value"
-    _print_menu_item "r" "${C_L_YELLOW}(R)emove${T_RESET} setting (use Ollama default)"
-    _print_menu_item "b" "Back to main menu (or press ${C_L_YELLOW}ESC${T_RESET})"
-    printMsg ""
-    printMsgNoNewline " ${T_QST_ICON} Your choice: "
-
-    local choice
-    choice=$(read_single_char)
-    clear_current_line
-
-    local num=""
-    case $choice in
-        1) num="1" ;;
-        2) num="2" ;;
-        3) num="3" ;;
-        4) num="4" ;;
-        c|C)
-            clear_lines_up 9
-            read -r -p "$(echo -e "${T_QST_ICON} Enter custom number of parallel requests: ")" num
-            if [[ -z "$num" ]]; then
-                printWarnMsg "No value entered. No changes made."
-                sleep 1
-                return 2
-            fi
-            ;;
-        r|R) num="" ;;
-        b|B|"$KEY_ESC") return 2 ;;
-        *) printWarnMsg "Invalid choice." && sleep 1; return 2 ;;
-    esac
-    
-    if [[ -n "$num" && ! "$num" =~ ^[0-9]+$ ]]; then
-        printErrMsg "Invalid input. Please enter a positive number."
-        sleep 2
-        return 2
-    fi
-    if [[ "$pending_parallel_ref" != "$num" ]]; then
-        pending_parallel_ref="$num"
-        return 0 # changed
-    fi
-    return 2 # no change
+    local help_text="Sets the number of parallel requests that can be processed at once.\nIncreasing this can improve throughput but significantly increases VRAM usage. Default is 1."
+    local -A options=(
+        [1]="1 (Default):1"
+        [2]="2:2"
+        [3]="3:3"
+        [4]="4:4"
+    )
+    _configure_generic_value pending_parallel_ref "Configure Parallel Requests" "$help_text" options "numeric"
 }
 
 #
@@ -490,8 +397,6 @@ configure_num_parallel() {
 #
 configure_models_dir() {
     local -n pending_dir_ref=$1
-    clear
-    printBanner "Configure Models Directory"
     local current_dir
     current_dir=$(get_env_var "$OLLAMA_MODELS_VAR" "$OLLAMA_ADVANCED_CONF")
     local dir_display
@@ -501,58 +406,88 @@ configure_models_dir() {
         dir_display="${C_GRAY}(default: ~/.ollama/models)${T_RESET}"
     fi
     printInfoMsg "Current ${OLLAMA_MODELS_VAR} is set to: ${dir_display}"
-    printMsg "\nThis sets the directory where Ollama stores models and manifests."
-    printMsg "Useful for storing models on a separate, larger drive."
 
-    printMsg "\n${T_ULINE}Choose an option:${T_RESET}"
-    _print_menu_item "c" "Enter a ${C_L_CYAN}(c)ustom${T_RESET} path"
+    local help_text="This sets the directory where Ollama stores models and manifests.\nUseful for storing models on a separate, larger drive."
+    local -A options=() # No common options for this one
+    _configure_generic_value pending_dir_ref "Configure Models Directory" "$help_text" options "path"
+}
+
+# (Private) A generic, reusable interactive menu for configuring a single value.
+# This function encapsulates the common UI for settings that have common presets,
+# a custom value option, and a reset option.
+#
+# Usage: _configure_generic_value <pending_var_nameref> <banner_text> <help_text> <options_assoc_array_nameref> <validation_type>
+#   validation_type: "numeric" or "path"
+_configure_generic_value() {
+    local -n pending_ref="$1"
+    local banner_text="$2"
+    local help_text="$3" 
+    local -n options_ref="$4"
+    local validation_type="$5"
+
+    clear
+    printBanner "$banner_text"
+    # The calling function is expected to have already printed the current status.
+    printMsg "\n${help_text}"
+
+    printMsg "\n${T_ULINE}Choose an option:${T_RESET}" 
+    for key in "${!options_ref[@]}"; do
+        local label="${options_ref[$key]%%:*}"
+        _print_menu_item "$key" "$label"
+    done
+    _print_menu_item "c" "Enter a ${C_L_CYAN}(c)ustom${T_RESET} value"
     _print_menu_item "r" "${C_L_YELLOW}(R)emove${T_RESET} setting (use Ollama default)"
     _print_menu_item "b" "Back to main menu (or press ${C_L_YELLOW}ESC${T_RESET})"
     printMsg ""
     printMsgNoNewline " ${T_QST_ICON} Your choice: "
 
-    local choice
-    choice=$(read_single_char)
+    local choice; choice=$(read_single_char)
     clear_current_line
 
-    local models_path=""
-    case $choice in
-        c|C)
-            clear_lines_up 6
-            read -r -e -p "$(echo -e "${T_QST_ICON} Enter custom models directory path: ")" models_path
-            # Expand tilde to home directory
-            models_path="${models_path/#\~/$HOME}"
+    local new_value=""
+    local choice_handled=false
 
-            if [[ -z "$models_path" ]]; then
-                printWarnMsg "No path entered. No changes made."
-                sleep 1.5
-                return 2
+    if [[ -n "${options_ref[$choice]}" ]]; then
+        new_value="${options_ref[$choice]#*:}"
+        choice_handled=true
+    else
+        case "$choice" in
+            c|C)
+                local menu_lines; menu_lines=$(echo -e "$help_text" | wc -l)
+                # Clear menu: banner(1) + help(N) + header(1) + options + custom/remove/back(3) + prompt(1)
+                clear_lines_up $((1 + menu_lines + 1 + ${#options_ref[@]} + 3 + 1))
+                read -r -e -p "$(echo -e "${T_QST_ICON} Enter custom value: ")" new_value
+                if [[ -z "$new_value" ]]; then printWarnMsg "No value entered. No changes made."; sleep 1.5; return 2; fi
+                choice_handled=true
+                ;;
+            r|R) new_value=""; choice_handled=true ;;
+            b|B|"$KEY_ESC") return 2 ;;
+            *) printWarnMsg "Invalid choice." && sleep 1; return 2 ;;
+        esac
+    fi
+
+    # --- Validation and Post-processing ---
+    if [[ "$validation_type" == "numeric" && -n "$new_value" && ! "$new_value" =~ ^[0-9]+$ ]]; then
+        printErrMsg "Invalid input. Please enter a positive number."; sleep 2; return 2
+    elif [[ "$validation_type" == "path" ]]; then
+        new_value="${new_value/#\~/$HOME}" # Expand tilde
+        if [[ -n "$new_value" && "$new_value" != /* ]]; then
+            printErrMsg "Invalid path. Please enter an absolute path."; sleep 2; return 2
+        fi
+        # Offer to create the directory if it's a path and doesn't exist
+        if [[ -n "$new_value" && ! -d "$new_value" ]]; then
+            if prompt_yes_no "Directory '${new_value}' does not exist. Create it now?" "y"; then
+                sudo mkdir -p "$new_value" && sudo chown -R "$(whoami)":"$(whoami)" "$new_value"
+                printOkMsg "Directory created."
             fi
+        fi
+    fi
 
-            # Basic validation: check if it's an absolute path
-            if [[ "$models_path" != /* ]]; then
-                printErrMsg "Invalid path. Please enter an absolute path (e.g., /mnt/models)."
-                sleep 2
-                return 2
-            fi
-
-            # Offer to create the directory
-            if [[ ! -d "$models_path" ]]; then
-                if prompt_yes_no "Directory '${models_path}' does not exist. Create it now?" "y"; then
-                    sudo mkdir -p "$models_path" && sudo chown -R "$(whoami)":"$(whoami)" "$models_path"
-                    printOkMsg "Directory created."
-                fi
-            fi
-            ;;
-        r|R) models_path="" ;; # Setting to empty removes it
-        b|B|"$KEY_ESC") return 2 ;;
-        *) printWarnMsg "Invalid choice." && sleep 1; return 2 ;;
-    esac
-
-    if [[ "$pending_dir_ref" != "$models_path" ]]; then
-        pending_dir_ref="$models_path"
+    if [[ "$pending_ref" != "$new_value" ]]; then
+        pending_ref="$new_value"
         return 0 # changed
     fi
+
     return 2 # no change
 }
 
