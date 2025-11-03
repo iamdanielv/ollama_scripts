@@ -90,6 +90,7 @@ After it starts, open the link provided (usually `http://localhost:3000`) and fo
 | Script | Description |
 |---|---|
 | `./src/diagnose.sh` | 🩺 Generates diagnostic report of the system, services, and configurations to help with troubleshooting. |
+| `./src/manage-env.sh` | 📝 An interactive TUI to manage variables in `.env` files. |
 | `./src/check-status.sh` | 🔄 Checks the status of Ollama and OpenWebUI. Can also list installed models (`--models`), watch currently loaded models in real-time (`--watch`), or run self-tests (`--test`). |
 
 ### 🤖 Ollama Management Scripts

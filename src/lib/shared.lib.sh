@@ -237,10 +237,15 @@ ensure_script_dir() {
 
 # (Private) Finds the project root directory by searching upwards for a known file.
 # The result is stored in the global variable _PROJECT_ROOT and exported.
+# Usage: _find_project_root [--silent]
 # Returns 0 on success, 1 on failure.
 _find_project_root() {
+    local silent=false
+    if [[ "$1" == "--silent" ]]; then
+        silent=true
+    fi
     # If already found, return success
-    if [[ -n "$_PROJECT_ROOT" ]]; then
+    if [[ -n "${_PROJECT_ROOT:-}" ]]; then
         return 0
     fi
 
@@ -253,7 +258,7 @@ _find_project_root() {
 
     while [[ "$current_dir" != "/" && "$current_dir" != "" ]]; do
         # Using README.md and shared.lib.sh as anchor files to identify the project root.
-        if [[ -f "$current_dir/README.md" && -f "$current_dir/src/lib/shared.lib.sh" ]]; then
+        if [[ -f "$current_dir/README.md" && -f "$current_dir/src/lib/shared.lib.sh" ]] || [[ -f "$current_dir/GEMINI.md" ]]; then
             _PROJECT_ROOT="$current_dir"
             export _PROJECT_ROOT # Export so subshells can see it
             return 0

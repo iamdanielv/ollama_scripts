@@ -188,18 +188,18 @@ debug_show_cursor_pos() {
 
 #region User Input
 read_single_char() {
-    local char; local seq; IFS= read -rsn1 char
+    local char; local seq; IFS= read -rsn1 char < /dev/tty
     if [[ -z "$char" ]]; then echo "$KEY_ENTER"; return; fi
     if [[ "$char" == "$KEY_ESC" ]]; then
-        while IFS= read -rsn1 -t 0.001 seq; do char+="$seq"; done
+        while IFS= read -rsn1 -t 0.001 seq < /dev/tty; do char+="$seq"; done
     fi
     echo "$char"
 }
 
 prompt_to_continue() {
-    printInfoMsg "Press any key to continue..." >/dev/tty
-    read_single_char >/dev/null
-    clear_lines_up 1
+    printMsgNoNewline "${T_INFO_ICON} Press any key to continue... " >/dev/tty
+    read_single_char >/dev/null # This now correctly reads from tty
+    clear_current_line >/dev/tty
 }
 
 # Prints a message for a fixed duration, then clears it. Does not wait for user input.
@@ -261,7 +261,7 @@ prompt_yes_no() {
     printf '%b' "${T_QST_ICON} ${question} ${prompt_suffix} " >/dev/tty
 
     while true; do
-        answer=$(read_single_char </dev/tty)
+        answer=$(read_single_char) # This will now correctly read from the tty
         if [[ "$answer" == "$KEY_ENTER" ]]; then answer="$default_answer"; fi
 
         case "$answer" in
@@ -415,7 +415,7 @@ prompt_for_input() {
     while true; do
         _prompt_for_input_redraw
 
-        key=$(read_single_char </dev/tty)
+        key=$(read_single_char) # This will now correctly read from the tty
 
         case "$key" in
             "$KEY_ENTER")
@@ -635,13 +635,13 @@ interactive_menu() {
 
     local movement_keys="↓/↑/j/k"; local select_action="${C_L_GREEN}SPACE/ENTER${C_WHITE} to confirm"
     if [[ "$mode" == "multi" ]]; then select_action="${C_L_CYAN}SPACE${C_WHITE} to select | ${C_L_GREEN}ENTER${C_WHITE} to confirm"; fi
-    printf '  %s%s%s Move | %s | %s%s%s to cancel%s\n' "${C_L_CYAN}" "${movement_keys}" "${C_WHITE}" "${select_action}" "${C_L_YELLOW}" "Q/ESC" "${C_GRAY}" "${T_RESET}" >/dev/tty
+    printf '  %s%s%s Move | %s | %s%s%s to cancel%s\n' "${C_L_CYAN}" "${movement_keys}" "${C_WHITE}" "${select_action}" "${C_L_YELLOW}" "Q/ESC" "${C_WHITE}" "${T_RESET}" >/dev/tty
 
     move_cursor_up 2
 
     local key; local lines_above=$((1 + header_lines)); local lines_below=2
     while true; do
-        move_cursor_up "$menu_content_lines"; key=$(read_single_char </dev/tty)
+        move_cursor_up "$menu_content_lines"; key=$(read_single_char)
         case "$key" in
             "$KEY_UP"|"k") current_option=$(( (current_option - 1 + num_options) % num_options ));;
             "$KEY_DOWN"|"j") current_option=$(( (current_option + 1) % num_options ));;
@@ -822,7 +822,7 @@ _interactive_list_view() {
             _redraw_all
         fi
 
-        local key; key=$(read_single_char)
+        local key; key=$(read_single_char) # This will now correctly read from the tty
         local handler_result="noop" # Default to no action
 
         case "$key" in
@@ -1386,7 +1386,7 @@ _interactive_list_models() {
     # 4. Main interactive loop
     local key
     while true; do
-        key=$(read_single_char </dev/tty)
+        key=$(read_single_char)
         local state_changed=false
 
         case "$key" in
