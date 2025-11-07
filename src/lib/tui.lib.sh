@@ -838,12 +838,6 @@ _interactive_list_view() {
                 if (( num_options > 0 )); then current_option=$(( num_options - 1 )); handler_result="redraw"; fi ;;
             *)
                 # # For other keys, we assume they might trigger a prompt that needs to draw
-                # # in the footer area. We prepare the screen by moving the cursor to the
-                # # start of the footer and clearing it.
-                # local footer_height; footer_height=$($footer_func | wc -l)
-                # local footer_start_line=$(( 2 + 1 + 1 + viewport_height + 1 + 1 )) # banner, header, div, list, div, newline
-                # move_cursor_to "$footer_start_line" 1
-                # clear_lines_down "$footer_height"
 
                 "$key_handler_func" \
                     "$key" \
@@ -852,7 +846,7 @@ _interactive_list_view() {
                     current_option \
                     num_options \
                     handler_result \
-                    "$footer_height" # Pass footer height to handler
+                    "$($footer_func | wc -l)" # Pass calculated footer height to handler
                 ;;
         esac
 

@@ -240,6 +240,8 @@ _handle_key_press() {
             ;;
         'c'|'C')
             if [[ $_FOOTER_EXPANDED -eq 1 ]]; then
+                clear_current_line
+                clear_lines_up "$footer_height"
                 run_menu_action bash "${SCRIPT_DIR}/config-ollama.sh"
                 handler_result_ref="refresh_data"
                 _LIST_VIEW_OFFSET=0 # Reset scroll on data refresh
@@ -247,29 +249,38 @@ _handle_key_press() {
             ;;
         's'|'S')
             if [[ $_FOOTER_EXPANDED -eq 1 ]]; then
+                clear_current_line
+                clear_lines_up "$footer_height"
                 if prompt_yes_no "Are you sure you want to stop the Ollama service?" "n"; then
                     run_menu_action bash "${SCRIPT_DIR}/stop-ollama.sh"
                     _LIST_VIEW_OFFSET=0 # Reset scroll on data refresh
                     handler_result_ref="refresh_data"
                 fi
+                handler_result_ref="redraw" # Redraw if user cancels prompt
             fi
             ;;
         'e'|'E')
             if [[ $_FOOTER_EXPANDED -eq 1 ]]; then
+                clear_current_line
+                clear_lines_up "$footer_height"
                 if prompt_yes_no "Are you sure you want to restart the Ollama service?" "y"; then
                     run_menu_action bash "${SCRIPT_DIR}/restart-ollama.sh"
                     _LIST_VIEW_OFFSET=0 # Reset scroll on data refresh
                     handler_result_ref="refresh_data"
                 fi
+                handler_result_ref="redraw" # Redraw if user cancels prompt
             fi
             ;;
         'i'|'I')
             if [[ $_FOOTER_EXPANDED -eq 1 ]]; then
+                clear_current_line
+                clear_lines_up "$footer_height"
                 if prompt_yes_no "This will run the Ollama installer. Continue?" "y"; then
                     run_menu_action bash "${SCRIPT_DIR}/install-ollama.sh"
                     _LIST_VIEW_OFFSET=0 # Reset scroll on data refresh
                     handler_result_ref="refresh_data"
                 fi
+                handler_result_ref="redraw" # Redraw if user cancels prompt
             fi
             ;;
         'q'|'Q'|"$KEY_ESC")
