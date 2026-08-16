@@ -358,12 +358,15 @@ configure_context_length() {
     fi
     printInfoMsg "Current ${CONTEXT_LENGTH_VAR} is set to: ${length_display}"
 
-    local help_text="Ollama will use this much context from a model's context window.\nA larger value requires more VRAM. Default is typically 2048."
+    local help_text="Ollama will use this much context from a model's context window.\nA larger value requires more VRAM. Default is typically 2048. Larger values (32k+) are recommended for coding tasks."
     local -A options=(
         [1]="2048 (Default for many models):2048"
         [2]="4096:4096"
         [3]="8192:8192"
         [4]="16384:16384"
+        [5]="32768 (32k - good for coding):32768"
+        [6]="65536 (64k - recommended for coding):65536"
+        [7]="131072 (128k - high-VRAM systems):131072"
     )
     _configure_generic_value pending_length_ref "Configure Context Length" "$help_text" options "numeric"
 }
