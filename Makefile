@@ -18,7 +18,7 @@ WEBUI_DIR := ./openwebui
 .DEFAULT_GOAL := help
 
 # Phony targets are not real files
-.PHONY: help install config status models run diagnose test restart stop logs webui-start webui-stop webui-update manager
+.PHONY: help install config status models run diagnose test restart stop logs webui-start webui-stop webui-update manager benchmark
 
 help: ##@ ✨ Show this help message
 	@printf "\n$(C_BOLD)Ollama & OpenWebUI Management Scripts$(C_RESET)\n\n"
@@ -76,3 +76,7 @@ webui-stop: ##@ Stop the OpenWebUI service
 
 webui-update: ##@ Update the OpenWebUI service
 	@$(WEBUI_DIR)/update-openwebui.sh
+
+benchmark:
+	@echo "Running benchmark script..."
+	@$(SRC_DIR)/benchmark.sh
