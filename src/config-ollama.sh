@@ -350,13 +350,6 @@ configure_kv_cache() {
 configure_context_length() {
     local -n pending_length_ref=$1
     local current_length; current_length=$(get_env_var "$CONTEXT_LENGTH_VAR" "$OLLAMA_ADVANCED_CONF")
-    local length_display
-    if [[ -n "$current_length" ]]; then
-        length_display="${C_L_BLUE}${current_length}${T_RESET}"
-    else
-        length_display="${C_GRAY}(default)${T_RESET}"
-    fi
-    printInfoMsg "Current ${CONTEXT_LENGTH_VAR} is set to: ${length_display}"
 
     local help_text="Ollama will use this much context from a model's context window.\nA larger value requires more VRAM. Default is typically 2048. Larger values (32k+) are recommended for coding tasks."
     local -A options=(
@@ -368,7 +361,7 @@ configure_context_length() {
         [6]="65536 (64k - recommended for coding):65536"
         [7]="131072 (128k - high-VRAM systems):131072"
     )
-    _configure_generic_value pending_length_ref "Configure Context Length" "$help_text" options "numeric"
+    _configure_generic_value pending_length_ref "Configure Context Length" "$help_text" options "numeric" "$current_length"
 }
 
 #
@@ -377,13 +370,6 @@ configure_context_length() {
 configure_num_parallel() {
     local -n pending_parallel_ref=$1
     local current_parallel; current_parallel=$(get_env_var "$NUM_PARALLEL_VAR" "$OLLAMA_ADVANCED_CONF")
-    local parallel_display
-    if [[ -n "$current_parallel" ]]; then
-        parallel_display="${C_L_BLUE}${current_parallel}${T_RESET}"
-    else
-        parallel_display="${C_GRAY}(default)${T_RESET}"
-    fi
-    printInfoMsg "Current ${NUM_PARALLEL_VAR} is set to: ${parallel_display}"
 
     local help_text="Sets the number of parallel requests that can be processed at once.\nIncreasing this can improve throughput but significantly increases VRAM usage. Default is 1."
     local -A options=(
@@ -392,7 +378,7 @@ configure_num_parallel() {
         [3]="3:3"
         [4]="4:4"
     )
-    _configure_generic_value pending_parallel_ref "Configure Parallel Requests" "$help_text" options "numeric"
+    _configure_generic_value pending_parallel_ref "Configure Parallel Requests" "$help_text" options "numeric" "$current_parallel"
 }
 
 #
@@ -402,40 +388,43 @@ configure_models_dir() {
     local -n pending_dir_ref=$1
     local current_dir
     current_dir=$(get_env_var "$OLLAMA_MODELS_VAR" "$OLLAMA_ADVANCED_CONF")
-    local dir_display
-    if [[ -n "$current_dir" ]]; then
-        dir_display="${C_L_CYAN}${current_dir}${T_RESET}"
-    else
-        dir_display="${C_GRAY}(default: ~/.ollama/models)${T_RESET}"
-    fi
-    printInfoMsg "Current ${OLLAMA_MODELS_VAR} is set to: ${dir_display}"
 
     local help_text="This sets the directory where Ollama stores models and manifests.\nUseful for storing models on a separate, larger drive."
     local -A options=() # No common options for this one
-    _configure_generic_value pending_dir_ref "Configure Models Directory" "$help_text" options "path"
+    _configure_generic_value pending_dir_ref "Configure Models Directory" "$help_text" options "path" "$current_dir"
 }
 
 # (Private) A generic, reusable interactive menu for configuring a single value.
 # This function encapsulates the common UI for settings that have common presets,
 # a custom value option, and a reset option.
 #
-# Usage: _configure_generic_value <pending_var_nameref> <banner_text> <help_text> <options_assoc_array_nameref> <validation_type>
+# Usage: _configure_generic_value <pending_var_nameref> <banner_text> <help_text> <options_assoc_array_nameref> <validation_type> <current_value>
 #   validation_type: "numeric" or "path"
+#   current_value: the current setting value to highlight (optional)
 _configure_generic_value() {
     local -n pending_ref="$1"
     local banner_text="$2"
     local help_text="$3" 
     local -n options_ref="$4"
     local validation_type="$5"
+    local current_value="$6"
 
     clear
     printBanner "$banner_text"
-    # The calling function is expected to have already printed the current status.
-    printMsg "\n${help_text}"
+    printMsg "${help_text}"    
+    # Display current value prominently if provided
+    if [[ -n "$current_value" ]]; then
+        printf "${T_BOLD}Current Value:${T_RESET} %b\n\n" "${C_L_BLUE}${current_value}${T_RESET}"
+    fi
 
     printMsg "\n${T_ULINE}Choose an option:${T_RESET}" 
     for key in "${!options_ref[@]}"; do
         local label="${options_ref[$key]%%:*}"
+        local value="${options_ref[$key]#*:}"
+        # Add a visual indicator if this option matches the current value
+        if [[ -n "$current_value" && "$value" == "$current_value" ]]; then
+            label="${label} ${C_L_GREEN}◄─ Current${T_RESET}"
+        fi
         _print_menu_item "$key" "$label"
     done
     _print_menu_item "c" "Enter a ${C_L_CYAN}(c)ustom${T_RESET} value"
