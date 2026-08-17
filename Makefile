@@ -79,4 +79,4 @@ webui-update: ##@ Update the OpenWebUI service
 
 benchmark:
 	@echo "Running benchmark script..."
-	@$(SRC_DIR)/benchmark.sh
+	@bash $(SRC_DIR)/benchmark.sh
