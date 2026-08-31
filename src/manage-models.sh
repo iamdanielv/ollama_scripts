@@ -179,6 +179,7 @@ run_tests() {
         MOCK_HELP_CALLED=false
         MOCK_INTERACTIVE_CALLED=false
         export MOCK_FETCH_FAIL="false"
+        export MOCK_API_FAIL="false"
     }
 
     reset_main_mocks; _main_logic --list &>/dev/null

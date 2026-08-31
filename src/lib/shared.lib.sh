@@ -1,5 +1,10 @@
 #!/bin/bash
 
+# Source the TUI constants first so that layout dimensions and styling are
+# available to all functions defined in this library and downstream libs.
+# shellcheck source=src/lib/tui_constants.sh
+source "$(dirname "${BASH_SOURCE[0]}")/tui_constants.sh"
+
 # Source the TUI library which contains all shared visual/interactive functions
 # This ensures that colors, key codes, prompts, and spinners are consistent.
 # shellcheck source=src/lib/tui.lib.sh

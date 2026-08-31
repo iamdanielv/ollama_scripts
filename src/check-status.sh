@@ -233,8 +233,8 @@ test_format_ps_output() {
         ]
     }'
     # Use $'...' to interpret escape sequences like \n.
-    # The awk script adds 4 spaces of padding.
-    local expected_two_models_output=$'NAME               SIZE    PROCESSOR    CONTEXT\ngemma:2b         2.9 GB    CPU             4096\nllama3:latest    8.0 GB    GPU             8192'
+    # The exact spacing is produced by format_tsv_as_table using COLUMN_PADDING.
+    local expected_two_models_output=$'NAME             SIZE  PROCESSOR  CONTEXT\ngemma:2b       2.9 GB  CPU           4096\nllama3:latest  8.0 GB  GPU           8192'
     local actual_two_models_output
     actual_two_models_output="$(_format_ps_output "$two_models_json")"
     _run_string_test "$actual_two_models_output" "$expected_two_models_output" "Formats multiple loaded models correctly"
@@ -321,10 +321,13 @@ test_check_gpu_status() {
 
     # --- Mock dependencies ---
     # We only need to mock _check_command_exists and the new helper.
+    # Note: check_gpu_status calls `_check_command_exists "nvidia-smi"` with a
+    # single argument, so the mock must match that exact signature.
     _check_command_exists() {
-        if [[ "$1" == "-v" && "$2" == "nvidia-smi" ]]; then
+        if [[ "$1" == "nvidia-smi" ]]; then
             [[ "$MOCK_NVIDIA_SMI_EXISTS" == "true" ]] && return 0 || return 1
         fi
+        return 1
     }
     print_gpu_status() { MOCK_PRINT_GPU_STATUS_CALLED=true; }
     export -f _check_command_exists print_gpu_status

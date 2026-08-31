@@ -504,7 +504,13 @@ _interactive_editor_loop() {
 #endregion
 
 #region Error Handling & Traps
-script_exit_handler() { printMsgNoNewline "${T_CURSOR_SHOW}" >/dev/tty; }
+# Restore the terminal cursor before exiting.
+# Guard against a missing /dev/tty (e.g. when running non-interactively in
+# subshells or CI), which would otherwise raise an error and change the exit
+# code of scripts that rely on `set -e`.
+script_exit_handler() {
+    [[ -e /dev/tty ]] && printMsgNoNewline "${T_CURSOR_SHOW}" >/dev/tty || true
+}
 trap 'script_exit_handler' EXIT
 script_interrupt_handler() {
     trap - INT # Disable the trap to prevent recursion
