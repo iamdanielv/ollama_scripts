@@ -567,15 +567,9 @@ print_ollama_models_table() {
 
     local formatted_table
     formatted_table=$(echo -e "${full_tsv}" | format_tsv_as_table "  " "1 3")
-    local formatted_header
-    formatted_header=$(echo "$formatted_table" | head -n 1)
-    local formatted_body
-    formatted_body=$(echo "$formatted_table" | tail -n +2)
-
-    printMsg "${formatted_header}"
-    printMsg "${C_BLUE}${DIV}${T_RESET}"
-    printMsg "${formatted_body}"
-    printMsg "${C_BLUE}${DIV}${T_RESET}"
+    
+    # The table now contains the header and body, so we just print the result once.
+    printMsg "${formatted_table}"
 }
 
 display_installed_models() {
