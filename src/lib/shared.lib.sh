@@ -45,7 +45,7 @@ function getPrettyDate() {
 format_tsv_as_table() {
     local indent="${1:-}" # Optional indent prefix
     local right_align_cols="${2:-}" # Optional string of column numbers to right-align, e.g., "2 3"
-    local padding=4      # Spaces between columns
+    local padding=${COLUMN_PADDING}      # Spaces between columns
 
     # Use a two-pass awk script for perfect alignment.
     # 1. The first pass calculates the maximum *visible* width of each column.
