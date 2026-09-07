@@ -179,26 +179,49 @@ prereq_checks() {
 # Checks if jq is installed. Exits if not found.
 # Usage: check_jq_installed [--silent]
 #   --silent: If provided, the success message will be cleared instead of printed.
-check_jq_installed() {
+check_dependencies() {
     local silent=false
     if [[ "$1" == "--silent" ]]; then
         silent=true
     fi
 
-    printMsgNoNewline "${T_INFO_ICON} Checking for jq... " >&2
-    if ! _check_command_exists "jq"; then
-        echo >&2 # Newline before error message
-        printErrMsg "jq is not installed. Please install it to parse model data." >&2
-        printMsg "    ${T_INFO_ICON} On Debian/Ubuntu: ${C_L_BLUE}sudo apt-get install jq${T_RESET}" >&2
-        exit 1
+    local missing_commands=()
+    
+    # Define dependencies to check
+    # Note: We don't check for systemctl or nvidia-smi here because they are optional/platform-specific
+    # but we handle them gracefully in their respective functions.
+    local required_cmds=("curl" "jq" "tput")
+    
+    # If we are in the openwebui directory, we might also want docker
+    if [[ "${_PROJECT_ROOT}" != "" && -d "${_PROJECT_ROOT}/openwebui" ]]; then
+        # We'll let individual scripts decide if they need docker, 
+        # but for a general dependency check, we'll stick to the core.
+        :
     fi
 
-    if $silent; then
-        # Overwrite the checking message, this reduces visual clutter
-        clear_current_line >&2
-    else
-        printOkMsg "jq is installed." >&2
+    for cmd in "${required_cmds[@]}"; do
+        if ! _check_command_exists "$cmd"; then
+            missing_commands+=("$cmd")
+        fi
+    done
+
+    if [[ ${#missing_commands[@]} -gt 0 ]]; then
+        if $silent; then
+            return 1
+        else
+            clear_lines_up 1
+            printErrMsg "Missing required dependencies:"
+            for cmd in "${missing_commands[@]}"; do
+                printMsg "    - ${C_L_YELLOW}${cmd}${T_RESET}"
+            done
+            exit 1
+        fi
     fi
+
+    if ! $silent; then
+        printOkMsg "All required dependencies (curl, jq, tput) are installed."
+    fi
+    return 0
 }
 
 # Gets the correct Docker Compose command ('docker compose' or 'docker-compose').

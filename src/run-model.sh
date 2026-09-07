@@ -13,8 +13,8 @@ run_model_logic() {
     load_project_env "${SCRIPT_DIR}/.env"
 
     # --- Pre-flight checks ---
+    check_dependencies --silent
     check_ollama_installed --silent
-    check_jq_installed --silent
     verify_ollama_api_responsive
 
     # --- Fetch models ---
