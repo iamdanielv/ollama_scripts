@@ -38,6 +38,7 @@ KV_CACHE_VAR="KV_CACHE_TYPE"
 CONTEXT_LENGTH_VAR="OLLAMA_CONTEXT_LENGTH"
 NUM_PARALLEL_VAR="OLLAMA_NUM_PARALLEL"
 OLLAMA_MODELS_VAR="OLLAMA_MODELS"
+KEEP_ALIVE_VAR="OLLAMA_KEEP_ALIVE"
 
 # Associative array to hold the colorized display strings for each option.
 declare -A KV_CACHE_DISPLAY
@@ -95,6 +96,25 @@ _get_setting_display() {
         "context"|"parallel")
             if [[ -n "$value" ]]; then echo "${C_L_BLUE}${value}${T_RESET}"; else echo "${C_GRAY}(default)${T_RESET}"; fi
             ;;
+        "keep_alive")
+            if [[ -n "$value" ]]; then
+                local keep_alive_display="$value"
+                if [[ "$value" =~ ^[0-9]+$ ]]; then
+                    if (( value % 86400 == 0 )); then
+                        keep_alive_display="$(( value / 86400 ))d"
+                    elif (( value % 3600 == 0 )); then
+                        keep_alive_display="$(( value / 3600 ))h"
+                    elif (( value % 60 == 0 )); then
+                        keep_alive_display="$(( value / 60 ))m"
+                    else
+                        keep_alive_display="${value}s"
+                    fi
+                fi
+                echo "${C_L_GREEN}${keep_alive_display}${T_RESET}"
+            else
+                echo "${C_GRAY}(default: 5m)${T_RESET}"
+            fi
+            ;;
         "models_dir")
             if [[ -n "$value" ]]; then echo "${C_L_CYAN}${value}${T_RESET}"; else echo "${C_GRAY}(default)${T_RESET}"; fi
             ;;
@@ -147,6 +167,7 @@ show_help() {
     printMsg "  ${C_L_CYAN}--context-length [n]${T_RESET}  Set OLLAMA_CONTEXT_LENGTH (e.g., 4096)."
     printMsg "  ${C_L_CYAN}--num-parallel [n]${T_RESET}    Set OLLAMA_NUM_PARALLEL (e.g., 2)."
     printMsg "  ${C_L_CYAN}--models-dir [path]${T_RESET}     Set OLLAMA_MODELS directory (e.g., /mnt/models)."
+    printMsg "  ${C_L_CYAN}--keep-alive [n]${T_RESET}       Set OLLAMA_KEEP_ALIVE duration in seconds (e.g., 3600). -1 keeps models loaded indefinitely."
     printMsg "  ${C_L_CYAN}--reset-advanced${T_RESET}      Remove all advanced settings and use Ollama defaults."
     printMsg "  ${C_L_CYAN}--restart${T_RESET}             Automatically restart the Ollama service after applying changes.\n"
 
@@ -176,6 +197,8 @@ print_all_status() {
     current_context_length=$(get_env_var "$CONTEXT_LENGTH_VAR" "$OLLAMA_ADVANCED_CONF")
     local current_num_parallel
     current_num_parallel=$(get_env_var "$NUM_PARALLEL_VAR" "$OLLAMA_ADVANCED_CONF")
+    local current_keep_alive
+    current_keep_alive=$(get_env_var "$KEEP_ALIVE_VAR" "$OLLAMA_ADVANCED_CONF")
 
     # Get display strings using the new helper
     local kv_display
@@ -188,6 +211,8 @@ print_all_status() {
     context_display=$(_get_setting_display "context" "$current_context_length")
     local parallel_display
     parallel_display=$(_get_setting_display "parallel" "$current_num_parallel")
+    local keep_alive_display
+    keep_alive_display=$(_get_setting_display "keep_alive" "$current_keep_alive")
 
     # Display
     printMsg "${T_ULINE}Current Configuration:${T_RESET}"
@@ -196,6 +221,7 @@ print_all_status() {
     _print_status_line "Models Directory" "$models_dir_display"
     _print_status_line "Context Length" "$context_display"
     _print_status_line "Parallel Requests" "$parallel_display"
+    _print_status_line "Keep-Alive Time" "$keep_alive_display"
 }
 
 #
@@ -394,6 +420,26 @@ configure_models_dir() {
     _configure_generic_value pending_dir_ref "Configure Models Directory" "$help_text" options "path" "$current_dir"
 }
 
+# Interactive menu to configure the model keep-alive time.
+#
+configure_keep_alive() {
+    local -n pending_keep_alive_ref=$1
+    local current_keep_alive
+    current_keep_alive=$(get_env_var "$KEEP_ALIVE_VAR" "$OLLAMA_ADVANCED_CONF")
+
+    local help_text="OLLAMA_KEEP_ALIVE controls how long a model stays loaded in memory after the last request before it is unloaded.\nA value of -1 keeps models loaded indefinitely. Larger values reduce model reload latency at the cost of VRAM."
+    local -A options=(
+        [1]="5 minutes (default):300"
+        [2]="15 minutes:900"
+        [3]="30 minutes:1800"
+        [4]="1 hour:3600"
+        [5]="2 hours:7200"
+        [6]="24 hours:86400"
+        [7]="Indefinitely (-1):-1"
+    )
+    _configure_generic_value pending_keep_alive_ref "Configure Model Keep-Alive Time" "$help_text" options "keep_alive" "$current_keep_alive"
+}
+
 # (Private) A generic, reusable interactive menu for configuring a single value.
 # This function encapsulates the common UI for settings that have common presets,
 # a custom value option, and a reset option.
@@ -459,7 +505,9 @@ _configure_generic_value() {
     fi
 
     # --- Validation and Post-processing ---
-    if [[ "$validation_type" == "numeric" && -n "$new_value" && ! "$new_value" =~ ^[0-9]+$ ]]; then
+    if [[ "$validation_type" == "keep_alive" && -n "$new_value" && ! "$new_value" =~ ^-?[0-9]+$ ]]; then
+        printErrMsg "Invalid input. Please enter a positive number of seconds, or -1 for indefinite."; sleep 2; return 2
+    elif [[ "$validation_type" == "numeric" && -n "$new_value" && ! "$new_value" =~ ^[0-9]+$ ]]; then
         printErrMsg "Invalid input. Please enter a positive number."; sleep 2; return 2
     elif [[ "$validation_type" == "path" ]]; then
         new_value="${new_value/#\~/$HOME}" # Expand tilde
@@ -506,6 +554,7 @@ run_interactive_menu() {
     local current_context_length pending_context_length
     local current_num_parallel pending_num_parallel
     local current_models_dir pending_models_dir
+    local current_keep_alive pending_keep_alive
 
     # --- Helper to load all current states from the system ---
     _load_current_states() {
@@ -515,6 +564,7 @@ run_interactive_menu() {
         current_context_length=$(get_env_var "$CONTEXT_LENGTH_VAR" "$OLLAMA_ADVANCED_CONF")
         current_num_parallel=$(get_env_var "$NUM_PARALLEL_VAR" "$OLLAMA_ADVANCED_CONF")
         current_models_dir=$(get_env_var "$OLLAMA_MODELS_VAR" "$OLLAMA_ADVANCED_CONF")
+        current_keep_alive=$(get_env_var "$KEEP_ALIVE_VAR" "$OLLAMA_ADVANCED_CONF")
     }
 
     # --- Helper to reset pending states from the current in-memory state ---
@@ -525,6 +575,7 @@ run_interactive_menu() {
         pending_context_length="$current_context_length"
         pending_num_parallel="$current_num_parallel"
         pending_models_dir="$current_models_dir"
+        pending_keep_alive="$current_keep_alive"
     }
     # --- Helper to check for pending changes ---
     _has_pending_changes() {
@@ -533,7 +584,8 @@ run_interactive_menu() {
               "$current_flash_attention" != "$pending_flash_attention" || \
               "$current_context_length" != "$pending_context_length" || \
               "$current_num_parallel" != "$pending_num_parallel" || \
-              "$current_models_dir" != "$pending_models_dir" ]]; then
+              "$current_models_dir" != "$pending_models_dir" || \
+              "$current_keep_alive" != "$pending_keep_alive" ]]; then
             return 0 # 0 is true in shell
         else
             return 1 # 1 is false
@@ -543,7 +595,7 @@ run_interactive_menu() {
     _load_current_states # Load initial state from disk
     _reset_pending_states # Set pending state to match
 
-    local menu_height=14 # banner(2) + header(1) + options(5) + spacer(1) + actions(4) + prompt(1)
+    local menu_height=15 # banner(2) + header(1) + options(6) + spacer(1) + actions(4) + prompt(1)
     local redraw_full_menu=true
 
     while true; do
@@ -563,6 +615,7 @@ run_interactive_menu() {
         local context_display=$(_get_combined_display "context" "$current_context_length" "$pending_context_length")
         local parallel_display=$(_get_combined_display "parallel" "$current_num_parallel" "$pending_num_parallel")
         local models_dir_display=$(_get_combined_display "models_dir" "$current_models_dir" "$pending_models_dir")
+        local keep_alive_display=$(_get_combined_display "keep_alive" "$current_keep_alive" "$pending_keep_alive")
 
         # --- Display Menu ---
         printMsg "${T_ULINE}Choose an option to configure:${T_RESET}"
@@ -571,6 +624,7 @@ run_interactive_menu() {
         _print_menu_item "3" "Context Length" "$context_display"
         _print_menu_item "4" "Parallel Requests" "$parallel_display"
         _print_menu_item "5" "Models Directory" "$models_dir_display"
+        _print_menu_item "6" "Keep-Alive Time" "$keep_alive_display"
         printMsg ""
         _print_menu_item "r" "${C_L_BLUE}(R)eset${T_RESET} all advanced settings to default"
         _print_menu_item "c" "${C_L_YELLOW}(C)ancel/(D)iscard${T_RESET} all pending changes"
@@ -605,12 +659,17 @@ run_interactive_menu() {
                 configure_models_dir pending_models_dir
                 redraw_full_menu=true
                 ;;
+            6)
+                configure_keep_alive pending_keep_alive
+                redraw_full_menu=true
+                ;;
             r|R)
                 pending_kv_type=""
                 pending_flash_attention=""
                 pending_context_length=""
                 pending_num_parallel=""
                 pending_models_dir=""
+                pending_keep_alive=""
                 ;;
             c|C|d|D)
                 printInfoMsg "Discarding pending changes..."
@@ -620,7 +679,7 @@ run_interactive_menu() {
                 clear_lines_up 1
                 ;;
             s|S)
-                apply_staged_changes "$pending_network_status" "$pending_kv_type" "$pending_flash_attention" "$pending_context_length" "$pending_num_parallel" "$pending_models_dir"
+                apply_staged_changes "$pending_network_status" "$pending_kv_type" "$pending_flash_attention" "$pending_context_length" "$pending_num_parallel" "$pending_models_dir" "$pending_keep_alive"
                 break # Exit the loop
                 ;;
             q|Q|"$KEY_ESC")
@@ -662,6 +721,7 @@ _write_advanced_config() {
     local context_len="$3"
     local num_parallel="$4"
     local models_dir="$5"
+    local keep_alive="$6"
 
     local conf_file="$OLLAMA_ADVANCED_CONF"
     local content="[Service]\n"
@@ -687,6 +747,10 @@ _write_advanced_config() {
         content+="Environment=\"${OLLAMA_MODELS_VAR}=${models_dir}\"\n"
         has_content=true
     fi
+    if [[ -n "$keep_alive" ]]; then
+        content+="Environment=\"${KEEP_ALIVE_VAR}=${keep_alive}\"\n"
+        has_content=true
+    fi
 
     if [[ "$has_content" == "true" ]]; then
         printf "%b" "$content" | sudo tee "$conf_file" > /dev/null
@@ -707,6 +771,7 @@ apply_staged_changes() {
     local p_context="$4"
     local p_parallel="$5"
     local p_models_dir="$6"
+    local p_keep_alive="$7"
 
     local any_change_made=false
 
@@ -737,14 +802,17 @@ apply_staged_changes() {
     current_parallel=$(get_env_var "$NUM_PARALLEL_VAR" "$OLLAMA_ADVANCED_CONF")
     local current_models_dir
     current_models_dir=$(get_env_var "$OLLAMA_MODELS_VAR" "$OLLAMA_ADVANCED_CONF")
+    local current_keep_alive
+    current_keep_alive=$(get_env_var "$KEEP_ALIVE_VAR" "$OLLAMA_ADVANCED_CONF")
 
     if [[ "$current_kv_type" != "$p_kv_type" || \
           "$current_flash" != "$p_flash" || \
           "$current_context" != "$p_context" || \
           "$current_parallel" != "$p_parallel" || \
-          "$current_models_dir" != "$p_models_dir" ]]; then
+          "$current_models_dir" != "$p_models_dir" || \
+          "$current_keep_alive" != "$p_keep_alive" ]]; then
         printInfoMsg "Applying advanced configuration..."
-        _write_advanced_config "$p_kv_type" "$p_flash" "$p_context" "$p_parallel" "$p_models_dir"
+        _write_advanced_config "$p_kv_type" "$p_flash" "$p_context" "$p_parallel" "$p_models_dir" "$p_keep_alive"
         any_change_made=true
     fi
 
@@ -761,7 +829,7 @@ _main_logic() {
         local needs_root=false
         for arg in "$@"; do
             case "$arg" in
-                -e|--expose|-r|--restrict|--kv-cache|--context-length|--num-parallel|--models-dir|--reset-advanced|--restart)
+                -e|--expose|-r|--restrict|--kv-cache|--context-length|--num-parallel|--models-dir|--keep-alive|--reset-advanced|--restart)
                     needs_root=true
                     break
                     ;;
@@ -795,7 +863,7 @@ _main_logic() {
     # For non-interactive mode, we also stage changes.
     # Initialize pending state from current state.
     local pending_network_status pending_kv_type pending_flash_attention
-    local pending_context_length pending_num_parallel pending_models_dir
+    local pending_context_length pending_num_parallel pending_models_dir pending_keep_alive
 
     if check_network_exposure; then pending_network_status="$STATUS_NETWORK"; else pending_network_status="$STATUS_LOCALHOST"; fi
     pending_kv_type=$(get_env_var "$KV_CACHE_VAR" "$OLLAMA_ADVANCED_CONF")
@@ -803,6 +871,7 @@ _main_logic() {
     pending_context_length=$(get_env_var "$CONTEXT_LENGTH_VAR" "$OLLAMA_ADVANCED_CONF")
     pending_num_parallel=$(get_env_var "$NUM_PARALLEL_VAR" "$OLLAMA_ADVANCED_CONF")
     pending_models_dir=$(get_env_var "$OLLAMA_MODELS_VAR" "$OLLAMA_ADVANCED_CONF")
+    pending_keep_alive=$(get_env_var "$KEEP_ALIVE_VAR" "$OLLAMA_ADVANCED_CONF")
 
 
     while [[ $# -gt 0 ]]; do
@@ -848,12 +917,18 @@ _main_logic() {
                 pending_models_dir="$models_path"
                 shift 2
                 ;;
+            --keep-alive)
+                if [[ -z "$2" || ! "$2" =~ ^-?[0-9]+$ ]]; then printErrMsg "Error: '$1' requires a numeric value (seconds), or -1 for indefinite." >&2; return 1; fi
+                pending_keep_alive="$2"
+                shift 2
+                ;;
             --reset-advanced)
                 pending_kv_type=""
                 pending_flash_attention=""
                 pending_context_length=""
                 pending_num_parallel=""
                 pending_models_dir=""
+                pending_keep_alive=""
                 shift
                 ;;
             --restart)
@@ -868,7 +943,7 @@ _main_logic() {
         esac
     done
 
-    apply_staged_changes "$pending_network_status" "$pending_kv_type" "$pending_flash_attention" "$pending_context_length" "$pending_num_parallel" "$pending_models_dir"
+    apply_staged_changes "$pending_network_status" "$pending_kv_type" "$pending_flash_attention" "$pending_context_length" "$pending_num_parallel" "$pending_models_dir" "$pending_keep_alive"
 }
 
 #
@@ -970,6 +1045,9 @@ run_tests() {
     _run_test '_main_logic --kv-cache &>/dev/null' 1 "--kv-cache fails without a value"
     _run_test '_main_logic --context-length abc &>/dev/null' 1 "--context-length fails with non-numeric value"
     _run_test '_main_logic --models-dir relative/path &>/dev/null' 1 "--models-dir fails with relative path"
+    _run_test '_main_logic --keep-alive abc &>/dev/null' 1 "--keep-alive fails with non-numeric value"
+    _run_test '_main_logic --keep-alive 3600 &>/dev/null' 0 "--keep-alive accepts a numeric value"
+    _run_test '_main_logic --keep-alive -1 &>/dev/null' 0 "--keep-alive accepts -1 for indefinite"
 
     _run_test '_main_logic --invalid-flag &>/dev/null' 1 "Handles an invalid flag"
 
