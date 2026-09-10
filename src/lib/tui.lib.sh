@@ -123,6 +123,40 @@ format_menu_lines() {
 }
 
 printBanner() { printMsg "$(generate_banner_string "$1")"; }
+
+# Prints a fixed-width section title as a divider line with the title embedded.
+# Usage: print_section_header "Configuration" [width] [alignment]
+# alignment can be: center (default) or left
+# Center example: "─────── Configuration ────────────────────────"
+#                 ^ title is visually centered within the line
+# Left example:   "── Configuration ──────────────────────────────────"
+print_section_header() {
+    local title="$1"
+    local total_width=${2:-70}
+    local alignment="${3:-center}"
+    local stripped_title; stripped_title=$(strip_ansi_codes "$title")
+    local title_len=${#stripped_title}
+
+    local left_fill=""; local right_fill=""
+    local content_width=$(( total_width - 4 ))
+
+    if [[ "$alignment" == "left" ]]; then
+        local right_width=$(( content_width - title_len - 6 ))
+        if (( right_width < 0 )); then right_width=0; fi
+        printf -v right_fill '%*s' "$right_width" ''; right_fill=${right_fill// /─}
+        printf ' %b── %s %s%b\n' "${C_L_GRAY}" "$title" "$right_fill" "${T_RESET}"
+        return
+    fi
+
+    local filler_width=$(( content_width - title_len - 2 ))
+    local left_width=$(( filler_width / 2 ))
+    local right_width=$(( filler_width - left_width ))
+
+    printf -v left_fill '%*s' "$left_width" ''; left_fill=${left_fill// /─}
+    printf -v right_fill '%*s' "$right_width" ''; right_fill=${right_fill// /─}
+
+    printf ' %b%s %s %s%b\n' "${C_L_GRAY}" "$left_fill" "$title" "$right_fill" "${T_RESET}"
+}
 #endregion Logging & Banners
 
 #region Terminal Control

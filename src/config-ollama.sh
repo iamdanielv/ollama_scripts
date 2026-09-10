@@ -666,7 +666,7 @@ run_interactive_menu() {
         local keep_alive_display=$(_get_combined_display "keep_alive" "$current_keep_alive" "$pending_keep_alive")
 
         # --- Display Menu ---
-        printMsg "${T_ULINE}Choose an option to configure:${T_RESET}"
+        print_section_header "Configuration" 70 left
         _print_menu_item "1" "Network Exposure" "$network_display"
         _print_menu_item "2" "KV Cache Type" "$kv_display"
         _print_menu_item "3" "Context Length" "$context_display"
@@ -675,10 +675,10 @@ run_interactive_menu() {
         _print_menu_item "6" "Keep-Alive Time" "$keep_alive_display"
 
         # --- Service Management Section ---
-        printMsg ""
+        print_section_header "Service Management" 70 left
         _print_menu_item "7" "${C_L_CYAN}(R)estart${T_RESET} Ollama service"
-        _print_menu_item "8" "${C_L_CYAN}(D)isable${T_RESET} Ollama service (won't start on boot)"
-        printMsg ""
+        _print_menu_item "8" "${C_L_MAGENTA}(D)isable${T_RESET} Ollama service (won't start on boot)"
+        print_section_header "Actions" 70 left
         _print_menu_item "r" "${C_L_BLUE}(R)eset${T_RESET} all advanced settings to default"
         _print_menu_item "c" "${C_L_YELLOW}(C)ancel/(D)iscard${T_RESET} all pending changes"
         _print_menu_item "s" "${C_L_GREEN}(S)ave changes and Quit${T_RESET}"
@@ -741,6 +741,7 @@ run_interactive_menu() {
                 ;;
             s|S)
                 apply_staged_changes "$pending_network_status" "$pending_kv_type" "$pending_flash_attention" "$pending_context_length" "$pending_num_parallel" "$pending_models_dir" "$pending_keep_alive"
+                clear_lines_up 1
                 break # Exit the loop
                 ;;
             q|Q|"$KEY_ESC")
@@ -758,7 +759,9 @@ run_interactive_menu() {
                         redraw_full_menu=true
                     fi
                 else
-                    clear_lines_up 6
+                    # Clear the prompt, actions, and service sections while keeping Configuration visible.
+                    clear_lines_up 9
+                    printMsg ""
                     printInfoMsg "Quitting without saving changes."
                     break # Exit the loop
                 fi
