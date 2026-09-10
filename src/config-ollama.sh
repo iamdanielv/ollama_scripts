@@ -143,6 +143,53 @@ _get_combined_display() {
         echo "$pending_display"
     fi
 }
+
+# --- Service Management Functions ---
+
+# Restarts the Ollama service using systemd.
+# Usage: _restart_ollama
+_restart_ollama() {
+    printBanner "Restart Ollama Service"
+    ensure_root "Root privileges are required to restart Ollama."
+
+    printMsgNoNewline "${T_INFO_ICON} Stopping Ollama..."
+    sudo systemctl stop "${OLLAMA_SERVICE_NAME}"
+    clear_current_line
+    printOkMsg "Ollama stopped."
+
+    printMsgNoNewline "${T_INFO_ICON} Reloading systemd daemon..."
+    sudo systemctl daemon-reload
+    clear_current_line
+
+    printMsgNoNewline "${T_INFO_ICON} Starting Ollama..."
+    sudo systemctl start "${OLLAMA_SERVICE_NAME}"
+    clear_current_line
+
+    verify_ollama_service
+    printOkMsg "Ollama restarted successfully."
+}
+
+# Disables the Ollama systemd service (won't start on boot).
+# Usage: _disable_ollama
+_disable_ollama() {
+    printBanner "Disable Ollama Service"
+    ensure_root "Root privileges are required to disable Ollama."
+
+    if ! systemctl is-enabled "${OLLAMA_SERVICE_NAME}" &>/dev/null; then
+        printInfoMsg "Ollama service is already disabled."
+        return 0
+    fi
+
+    printMsgNoNewline "${T_INFO_ICON} Disabling Ollama service..."
+    sudo systemctl disable "${OLLAMA_SERVICE_NAME}"
+    clear_current_line
+    printOkMsg "Ollama service disabled. It won't start on boot."
+
+    if systemctl is-active "${OLLAMA_SERVICE_NAME}" &>/dev/null; then
+        printInfoMsg "Ollama is currently running. Use '${C_L_BLUE}sudo systemctl stop ollama${T_RESET}' to stop it now."
+    fi
+}
+
 # --- Function Definitions ---
 
 show_help() {
@@ -169,7 +216,8 @@ show_help() {
     printMsg "  ${C_L_CYAN}--models-dir [path]${T_RESET}     Set OLLAMA_MODELS directory (e.g., /mnt/models)."
     printMsg "  ${C_L_CYAN}--keep-alive [n]${T_RESET}       Set OLLAMA_KEEP_ALIVE duration in seconds (e.g., 3600). -1 keeps models loaded indefinitely."
     printMsg "  ${C_L_CYAN}--reset-advanced${T_RESET}      Remove all advanced settings and use Ollama defaults."
-    printMsg "  ${C_L_CYAN}--restart${T_RESET}             Automatically restart the Ollama service after applying changes.\n"
+    printMsg "  ${C_L_CYAN}--restart${T_RESET}             Restart the Ollama service."
+    printMsg "  ${C_L_CYAN}--disable${T_RESET}             Disable the Ollama service (won't start on boot).\n"
 
     printMsg "${T_ULINE}Examples:${T_RESET}"
     printMsg "  ${C_GRAY}# Run the interactive configuration menu${T_RESET}"
@@ -595,7 +643,7 @@ run_interactive_menu() {
     _load_current_states # Load initial state from disk
     _reset_pending_states # Set pending state to match
 
-    local menu_height=15 # banner(2) + header(1) + options(6) + spacer(1) + actions(4) + prompt(1)
+    local menu_height=19 # banner + header + options(6) + service actions(2) + actions(4) + spacing/prompt
     local redraw_full_menu=true
 
     while true; do
@@ -625,6 +673,11 @@ run_interactive_menu() {
         _print_menu_item "4" "Parallel Requests" "$parallel_display"
         _print_menu_item "5" "Models Directory" "$models_dir_display"
         _print_menu_item "6" "Keep-Alive Time" "$keep_alive_display"
+
+        # --- Service Management Section ---
+        printMsg ""
+        _print_menu_item "7" "${C_L_CYAN}(R)estart${T_RESET} Ollama service"
+        _print_menu_item "8" "${C_L_CYAN}(D)isable${T_RESET} Ollama service (won't start on boot)"
         printMsg ""
         _print_menu_item "r" "${C_L_BLUE}(R)eset${T_RESET} all advanced settings to default"
         _print_menu_item "c" "${C_L_YELLOW}(C)ancel/(D)iscard${T_RESET} all pending changes"
@@ -661,6 +714,14 @@ run_interactive_menu() {
                 ;;
             6)
                 configure_keep_alive pending_keep_alive
+                redraw_full_menu=true
+                ;;
+            7)
+                _restart_ollama
+                redraw_full_menu=true
+                ;;
+            8)
+                _disable_ollama
                 redraw_full_menu=true
                 ;;
             r|R)
