@@ -430,10 +430,13 @@ configure_context_length() {
         [1]="2048 (Default for many models):2048"
         [2]="4096:4096"
         [3]="8192:8192"
-        [4]="16384:16384"
+        [4]="16384 (16k):16384"
         [5]="32768 (32k - good for coding):32768"
         [6]="65536 (64k - recommended for coding):65536"
         [7]="131072 (128k - high-VRAM systems):131072"
+        [8]="163840 (163k - common large context):163840"
+        [9]="262144 (256k - very large context):262144"
+        [10]="524288 (512k - extremely large context):524288"
     )
     _configure_generic_value pending_length_ref "Configure Context Length" "$help_text" options "numeric" "$current_length"
 }
